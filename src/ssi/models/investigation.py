@@ -243,3 +243,4 @@ class InvestigationResult(BaseModel):
     duration_seconds: float = 0.0
     cost_summary: dict[str, Any] | None = None
     captcha_encountered: bool = False
+    warnings: list[str] = Field(default_factory=list)

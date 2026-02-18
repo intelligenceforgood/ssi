@@ -3,7 +3,7 @@
 
 [llm]
 max_tokens = 4096
-model = "llama3.3"
+model = "llama3.1"
 ollama_base_url = "http://localhost:11434"
 provider = "ollama"
 temperature = 0.1

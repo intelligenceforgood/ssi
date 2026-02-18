@@ -142,9 +142,11 @@ _TECHNIQUE_WEIGHTS: dict[str, float] = {
 
 
 def _calculate_risk_score(taxonomy: FraudTaxonomyResult) -> float:
-    """Compute risk score from taxonomy labels and confidence × weights.
+    """Compute base risk score from taxonomy labels and confidence * weights.
 
-    Formula: ``sum(confidence × weight) × 2.5``, capped at 100.
+    Formula: ``sum(confidence * weight) * 2.5``, capped at 100.
+    This is the LLM-based component; ``_apply_infrastructure_boost`` adds
+    evidence from the OSINT modules.
     """
     total = 0.0
     for lbl in taxonomy.intent:
@@ -154,6 +156,90 @@ def _calculate_risk_score(taxonomy: FraudTaxonomyResult) -> float:
     for lbl in taxonomy.techniques:
         total += lbl.confidence * _TECHNIQUE_WEIGHTS.get(lbl.label, 5)
     return min(100.0, total * 2.5)
+
+
+def _apply_infrastructure_boost(
+    base_score: float,
+    result: "InvestigationResult",
+) -> float:
+    """Add risk points for suspicious infrastructure signals the LLM may overlook.
+
+    Each signal adds a small additive bonus. The total is capped at 100.
+    """
+    boost = 0.0
+
+    # --- Domain age ---
+    if result.whois and result.whois.creation_date:
+        try:
+            from datetime import datetime, timezone
+
+            created = result.whois.creation_date
+            if isinstance(created, str):
+                # Strip timezone suffix for fromisoformat compat
+                created = created.replace("+00:00", "").replace("Z", "").strip()
+                dt = datetime.fromisoformat(created)
+            else:
+                dt = created  # type: ignore[assignment]
+            if not dt.tzinfo:
+                dt = dt.replace(tzinfo=timezone.utc)
+            age_days = (datetime.now(timezone.utc) - dt).days
+            if age_days < 30:
+                boost += 15  # Created in the last month
+            elif age_days < 90:
+                boost += 10  # Created in the last 3 months
+            elif age_days < 365:
+                boost += 5   # Created in the last year
+        except Exception:
+            pass
+
+    # --- SSL certificate ---
+    if result.ssl:
+        if not result.ssl.is_valid and not result.ssl.issuer:
+            boost += 8  # No SSL cert at all (for an https URL)
+        elif result.ssl.is_self_signed:
+            boost += 10  # Self-signed cert
+
+    # --- Suspicious TLD ---
+    from urllib.parse import urlparse
+
+    host = urlparse(result.url).hostname or ""
+    _SUSPICIOUS_TLDS = {
+        ".cc", ".tk", ".ml", ".ga", ".cf", ".gq", ".buzz", ".top",
+        ".xyz", ".icu", ".club", ".wang", ".work", ".live", ".click",
+        ".surf", ".rest", ".monster",
+    }
+    for tld in _SUSPICIOUS_TLDS:
+        if host.endswith(tld):
+            boost += 5
+            break
+
+    # --- Brand name in subdomain (impersonation signal) ---
+    _COMMON_BRANDS = {
+        "paypal", "apple", "amazon", "microsoft", "google", "netflix",
+        "chase", "wells-fargo", "wellsfargo", "bank-of-america",
+        "t-mobile", "tmobile", "verizon", "att", "usps", "fedex",
+        "dhl", "ups", "irs", "costco", "walmart", "target", "etsy",
+        "facebook", "instagram", "whatsapp", "linkedin",
+    }
+    host_lower = host.lower()
+    for brand in _COMMON_BRANDS:
+        if brand in host_lower:
+            # Only count if the brand is NOT the registrable domain itself
+            parts = host_lower.rsplit(".", 2)
+            registrable = parts[-2] if len(parts) >= 2 else host_lower
+            if brand != registrable:
+                boost += 10
+                break
+
+    # --- Privacy-protected or missing registrant ---
+    if result.whois and not result.whois.registrant_name and not result.whois.registrant_org:
+        boost += 3
+
+    # --- No DNS records (domain parked / dead) ---
+    if result.dns and not result.dns.a and not result.dns.aaaa:
+        boost += 5
+
+    return min(100.0, base_score + boost)
 
 
 # ---------------------------------------------------------------------------
@@ -315,6 +401,8 @@ def classify_investigation(
         raw_content = body.get("message", {}).get("content", "")
 
         taxonomy = _parse_llm_response(raw_content)
+        # Apply infrastructure-based boost on top of the LLM-derived base score
+        taxonomy.risk_score = _apply_infrastructure_boost(taxonomy.risk_score, result)
         logger.info(
             "Classification complete: risk_score=%.1f intent=%s",
             taxonomy.risk_score,

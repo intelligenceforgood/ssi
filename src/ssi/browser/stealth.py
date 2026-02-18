@@ -246,6 +246,9 @@ def build_browser_profile(
     if record_video_dir:
         ctx["record_video_dir"] = record_video_dir
 
+    # Scam sites rarely have valid SSL certs — accept them anyway.
+    ctx["ignore_https_errors"] = True
+
     return profile
 
 

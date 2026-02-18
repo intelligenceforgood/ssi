@@ -53,6 +53,11 @@ def investigate_url(
         )
         progress.update(task, completed=True)
 
+    # Display warnings before success/failure status
+    if result.warnings:
+        for warning in result.warnings:
+            console.print(f"\n[yellow]⚠[/yellow] {warning}")
+
     if result.success:
         console.print(f"\n[green]✓[/green] Investigation complete: {result.investigation_id}")
         console.print(f"  Evidence saved to: {result.output_path}")

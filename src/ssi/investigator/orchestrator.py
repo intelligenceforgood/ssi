@@ -60,6 +60,15 @@ def run_investigation(
         cost_tracker = CostTracker(budget_usd=settings.cost.budget_per_investigation_usd)
 
     try:
+        # --- Pre-flight: Domain resolution check ----------------------------
+        domain_resolves = _check_domain_resolution(url)
+        if not domain_resolves:
+            result.warnings.append(
+                f"Domain does not resolve (NXDOMAIN). The domain may be unregistered, "
+                f"expired, or taken down. WHOIS, DNS, SSL, and GeoIP data will be unavailable."
+            )
+            logger.warning("Domain does not resolve — OSINT data will be limited")
+
         # --- Phase 1: Passive Reconnaissance --------------------------------
         logger.info("Phase 1: Passive recon for %s", url)
 
@@ -143,7 +152,6 @@ def run_investigation(
         # --- Phase 3: Classification & Evidence Packaging -------------------
         logger.info("Phase 3: Classification & evidence packaging")
         _run_classification(result)
-        _package_evidence(result, inv_dir, report_format=report_format)
 
         result.status = InvestigationStatus.COMPLETED
         result.success = True
@@ -153,8 +161,11 @@ def run_investigation(
         result.status = InvestigationStatus.FAILED
         result.error = str(e)
 
-    # Record browser compute time
+    # Record timing and cost *before* evidence packaging so the JSON is complete.
     elapsed = time.monotonic() - start
+    result.completed_at = datetime.now(timezone.utc)
+    result.duration_seconds = elapsed
+
     if cost_tracker:
         cost_tracker.record_browser_seconds(elapsed)
         summary = cost_tracker.summary()
@@ -166,9 +177,30 @@ def run_investigation(
                 summary.budget_usd,
             )
 
-    result.completed_at = datetime.now(timezone.utc)
-    result.duration_seconds = elapsed
+    # Package evidence last so the serialized JSON reflects final status, timing, and cost.
+    _package_evidence(result, inv_dir, report_format=report_format)
+
     return result
+
+
+# ---------------------------------------------------------------------------
+# Pre-flight check
+# ---------------------------------------------------------------------------
+
+
+def _check_domain_resolution(url: str) -> bool:
+    """Return True if the domain in *url* resolves to at least one A/AAAA record."""
+    import socket
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url if "://" in url else f"https://{url}")
+    host = parsed.hostname or url
+
+    try:
+        socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        return True
+    except socket.gaierror:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -328,11 +360,6 @@ def _package_evidence(result: InvestigationResult, inv_dir: Path, *, report_form
     """Write result JSON, optional markdown report, and create evidence ZIP with chain-of-custody."""
     import json
 
-    # Always write JSON
-    report_path = inv_dir / "investigation.json"
-    report_path.write_text(json.dumps(result.model_dump(mode="json"), indent=2, default=str))
-    result.report_path = str(report_path)
-
     # Markdown report
     if report_format in ("markdown", "both"):
         from ssi.reports import render_markdown_report
@@ -351,6 +378,12 @@ def _package_evidence(result: InvestigationResult, inv_dir: Path, *, report_form
 
     # Create ZIP archive with chain-of-custody manifest
     _create_evidence_zip(result, inv_dir)
+
+    # Write JSON *last* so it includes report_path, evidence_zip_path,
+    # and chain_of_custody populated by the steps above.
+    report_path = inv_dir / "investigation.json"
+    result.report_path = str(report_path)
+    report_path.write_text(json.dumps(result.model_dump(mode="json"), indent=2, default=str))
 
 
 def _write_leo_report(result: InvestigationResult, inv_dir: Path) -> None:

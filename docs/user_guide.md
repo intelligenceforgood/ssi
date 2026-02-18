@@ -26,7 +26,7 @@ Before using SSI, you need:
 
 - **Python 3.11 or later** — check with `python3 --version`
 - **Ollama** — a local LLM runtime (required for the AI agent). Download from [ollama.com](https://ollama.com)
-- **Llama 3.3 model** — pulled via Ollama (see below)
+- **Llama 3.1 model** — pulled via Ollama (see below)
 
 ### Install Ollama and pull the model
 
@@ -37,11 +37,11 @@ brew install ollama
 # Start the Ollama service
 ollama serve
 
-# In a new terminal, pull the Llama 3.3 model (~20GB download)
-ollama pull llama3.3
+# In a new terminal, pull the Llama 3.1 model (~5GB download)
+ollama pull llama3.1
 ```
 
-> **Note**: The Llama 3.3 model requires ~20GB of disk space and runs well on machines with 16GB+ RAM. On Apple Silicon Macs, it uses the GPU automatically.
+> **Note**: The Llama 3.1 8B model requires ~5GB of disk space and runs well on machines with 16GB+ RAM. On Apple Silicon Macs, it uses the GPU automatically.
 
 ---
 
@@ -109,10 +109,26 @@ ssi settings show
 
 A passive scan collects infrastructure intelligence about a URL **without** interacting with the site (no form filling, no clicking). This is the safest starting point.
 
-### Example: Investigating a suspicious URL
+### Finding a suspicious URL to investigate
+
+Scam and phishing sites are short-lived — they typically get taken down within hours or days. Rather than listing example URLs that will quickly go stale, use one of these community databases to find a **live** URL to practice with:
+
+| Source        | URL                                           | Notes                                                                                              |
+| ------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **PhishTank** | [phishtank.org](https://phishtank.org/)       | Free, community-curated phishing URL database. Browse the "Phish List" for recently verified URLs. |
+| **OpenPhish** | [openphish.com](https://openphish.com/)       | Automated phishing intelligence feed with live URLs.                                               |
+| **URLhaus**   | [urlhaus.abuse.ch](https://urlhaus.abuse.ch/) | Malware URL exchange. Filter by "online" status.                                                   |
+
+> **Tip**: On PhishTank, click **"Phish Search"**, filter by status **"valid (verified)"**, and pick a recently submitted URL. Copy the target URL (not the PhishTank page URL) for use with SSI.
+
+> **Safety note**: SSI runs investigations in a sandboxed browser — it is safe to point it at live phishing URLs. Never visit these URLs in your regular browser.
+
+### Running a passive scan
+
+Once you have a suspicious URL, run:
 
 ```bash
-ssi investigate url "https://etsyorders.com" --passive
+ssi investigate url "<SUSPICIOUS_URL>" --passive
 ```
 
 This command:
@@ -130,12 +146,11 @@ This command:
 
 ### Where to find results
 
-After the investigation completes, SSI creates a timestamped folder under `data/evidence/`:
+After the investigation completes, SSI creates a folder under `data/evidence/<investigation-id>/`:
 
 ```
-data/evidence/etsyorders_com_20260218_143022/
+data/evidence/<investigation-id>/
 ├── investigation.json      # Full structured result (machine-readable)
-├── report.md               # Human-readable investigation report
 ├── leo_evidence_report.md  # Law enforcement evidence summary
 ├── stix_bundle.json        # STIX 2.1 threat indicators (IOCs)
 ├── evidence.zip            # All artifacts with chain-of-custody manifest
@@ -143,6 +158,8 @@ data/evidence/etsyorders_com_20260218_143022/
 ├── dom.html                # DOM snapshot
 └── network.har             # HAR network recording
 ```
+
+> **Note**: Some files (e.g., `screenshot.png`, `dom.html`, `stix_bundle.json`) only appear when the target site is reachable and data is available. If the domain has already been taken down, you will see fewer files and the report will indicate which data could not be collected.
 
 Open `report.md` in any text editor or Markdown viewer for a human-readable summary of the investigation.
 
@@ -201,7 +218,7 @@ A full investigation goes beyond passive scanning — SSI launches an AI agent t
 ### Running a full investigation
 
 ```bash
-ssi investigate url "https://etsyorders.com"
+ssi investigate url "<SUSPICIOUS_URL>"
 ```
 
 Without the `--passive` flag, SSI performs the passive scan first, then:
@@ -228,23 +245,23 @@ Beyond the passive scan outputs, a full investigation produces:
 - **PII collection map** — which data the scam asked for, in what order
 - **Fraud classification** — five-axis taxonomy labels with confidence scores
 
-### Example: Walk through a fake Etsy order scam
+### Example workflow
 
-Suppose you receive a text message saying "Your Etsy order has been delayed, verify at etsyorders.com." Here's how to investigate:
+Suppose you find a suspicious URL from PhishTank or receive one in a phishing text message. Here's the recommended workflow:
 
 ```bash
 # Step 1: Quick passive scan to see what we're dealing with
-ssi investigate url "https://etsyorders.com" --passive --format both
+ssi investigate url "<SUSPICIOUS_URL>" --passive --format both
 
-# Step 2: Review the report
-cat data/evidence/etsyorders_com_*/report.md
+# Step 2: Review the LEO report (replace <ID> with the investigation ID from output)
+cat data/evidence/<ID>/leo_evidence_report.md
 
-# Step 3: If it looks suspicious, run the full investigation
-ssi investigate url "https://etsyorders.com" --format both
+# Step 3: If it looks suspicious, run the full investigation with AI agent
+ssi investigate url "<SUSPICIOUS_URL>" --format both
 
 # Step 4: Review the complete evidence package
-ls data/evidence/etsyorders_com_*/
-cat data/evidence/etsyorders_com_*/report.md
+ls data/evidence/<ID>/
+cat data/evidence/<ID>/leo_evidence_report.md
 ```
 
 ---
@@ -254,11 +271,12 @@ cat data/evidence/etsyorders_com_*/report.md
 To investigate multiple URLs at once, create a text file with one URL per line:
 
 ```bash
-# Create a file with URLs to investigate
+# Create a file with URLs to investigate (one per line)
+# Find live URLs from PhishTank, OpenPhish, or URLhaus
 cat > urls.txt << 'EOF'
-https://etsyorders.com
-https://fedex-delivery-update.com
-https://amazon-refund-claim.net
+https://example-phish-1.com
+https://example-phish-2.net
+https://example-phish-3.org
 # Lines starting with # are comments and are skipped
 EOF
 
@@ -297,7 +315,7 @@ make serve
 ```bash
 curl -X POST http://localhost:8100/investigate \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://etsyorders.com", "passive_only": true}'
+  -d '{"url": "<SUSPICIOUS_URL>", "passive_only": true}'
 ```
 
 Response:
@@ -405,7 +423,7 @@ All environment variables use the `SSI_` prefix. Use double underscores (`__`) f
 | Variable                            | Description                       | Default                  |
 | ----------------------------------- | --------------------------------- | ------------------------ |
 | `SSI_LLM__PROVIDER`                 | LLM provider (`ollama`, `vertex`) | `ollama`                 |
-| `SSI_LLM__MODEL`                    | Model name                        | `llama3.3`               |
+| `SSI_LLM__MODEL`                    | Model name                        | `llama3.1`               |
 | `SSI_LLM__OLLAMA_BASE_URL`          | Ollama API URL                    | `http://localhost:11434` |
 | `SSI_LLM__TEMPERATURE`              | Sampling temperature              | `0.1`                    |
 | `SSI_LLM__MAX_TOKENS`               | Max tokens per response           | `4096`                   |
@@ -493,7 +511,7 @@ ipinfo_token = "your-token-here"
 headless = false  # Watch the browser in action
 
 [llm]
-model = "llama3.3"
+model = "llama3.1"
 temperature = 0.1
 ```
 

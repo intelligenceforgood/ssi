@@ -37,6 +37,16 @@ def lookup_whois(url: str) -> WHOISRecord:
             return str(val[0]) if val else ""
         return str(val) if val else ""
 
+    def _normalize_list(val) -> list[str]:
+        """Ensure *val* is a list of strings, not a char-iterated string."""
+        if not val:
+            return []
+        if isinstance(val, str):
+            return [val]
+        if isinstance(val, list):
+            return [str(s) for s in val]
+        return [str(val)]
+
     return WHOISRecord(
         domain=domain,
         registrar=_first(w.registrar),
@@ -47,6 +57,6 @@ def lookup_whois(url: str) -> WHOISRecord:
         registrant_org=_first(getattr(w, "org", "")),
         registrant_country=_first(getattr(w, "country", "")),
         name_servers=[str(ns) for ns in (w.name_servers or [])],
-        status=[str(s) for s in (w.status or [])] if w.status else [],
+        status=_normalize_list(w.status),
         raw=str(w.text) if hasattr(w, "text") else "",
     )

@@ -80,7 +80,7 @@ class AgentLLMClient:
 
     Args:
         base_url: Ollama base URL (e.g. ``http://localhost:11434``).
-        model: Model name (e.g. ``llama3.3``).
+        model: Model name (e.g. ``llama3.1``).
         temperature: Sampling temperature.
         max_tokens: Maximum generation tokens per call.
     """
@@ -88,7 +88,7 @@ class AgentLLMClient:
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
-        model: str = "llama3.3",
+        model: str = "llama3.1",
         temperature: float = 0.1,
         max_tokens: int = 1024,
         max_steps: int = 20,

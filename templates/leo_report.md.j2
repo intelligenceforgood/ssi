@@ -44,6 +44,13 @@ to document the site's infrastructure, behaviour, and threat indicators.
 {% endif %}
 {% endif %}
 
+{% if result.warnings %}
+> **⚠ Investigation Warnings**
+{% for warning in result.warnings %}
+> - {{ warning }}
+{% endfor %}
+
+{% endif %}
 ---
 
 ## 2. Infrastructure Intelligence
@@ -61,27 +68,33 @@ to document the site's infrastructure, behaviour, and threat indicators.
 | **Country** | {{ result.whois.registrant_country or 'Unknown' }} |
 | **Name Servers** | {{ result.whois.name_servers | join(', ') }} |
 {% else %}
-WHOIS data was not available.
+WHOIS data was not available — the domain may be unregistered or privacy-protected beyond RDAP.
 {% endif %}
 
 ### DNS Records
 
-{% if result.dns %}
+{% if result.dns and (result.dns.a or result.dns.aaaa or result.dns.mx or result.dns.ns or result.dns.txt or result.dns.cname) %}
 | Record Type | Values |
 |-------------|--------|
-{% if result.dns.a %}| A | {{ result.dns.a | join(', ') }} |{% endif %}
-{% if result.dns.aaaa %}| AAAA | {{ result.dns.aaaa | join(', ') }} |{% endif %}
-{% if result.dns.mx %}| MX | {{ result.dns.mx | join(', ') }} |{% endif %}
-{% if result.dns.ns %}| NS | {{ result.dns.ns | join(', ') }} |{% endif %}
-{% if result.dns.txt %}| TXT | {{ result.dns.txt | join(', ') }} |{% endif %}
-{% if result.dns.cname %}| CNAME | {{ result.dns.cname | join(', ') }} |{% endif %}
+{% if result.dns.a %}| A | {{ result.dns.a | join(', ') }} |
+{% endif %}
+{% if result.dns.aaaa %}| AAAA | {{ result.dns.aaaa | join(', ') }} |
+{% endif %}
+{% if result.dns.mx %}| MX | {{ result.dns.mx | join(', ') }} |
+{% endif %}
+{% if result.dns.ns %}| NS | {{ result.dns.ns | join(', ') }} |
+{% endif %}
+{% if result.dns.txt %}| TXT | {{ result.dns.txt | join(', ') }} |
+{% endif %}
+{% if result.dns.cname %}| CNAME | {{ result.dns.cname | join(', ') }} |
+{% endif %}
 {% else %}
-DNS records were not available.
+No DNS records found — the domain does not resolve (NXDOMAIN). This may indicate the domain is unregistered, expired, or has been taken down.
 {% endif %}
 
 ### SSL Certificate
 
-{% if result.ssl %}
+{% if result.ssl and result.ssl.issuer %}
 | Field | Value |
 |-------|-------|
 | **Issuer** | {{ result.ssl.issuer }} |
@@ -93,7 +106,7 @@ DNS records were not available.
 | **SHA-256 Fingerprint** | `{{ result.ssl.fingerprint_sha256 }}` |
 {% if result.ssl.san %}| **SAN** | {{ result.ssl.san | join(', ') }} |{% endif %}
 {% else %}
-SSL certificate data was not available.
+SSL certificate could not be retrieved — no server responded on port 443.
 {% endif %}
 
 ### Hosting / GeoIP
@@ -107,7 +120,7 @@ SSL certificate data was not available.
 | **Organisation** | {{ result.geoip.org }} |
 | **ASN** | {{ result.geoip.asn }} ({{ result.geoip.as_name }}) |
 {% else %}
-GeoIP data was not available.
+GeoIP data was not available — no IP address could be resolved for this domain.
 {% endif %}
 
 ---

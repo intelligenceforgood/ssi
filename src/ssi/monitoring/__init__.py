@@ -16,7 +16,7 @@ Usage::
     from ssi.monitoring.costs import CostTracker
 
     tracker = CostTracker(budget_usd=0.25)
-    tracker.record_llm_tokens(model="llama3.3", input_tokens=5000, output_tokens=1000)
+    tracker.record_llm_tokens(model="llama3.1", input_tokens=5000, output_tokens=1000)
     tracker.record_api_call("virustotal")
     tracker.record_browser_seconds(30.0)
 
@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 _LLM_COST_PER_1K_TOKENS: dict[str, dict[str, float]] = {
     # Local models — zero cost
     "ollama": {"input": 0.0, "output": 0.0},
-    "llama3.3": {"input": 0.0, "output": 0.0},
+    "llama3.1": {"input": 0.0, "output": 0.0},
     "llama3.2": {"input": 0.0, "output": 0.0},
     "mistral": {"input": 0.0, "output": 0.0},
     # Vertex AI / Google Cloud
@@ -83,7 +83,7 @@ class CostLineItem:
     """A single cost entry in the investigation ledger."""
 
     category: str  # "llm", "api", "compute", "other"
-    label: str  # "llama3.3 input tokens", "virustotal lookup", "browser session"
+    label: str  # "llama3.1 input tokens", "virustotal lookup", "browser session"
     quantity: float = 0.0  # tokens, calls, seconds
     unit: str = ""  # "tokens", "calls", "seconds"
     unit_cost_usd: float = 0.0  # cost per unit

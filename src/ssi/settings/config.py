@@ -52,7 +52,7 @@ class LLMSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SSI_LLM__")
 
     provider: str = "ollama"
-    model: str = "llama3.3"
+    model: str = "llama3.1"
     ollama_base_url: str = "http://localhost:11434"
     temperature: float = 0.1
     max_tokens: int = 4096
