@@ -36,3 +36,30 @@ host = "0.0.0.0"
 port = 8100
 rate_limit_per_minute = 30
 require_auth = false
+
+[integration]
+core_api_url = "http://localhost:8000"
+dataset = "ssi"
+push_to_core = false
+trigger_dossier = false
+
+[stealth]
+apply_stealth_scripts = true
+proxy_urls = []
+randomize_fingerprint = true
+rotation_strategy = "round_robin"
+
+[captcha]
+screenshot_on_detect = true
+solver_api_key = ""
+strategy = "skip"
+wait_seconds = 15
+
+[cost]
+budget_per_investigation_usd = 1.0
+enabled = true
+warn_at_pct = 80
+
+[feedback]
+db_path = "data/evidence/feedback.db"
+enabled = true

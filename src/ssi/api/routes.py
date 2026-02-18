@@ -24,6 +24,9 @@ class InvestigateRequest(BaseModel):
     skip_whois: bool = False
     skip_screenshot: bool = False
     skip_virustotal: bool = False
+    push_to_core: bool = Field(False, description="Push results to i4g core platform.")
+    trigger_dossier: bool = Field(False, description="Queue dossier generation after push.")
+    dataset: str = Field("ssi", description="Dataset label for the core case.")
 
 
 class InvestigateResponse(BaseModel):
@@ -101,9 +104,33 @@ def _run_investigation_task(task_id: str, req: InvestigateRequest) -> None:
             skip_whois=req.skip_whois,
             skip_screenshot=req.skip_screenshot,
             skip_virustotal=req.skip_virustotal,
+            report_format="both",
         )
         _TASKS[task_id]["status"] = "completed" if result.success else "failed"
         _TASKS[task_id]["result"] = result.model_dump(mode="json")
+
+        # Push to core platform if requested
+        if req.push_to_core and result.success:
+            _push_to_core(task_id, result, dataset=req.dataset, trigger_dossier=req.trigger_dossier)
+
     except Exception as e:
         _TASKS[task_id]["status"] = "failed"
         _TASKS[task_id]["result"] = {"error": str(e)}
+
+
+def _push_to_core(task_id: str, result: Any, *, dataset: str, trigger_dossier: bool) -> None:
+    """Push investigation results to the i4g core platform."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+    try:
+        from ssi.integration.core_bridge import CoreBridge
+
+        bridge = CoreBridge()
+        case_id = bridge.push_investigation(result, dataset=dataset, trigger_dossier=trigger_dossier)
+        bridge.close()
+        _TASKS[task_id]["core_case_id"] = case_id
+        logger.info("Pushed investigation %s to core case %s", task_id, case_id)
+    except Exception as e:
+        logger.warning("Failed to push to core: %s", e)
+        _TASKS[task_id]["core_push_error"] = str(e)

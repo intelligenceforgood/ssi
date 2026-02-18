@@ -2,111 +2,75 @@
 
 AI-driven scam URL reconnaissance and evidence packaging for law enforcement.
 
-## What It Does
-
 Given a suspicious URL, SSI automatically:
 
 1. **Passive Recon** — WHOIS, DNS, SSL, GeoIP, screenshot, DOM snapshot, form inventory, technology fingerprint
-2. **Active Interaction** _(Phase 2)_ — AI agent navigates scam funnels with synthetic PII, recording every step
-3. **Evidence Packaging** — Generates prosecution-ready evidence packages (JSON + screenshots + HAR + network logs)
+2. **Active Interaction** — AI agent navigates scam funnels with synthetic PII, recording every step
+3. **Evidence Packaging** — generates prosecution-ready evidence packages (JSON, Markdown, STIX 2.1, ZIP with chain-of-custody)
 
 ## Quick Start
 
 ```bash
-# Install in development mode
-pip install -e ".[dev,test]"
+# Create and activate a virtual environment
+conda create -n i4g-ssi python=3.11 && conda activate i4g-ssi
+# or: python3.11 -m venv .venv && source .venv/bin/activate
 
-# Install Playwright browser
+# Install SSI
+pip install -e ".[dev,test]"
 playwright install chromium
 
-# Run the CLI
+# Ensure Ollama is running with Llama 3.3
+ollama serve          # in a separate terminal
+ollama pull llama3.3  # one-time download
+
+# Run a passive investigation
 ssi investigate url "https://suspicious-site.example.com" --passive
 
-# Run the API server
-uvicorn ssi.api.app:app --reload --port 8100
-
-# Run tests
-pytest tests/unit -v
+# Run a full investigation (AI agent interacts with the site)
+ssi investigate url "https://suspicious-site.example.com"
 ```
 
-## Project Structure
+## Documentation
 
-```
-ssi/
-├── config/                  # TOML settings files
-├── docker/                  # Dockerfiles for API and job images
-├── src/ssi/
-│   ├── api/                 # FastAPI REST API + web interface
-│   ├── browser/             # Playwright-based page capture
-│   ├── cli/                 # Typer CLI (entry point: `ssi`)
-│   ├── identity/            # Synthetic PII vault (Faker-based)
-│   ├── investigator/        # Core investigation orchestrator
-│   ├── models/              # Pydantic domain models
-│   ├── osint/               # OSINT modules (WHOIS, DNS, SSL, GeoIP, VT)
-│   └── settings/            # Pydantic-settings configuration
-├── tests/
-│   ├── unit/
-│   └── integration/
-└── pyproject.toml
-```
+| Document                                       | Description                                                       |
+| ---------------------------------------------- | ----------------------------------------------------------------- |
+| **[User Guide](docs/user_guide.md)**           | Step-by-step guide from basic scans to advanced investigations    |
+| **[Developer Guide](docs/developer_guide.md)** | Environment setup, codebase walkthrough, testing, contributing    |
+| **[Architecture](docs/architecture.md)**       | System design, decisions, component stack, investigation pipeline |
 
-## Configuration
+### Planning & Roadmap (in planning repo)
 
-Settings follow the same layered pattern as the i4g core platform:
+| Document                                                                      | Description                                  |
+| ----------------------------------------------------------------------------- | -------------------------------------------- |
+| [PRD](../planning/prd_scam_site_investigator.md)                              | Product requirements and success criteria    |
+| [Next Steps](../planning/proposals/ssi_next_steps.md)                         | Roadmap: local → GCP → platform integration  |
+| [Original Proposal](../planning/proposals/scam_site_investigator.md)          | Initial proposal (historical reference)      |
+| [Architecture Decisions](../planning/proposals/ssi_architecture_decisions.md) | Original ADR document (historical reference) |
 
-1. `config/settings.default.toml` — Defaults
-2. `config/settings.{env}.toml` — Environment-specific overrides
-3. `config/settings.local.toml` — Local developer overrides (gitignored)
-4. Environment variables (`SSI_*` with `__` for nesting)
-5. CLI flags
-
-### Key Environment Variables
-
-| Variable                        | Description                               | Default         |
-| ------------------------------- | ----------------------------------------- | --------------- |
-| `SSI_ENV`                       | Environment name (`local`, `dev`, `prod`) | `local`         |
-| `SSI_LLM__PROVIDER`             | LLM provider (`ollama`, `vertex`)         | `ollama`        |
-| `SSI_LLM__MODEL`                | Model name                                | `llama3.3`      |
-| `SSI_OSINT__VIRUSTOTAL_API_KEY` | VirusTotal API key                        | _(empty)_       |
-| `SSI_OSINT__IPINFO_TOKEN`       | ipinfo.io token                           | _(empty)_       |
-| `SSI_BROWSER__HEADLESS`         | Run browser headless                      | `true`          |
-| `SSI_EVIDENCE__OUTPUT_DIR`      | Evidence output directory                 | `data/evidence` |
-
-## CLI Usage
+## CLI Reference
 
 ```bash
-# Investigate a single URL (passive only)
-ssi investigate url "https://example.com" --passive
+ssi investigate url <URL> [--passive] [--format json|markdown|both] [--output DIR]
+                         [--skip-whois] [--skip-virustotal] [--skip-urlscan] [--skip-screenshot]
+                         [--push-to-core] [--trigger-dossier]
 
-# Full investigation with active agent interaction
-ssi investigate url "https://example.com"
+ssi investigate batch <FILE> [--passive] [--output DIR]
 
-# Batch investigation from file
-ssi investigate batch urls.txt --output ./evidence
+ssi job investigate --url <URL> [--passive] [--push-to-core] [--trigger-dossier]
 
-# Show resolved settings
 ssi settings show
-
-# Validate settings
 ssi settings validate
 ```
 
 ## API Endpoints
 
-| Method | Path                | Description                          |
-| ------ | ------------------- | ------------------------------------ |
-| `GET`  | `/health`           | Health check                         |
-| `POST` | `/investigate`      | Submit URL for investigation (async) |
-| `GET`  | `/investigate/{id}` | Check investigation status           |
+| Method | Path                | Description                        |
+| ------ | ------------------- | ---------------------------------- |
+| `GET`  | `/health`           | Health check                       |
+| `POST` | `/investigate`      | Submit URL for async investigation |
+| `GET`  | `/investigate/{id}` | Check investigation status         |
 
-## Integration with i4g Platform
-
-SSI is designed as a standalone tool that integrates with i4g:
-
-- **Fraud taxonomy** — Classification output maps to i4g's five-axis taxonomy
-- **Evidence store** — Packages attach to existing case records
-- **Ingestion trigger** — Scam URLs from victim reports auto-trigger SSI via workers
-- **LEO reports** — SSI intelligence enriches dossier/LEO report pipeline
+Start the API: `uvicorn ssi.api.app:app --reload --port 8100`
 
 ## License
 

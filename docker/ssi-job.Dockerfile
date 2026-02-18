@@ -29,6 +29,7 @@ RUN playwright install chromium --with-deps
 
 COPY src ./src
 COPY config ./config
+COPY templates ./templates
 
-# Default: investigate a URL passed as SSI_TARGET_URL env var
-ENTRYPOINT ["ssi", "investigate", "url"]
+# Run as a Cloud Run Job — reads SSI_JOB__URL and SSI_JOB__* env vars
+ENTRYPOINT ["ssi", "job", "investigate"]

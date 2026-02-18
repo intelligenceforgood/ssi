@@ -29,9 +29,10 @@ RUN pip install --upgrade pip \
 # Install Playwright browsers
 RUN playwright install chromium --with-deps
 
-# Copy source + config
+# Copy source + config + templates
 COPY src ./src
 COPY config ./config
+COPY templates ./templates
 
 EXPOSE 8100
 

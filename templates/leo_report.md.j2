@@ -1,0 +1,216 @@
+# Law Enforcement Evidence Report
+## Scam Site Investigation — {{ result.investigation_id }}
+
+---
+
+**CONFIDENTIAL — FOR LAW ENFORCEMENT USE ONLY**
+
+| Field | Value |
+|-------|-------|
+| **Investigation ID** | `{{ result.investigation_id }}` |
+| **Target URL** | `{{ result.url }}` |
+| **Investigation Date** | {{ result.started_at.strftime('%Y-%m-%d %H:%M:%S UTC') if result.started_at else 'N/A' }} |
+| **Duration** | {{ "%.1f"|format(result.duration_seconds) }} seconds |
+| **Status** | {{ result.status.value }} |
+| **Collection Method** | Automated (SSI — Scam Site Investigator) |
+
+---
+
+## 1. Executive Summary
+
+{% if result.classification and result.classification.summary %}
+{{ result.classification.summary }}
+{% else %}
+Automated investigation of the target URL was conducted using the Scam Site
+Investigator (SSI). The tool performed
+{% if result.passive_only %}passive reconnaissance{% else %}passive and active reconnaissance{% endif %}
+to document the site's infrastructure, behaviour, and threat indicators.
+{% endif %}
+
+{% if result.taxonomy_result %}
+### Risk Assessment
+
+| Metric | Value |
+|--------|-------|
+| **Risk Score** | {{ "%.1f"|format(result.taxonomy_result.risk_score) }} / 100 |
+| **Primary Intent** | {% for lbl in result.taxonomy_result.intent %}{{ lbl.label }} ({{ "%.0f"|format(lbl.confidence * 100) }}%){% if not loop.last %}, {% endif %}{% endfor %} |
+| **Delivery Channel** | {% for lbl in result.taxonomy_result.channel %}{{ lbl.label }}{% if not loop.last %}, {% endif %}{% endfor %} |
+| **Techniques** | {% for lbl in result.taxonomy_result.techniques %}{{ lbl.label }}{% if not loop.last %}, {% endif %}{% endfor %} |
+| **Requested Actions** | {% for lbl in result.taxonomy_result.actions %}{{ lbl.label }}{% if not loop.last %}, {% endif %}{% endfor %} |
+| **Claimed Persona** | {% for lbl in result.taxonomy_result.persona %}{{ lbl.label }}{% if not loop.last %}, {% endif %}{% endfor %} |
+
+{% if result.taxonomy_result.explanation %}
+**Classification Rationale:** {{ result.taxonomy_result.explanation }}
+{% endif %}
+{% endif %}
+
+---
+
+## 2. Infrastructure Intelligence
+
+### Domain Registration (WHOIS)
+
+{% if result.whois %}
+| Field | Value |
+|-------|-------|
+| **Domain** | {{ result.whois.domain }} |
+| **Registrar** | {{ result.whois.registrar }} |
+| **Created** | {{ result.whois.creation_date }} |
+| **Expires** | {{ result.whois.expiration_date }} |
+| **Registrant** | {{ result.whois.registrant_name or 'Redacted' }} ({{ result.whois.registrant_org or 'N/A' }}) |
+| **Country** | {{ result.whois.registrant_country or 'Unknown' }} |
+| **Name Servers** | {{ result.whois.name_servers | join(', ') }} |
+{% else %}
+WHOIS data was not available.
+{% endif %}
+
+### DNS Records
+
+{% if result.dns %}
+| Record Type | Values |
+|-------------|--------|
+{% if result.dns.a %}| A | {{ result.dns.a | join(', ') }} |{% endif %}
+{% if result.dns.aaaa %}| AAAA | {{ result.dns.aaaa | join(', ') }} |{% endif %}
+{% if result.dns.mx %}| MX | {{ result.dns.mx | join(', ') }} |{% endif %}
+{% if result.dns.ns %}| NS | {{ result.dns.ns | join(', ') }} |{% endif %}
+{% if result.dns.txt %}| TXT | {{ result.dns.txt | join(', ') }} |{% endif %}
+{% if result.dns.cname %}| CNAME | {{ result.dns.cname | join(', ') }} |{% endif %}
+{% else %}
+DNS records were not available.
+{% endif %}
+
+### SSL Certificate
+
+{% if result.ssl %}
+| Field | Value |
+|-------|-------|
+| **Issuer** | {{ result.ssl.issuer }} |
+| **Subject** | {{ result.ssl.subject }} |
+| **Valid** | {{ result.ssl.is_valid }} |
+| **Self-Signed** | {{ result.ssl.is_self_signed }} |
+| **Not Before** | {{ result.ssl.not_before }} |
+| **Not After** | {{ result.ssl.not_after }} |
+| **SHA-256 Fingerprint** | `{{ result.ssl.fingerprint_sha256 }}` |
+{% if result.ssl.san %}| **SAN** | {{ result.ssl.san | join(', ') }} |{% endif %}
+{% else %}
+SSL certificate data was not available.
+{% endif %}
+
+### Hosting / GeoIP
+
+{% if result.geoip %}
+| Field | Value |
+|-------|-------|
+| **IP Address** | {{ result.geoip.ip }} |
+| **Hostname** | {{ result.geoip.hostname or 'N/A' }} |
+| **Location** | {{ result.geoip.city }}, {{ result.geoip.region }}, {{ result.geoip.country }} |
+| **Organisation** | {{ result.geoip.org }} |
+| **ASN** | {{ result.geoip.asn }} ({{ result.geoip.as_name }}) |
+{% else %}
+GeoIP data was not available.
+{% endif %}
+
+---
+
+## 3. PII Collection Map
+
+{% if result.page_snapshot and result.page_snapshot.form_fields %}
+The following personal information fields were identified on the target site:
+
+| # | Field Type | Name | Label | PII Category | Required |
+|---|-----------|------|-------|-------------|----------|
+{% for field in result.page_snapshot.form_fields %}
+| {{ loop.index }} | {{ field.field_type }} | `{{ field.name }}` | {{ field.label or field.placeholder or '—' }} | {{ field.pii_category or '—' }} | {{ '✓' if field.required else '—' }} |
+{% endfor %}
+
+**Total PII fields identified:** {{ result.page_snapshot.form_fields | length }}
+{% else %}
+No form fields were identified during the investigation.
+{% endif %}
+
+---
+
+## 4. Threat Indicators (IOCs)
+
+{% if result.threat_indicators %}
+| # | Type | Value | Context | Source |
+|---|------|-------|---------|--------|
+{% for ti in result.threat_indicators %}
+| {{ loop.index }} | {{ ti.indicator_type }} | `{{ ti.value }}` | {{ ti.context }} | {{ ti.source }} |
+{% endfor %}
+
+**Total IOCs:** {{ result.threat_indicators | length }}
+{% else %}
+No threat indicators were identified.
+{% endif %}
+
+---
+
+## 5. Downloaded Files
+
+{% if result.downloads %}
+| # | Filename | SHA-256 | Malicious | VT Detections |
+|---|----------|---------|-----------|---------------|
+{% for dl in result.downloads %}
+| {{ loop.index }} | {{ dl.filename }} | `{{ dl.sha256[:16] }}…` | {{ '⚠ YES' if dl.is_malicious else 'No' }} | {{ dl.vt_detections }}/{{ dl.vt_total_engines }} |
+{% endfor %}
+{% else %}
+No files were downloaded during the investigation.
+{% endif %}
+
+---
+
+{% if result.agent_steps %}
+## 6. AI Agent Interaction Log
+
+The following steps were recorded during active interaction with the target site:
+
+| Step | Action | Reasoning | Duration |
+|------|--------|-----------|----------|
+{% for step in result.agent_steps %}
+| {{ step.get('step', '?') }} | {{ step.get('action', '?') }} | {{ step.get('reasoning', '—') }} | {{ step.get('duration_ms', 0) }}ms |
+{% endfor %}
+
+**Total tokens used:** {{ result.token_usage }}
+{% endif %}
+
+---
+
+## 7. Brand Impersonation
+
+{% if result.brand_impersonation %}
+{{ result.brand_impersonation }}
+{% else %}
+No brand impersonation was detected.
+{% endif %}
+
+---
+
+## 8. Evidence Package Contents
+
+{% if result.chain_of_custody %}
+| Field | Value |
+|-------|-------|
+| **Total Artifacts** | {{ result.chain_of_custody.total_artifacts }} |
+| **Total Size** | {{ result.chain_of_custody.total_size_bytes }} bytes |
+| **Hash Algorithm** | {{ result.chain_of_custody.hash_algorithm }} |
+| **Package SHA-256** | `{{ result.chain_of_custody.package_sha256 }}` |
+| **Collection Tool** | {{ result.chain_of_custody.collected_by }} v{{ result.chain_of_custody.tool_version }} |
+
+### Artifact Manifest
+
+| # | File | SHA-256 | Size |
+|---|------|---------|------|
+{% for a in result.chain_of_custody.artifacts %}
+| {{ loop.index }} | {{ a.file }} | `{{ a.sha256[:16] }}…` | {{ a.size_bytes }} bytes |
+{% endfor %}
+
+### Legal Notice
+
+{{ result.chain_of_custody.legal_notice }}
+{% endif %}
+
+---
+
+*Report generated by SSI (Scam Site Investigator) — Intelligence For Good*
+*{{ result.completed_at.strftime('%Y-%m-%d %H:%M:%S UTC') if result.completed_at else 'N/A' }}*

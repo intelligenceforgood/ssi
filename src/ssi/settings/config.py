@@ -108,6 +108,47 @@ class IdentityVaultSettings(BaseSettings):
     rotate_per_session: bool = True
 
 
+class StealthSettings(BaseSettings):
+    """Anti-detection / stealth configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="SSI_STEALTH__")
+
+    proxy_urls: list[str] = Field(default_factory=list)
+    rotation_strategy: str = "round_robin"  # round_robin | random
+    randomize_fingerprint: bool = True
+    apply_stealth_scripts: bool = True
+
+
+class CaptchaSettings(BaseSettings):
+    """CAPTCHA detection and handling configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="SSI_CAPTCHA__")
+
+    strategy: str = "skip"  # skip | wait | accessibility | solver
+    solver_api_key: str = ""
+    wait_seconds: int = 15
+    screenshot_on_detect: bool = True
+
+
+class CostSettings(BaseSettings):
+    """Cost monitoring and budget enforcement."""
+
+    model_config = SettingsConfigDict(env_prefix="SSI_COST__")
+
+    budget_per_investigation_usd: float = 1.0
+    warn_at_pct: int = 80
+    enabled: bool = True
+
+
+class FeedbackSettings(BaseSettings):
+    """Investigation feedback loop configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="SSI_FEEDBACK__")
+
+    db_path: str = "data/evidence/feedback.db"
+    enabled: bool = True
+
+
 class APISettings(BaseSettings):
     """API server configuration."""
 
@@ -118,6 +159,17 @@ class APISettings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
     rate_limit_per_minute: int = 30
     require_auth: bool = False
+
+
+class IntegrationSettings(BaseSettings):
+    """Settings for integration with the i4g core platform."""
+
+    model_config = SettingsConfigDict(env_prefix="SSI_INTEGRATION__")
+
+    core_api_url: str = "http://localhost:8000"
+    push_to_core: bool = False
+    trigger_dossier: bool = False
+    dataset: str = "ssi"
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +196,11 @@ class Settings(BaseSettings):
     evidence: EvidenceSettings = Field(default_factory=EvidenceSettings)
     identity: IdentityVaultSettings = Field(default_factory=IdentityVaultSettings)
     api: APISettings = Field(default_factory=APISettings)
+    integration: IntegrationSettings = Field(default_factory=IntegrationSettings)
+    stealth: StealthSettings = Field(default_factory=StealthSettings)
+    captcha: CaptchaSettings = Field(default_factory=CaptchaSettings)
+    cost: CostSettings = Field(default_factory=CostSettings)
+    feedback: FeedbackSettings = Field(default_factory=FeedbackSettings)
 
     @model_validator(mode="before")
     @classmethod
@@ -175,6 +232,8 @@ class Settings(BaseSettings):
         ).is_absolute():
             rel = self.identity.db_url.replace("sqlite:///", "")
             self.identity.db_url = f"sqlite:///{root / rel}"
+        if not Path(self.feedback.db_path).is_absolute():
+            self.feedback.db_path = str(root / self.feedback.db_path)
         return self
 
 

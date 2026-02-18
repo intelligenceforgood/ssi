@@ -11,6 +11,7 @@ from pathlib import Path
 import typer
 
 from ssi.cli.investigate import investigate_app
+from ssi.cli.job import job_app
 from ssi.cli.settings_cmd import settings_app
 
 try:
@@ -33,6 +34,7 @@ if str(PROJECT_ROOT) not in sys.path:
 app = typer.Typer(add_completion=True, help=APP_HELP)
 
 app.add_typer(investigate_app, name="investigate")
+app.add_typer(job_app, name="job")
 app.add_typer(settings_app, name="settings")
 
 

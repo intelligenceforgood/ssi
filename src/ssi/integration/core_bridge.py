@@ -1,0 +1,282 @@
+"""Bridge between SSI investigation results and i4g core platform.
+
+This module translates SSI's ``InvestigationResult`` into the data
+structures expected by core's case management, evidence storage, and
+dossier/LEO report pipeline.  It communicates with the core API over
+HTTP so the two systems remain independently deployable.
+
+Usage (local/dev)::
+
+    from ssi.integration.core_bridge import CoreBridge
+
+    bridge = CoreBridge(core_api_url="http://localhost:8000")
+    case_id = bridge.push_investigation(result)
+
+Usage (Cloud Run)::
+
+    bridge = CoreBridge()  # reads SSI_INTEGRATION__CORE_API_URL env var
+    case_id = bridge.push_investigation(result)
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import mimetypes
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+from uuid import uuid4
+
+import httpx
+
+from ssi.models.investigation import InvestigationResult
+
+logger = logging.getLogger(__name__)
+
+
+class CoreBridge:
+    """Push SSI investigation results into the i4g core platform.
+
+    Translates investigation evidence into core API calls:
+    - Creates a case record
+    - Attaches evidence artifacts (screenshots, HAR, DOM, etc.)
+    - Stores the taxonomy classification
+    - Extracts entities (IOCs) and links them to the case
+    - Optionally triggers dossier generation
+
+    Args:
+        core_api_url: Base URL of the i4g core API.
+        timeout: HTTP request timeout in seconds.
+    """
+
+    def __init__(
+        self,
+        core_api_url: str | None = None,
+        timeout: float = 60.0,
+    ) -> None:
+        if core_api_url is None:
+            from ssi.settings import get_settings
+
+            settings = get_settings()
+            core_api_url = getattr(getattr(settings, "integration", None), "core_api_url", None)
+            if not core_api_url:
+                core_api_url = "http://localhost:8000"
+
+        self.core_api_url = core_api_url.rstrip("/")
+        self.timeout = timeout
+        self._client = httpx.Client(base_url=self.core_api_url, timeout=self.timeout)
+
+    def close(self) -> None:
+        """Close the underlying HTTP client."""
+        self._client.close()
+
+    # ------------------------------------------------------------------
+    # Public interface
+    # ------------------------------------------------------------------
+
+    def push_investigation(
+        self,
+        result: InvestigationResult,
+        *,
+        dataset: str = "ssi",
+        trigger_dossier: bool = False,
+    ) -> str:
+        """Push a complete SSI investigation into core.
+
+        Steps:
+            1. Create a case record.
+            2. Attach evidence artifacts.
+            3. Store taxonomy classification on the case.
+            4. Create entity records for threat indicators.
+            5. Optionally queue dossier generation.
+
+        Args:
+            result: Completed SSI investigation.
+            dataset: Dataset label for the case (default ``"ssi"``).
+            trigger_dossier: When True, queue a dossier job for the case.
+
+        Returns:
+            The ``case_id`` assigned by the core platform.
+        """
+        case_id = self._create_case(result, dataset=dataset)
+        logger.info("Created case %s for investigation %s", case_id, result.investigation_id)
+
+        self._attach_evidence(case_id, result)
+        self._store_classification(case_id, result)
+        self._create_entities(case_id, result)
+
+        if trigger_dossier:
+            self._trigger_dossier(case_id, result)
+
+        return case_id
+
+    def health_check(self) -> bool:
+        """Check if the core API is reachable."""
+        try:
+            resp = self._client.get("/health")
+            return resp.status_code == 200
+        except httpx.HTTPError:
+            return False
+
+    # ------------------------------------------------------------------
+    # Case management
+    # ------------------------------------------------------------------
+
+    def _create_case(self, result: InvestigationResult, *, dataset: str) -> str:
+        """Create a case record in the core platform."""
+        payload: dict[str, Any] = {
+            "dataset": dataset,
+            "source_type": "ssi_investigation",
+            "source_url": result.url,
+            "metadata": {
+                "ssi_investigation_id": str(result.investigation_id),
+                "passive_only": result.passive_only,
+                "started_at": result.started_at.isoformat() if result.started_at else None,
+                "completed_at": result.completed_at.isoformat() if result.completed_at else None,
+                "duration_seconds": result.duration_seconds,
+            },
+        }
+
+        # Include classification if available
+        if result.taxonomy_result:
+            payload["classification_result"] = result.taxonomy_result.model_dump(mode="json")
+            payload["risk_score"] = result.taxonomy_result.risk_score
+
+        resp = self._client.post("/cases", json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("case_id", data.get("id", str(uuid4())))
+
+    # ------------------------------------------------------------------
+    # Evidence attachment
+    # ------------------------------------------------------------------
+
+    def _attach_evidence(self, case_id: str, result: InvestigationResult) -> None:
+        """Upload evidence artifacts to the core evidence store."""
+        inv_dir = Path(result.output_path) if result.output_path else None
+        if not inv_dir or not inv_dir.is_dir():
+            logger.warning("No output directory found for evidence attachment")
+            return
+
+        # Attach key artifacts
+        _PRIORITY_FILES = [
+            "investigation.json",
+            "report.md",
+            "leo_evidence_report.md",
+            "stix_bundle.json",
+            "evidence.zip",
+        ]
+
+        for fname in _PRIORITY_FILES:
+            fpath = inv_dir / fname
+            if fpath.is_file():
+                self._upload_evidence_file(case_id, fpath)
+
+        # Attach screenshots and HAR files from subdirectories
+        for pattern in ("*.png", "*.har", "*.html"):
+            for fpath in inv_dir.rglob(pattern):
+                if fpath.is_file():
+                    self._upload_evidence_file(case_id, fpath)
+
+    def _upload_evidence_file(self, case_id: str, file_path: Path) -> None:
+        """Upload a single evidence file to the core API."""
+        mime_type, _ = mimetypes.guess_type(file_path.name)
+        try:
+            with open(file_path, "rb") as f:
+                files = {"file": (file_path.name, f, mime_type or "application/octet-stream")}
+                resp = self._client.post(
+                    f"/cases/{case_id}/evidence",
+                    files=files,
+                )
+                resp.raise_for_status()
+                logger.debug("Attached %s to case %s", file_path.name, case_id)
+        except httpx.HTTPError as e:
+            logger.warning("Failed to attach %s to case %s: %s", file_path.name, case_id, e)
+
+    # ------------------------------------------------------------------
+    # Classification
+    # ------------------------------------------------------------------
+
+    def _store_classification(self, case_id: str, result: InvestigationResult) -> None:
+        """Store the fraud taxonomy classification on the case."""
+        if not result.taxonomy_result:
+            return
+
+        payload = {
+            "classification_result": result.taxonomy_result.model_dump(mode="json"),
+            "classification_status": "completed",
+            "risk_score": result.taxonomy_result.risk_score,
+        }
+        try:
+            resp = self._client.patch(f"/cases/{case_id}", json=payload)
+            resp.raise_for_status()
+            logger.info("Stored classification on case %s (risk_score=%.1f)", case_id, result.taxonomy_result.risk_score)
+        except httpx.HTTPError as e:
+            logger.warning("Failed to store classification on case %s: %s", case_id, e)
+
+    # ------------------------------------------------------------------
+    # Entity extraction (IOCs → entities + indicators)
+    # ------------------------------------------------------------------
+
+    def _create_entities(self, case_id: str, result: InvestigationResult) -> None:
+        """Create entity and indicator records from threat indicators."""
+        if not result.threat_indicators:
+            return
+
+        entities: list[dict[str, Any]] = []
+        for ti in result.threat_indicators:
+            entity_type = _IOC_TYPE_TO_ENTITY.get(ti.indicator_type, "other")
+            entities.append(
+                {
+                    "entity_type": entity_type,
+                    "canonical_value": ti.value,
+                    "raw_value": ti.value,
+                    "confidence": 0.9,
+                    "metadata": {"source": ti.source, "context": ti.context},
+                }
+            )
+
+        try:
+            resp = self._client.post(f"/cases/{case_id}/entities/batch", json={"entities": entities})
+            resp.raise_for_status()
+            logger.info("Created %d entities on case %s", len(entities), case_id)
+        except httpx.HTTPError as e:
+            logger.warning("Failed to create entities on case %s: %s", case_id, e)
+
+    # ------------------------------------------------------------------
+    # Dossier / LEO report trigger
+    # ------------------------------------------------------------------
+
+    def _trigger_dossier(self, case_id: str, result: InvestigationResult) -> None:
+        """Queue a dossier generation job for the case."""
+        payload = {
+            "case_ids": [case_id],
+            "priority": "normal",
+            "metadata": {
+                "source": "ssi",
+                "investigation_id": str(result.investigation_id),
+                "target_url": result.url,
+            },
+        }
+        try:
+            resp = self._client.post("/dossier/queue", json=payload)
+            resp.raise_for_status()
+            logger.info("Queued dossier generation for case %s", case_id)
+        except httpx.HTTPError as e:
+            logger.warning("Failed to trigger dossier for case %s: %s", case_id, e)
+
+
+# IOC type → entity type mapping for core platform
+_IOC_TYPE_TO_ENTITY: dict[str, str] = {
+    "ip": "ip_address",
+    "ipv4": "ip_address",
+    "ipv6": "ip_address",
+    "domain": "domain",
+    "email": "email",
+    "url": "url",
+    "crypto_wallet": "crypto_wallet",
+    "phone": "phone",
+    "sha256": "file_hash",
+    "md5": "file_hash",
+}

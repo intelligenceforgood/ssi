@@ -1,0 +1,250 @@
+# SSI Investigation Report — {{ result.url }}
+
+> **Investigation ID:** {{ result.investigation_id }}
+> **Date:** {{ result.started_at.strftime('%Y-%m-%d %H:%M UTC') }}
+> **Status:** {{ result.status.value | upper }}
+> **Duration:** {{ "%.1f" | format(result.duration_seconds) }}s
+{% if result.passive_only %}
+> **Mode:** Passive Reconnaissance Only
+{% else %}
+> **Mode:** Full Investigation (Passive + Active Agent)
+{% endif %}
+
+---
+
+## Summary
+
+| Field | Value |
+|-------|-------|
+| **Target URL** | `{{ result.url }}` |
+{% if result.page_snapshot and result.page_snapshot.final_url != result.url %}
+| **Final URL** | `{{ result.page_snapshot.final_url }}` |
+{% endif %}
+{% if result.page_snapshot %}
+| **Page Title** | {{ result.page_snapshot.title or "N/A" }} |
+| **HTTP Status** | {{ result.page_snapshot.status_code }} |
+{% endif %}
+{% if result.whois %}
+| **Registrar** | {{ result.whois.registrar or "N/A" }} |
+| **Domain Created** | {{ result.whois.creation_date or "N/A" }} |
+{% endif %}
+{% if result.geoip %}
+| **Hosting Country** | {{ result.geoip.country or "N/A" }} |
+| **ASN** | {{ result.geoip.asn or "N/A" }} ({{ result.geoip.as_name or "" }}) |
+{% endif %}
+{% if result.threat_indicators %}
+| **Threat Indicators** | {{ result.threat_indicators | length }} found |
+{% endif %}
+
+---
+{% if result.whois %}
+
+## WHOIS / Domain Registration
+
+| Field | Value |
+|-------|-------|
+| **Domain** | {{ result.whois.domain }} |
+| **Registrar** | {{ result.whois.registrar or "Unknown" }} |
+| **Created** | {{ result.whois.creation_date or "Unknown" }} |
+| **Expires** | {{ result.whois.expiration_date or "Unknown" }} |
+| **Updated** | {{ result.whois.updated_date or "Unknown" }} |
+| **Registrant** | {{ result.whois.registrant_name or "Redacted" }} |
+| **Organization** | {{ result.whois.registrant_org or "Redacted" }} |
+| **Country** | {{ result.whois.registrant_country or "Unknown" }} |
+{% if result.whois.name_servers %}
+| **Name Servers** | {{ result.whois.name_servers | join(', ') }} |
+{% endif %}
+{% if result.whois.status %}
+| **Status** | {{ result.whois.status | join(', ') }} |
+{% endif %}
+{% endif %}
+
+---
+{% if result.dns %}
+
+## DNS Records
+
+{% if result.dns.a %}
+| Type | Value |
+|------|-------|
+{% for record in result.dns.a %}
+| A | `{{ record }}` |
+{% endfor %}
+{% for record in result.dns.aaaa %}
+| AAAA | `{{ record }}` |
+{% endfor %}
+{% for record in result.dns.mx %}
+| MX | `{{ record }}` |
+{% endfor %}
+{% for record in result.dns.ns %}
+| NS | `{{ record }}` |
+{% endfor %}
+{% for record in result.dns.cname %}
+| CNAME | `{{ record }}` |
+{% endfor %}
+{% for record in result.dns.txt %}
+| TXT | `{{ record[:80] }}` |
+{% endfor %}
+{% endif %}
+{% endif %}
+
+---
+{% if result.ssl %}
+
+## TLS / SSL Certificate
+
+| Field | Value |
+|-------|-------|
+| **Issuer** | {{ result.ssl.issuer }} |
+| **Subject** | {{ result.ssl.subject }} |
+| **Valid From** | {{ result.ssl.not_before }} |
+| **Valid Until** | {{ result.ssl.not_after }} |
+| **Valid** | {{ "Yes" if result.ssl.is_valid else "No" }} |
+| **Self-Signed** | {{ "Yes" if result.ssl.is_self_signed else "No" }} |
+{% if result.ssl.san %}
+| **SANs** | {{ result.ssl.san | join(', ') }} |
+{% endif %}
+| **SHA-256** | `{{ result.ssl.fingerprint_sha256 }}` |
+{% endif %}
+
+---
+{% if result.geoip %}
+
+## IP Geolocation
+
+| Field | Value |
+|-------|-------|
+| **IP Address** | `{{ result.geoip.ip }}` |
+{% if result.geoip.hostname %}
+| **Hostname** | {{ result.geoip.hostname }} |
+{% endif %}
+| **Location** | {{ result.geoip.city }}{{ ", " + result.geoip.region if result.geoip.region else "" }}, {{ result.geoip.country }} |
+| **Organization** | {{ result.geoip.org or "Unknown" }} |
+| **ASN** | {{ result.geoip.asn or "Unknown" }} |
+| **AS Name** | {{ result.geoip.as_name or "Unknown" }} |
+{% endif %}
+
+---
+{% if result.page_snapshot %}
+
+## Page Analysis
+
+| Field | Value |
+|-------|-------|
+| **Title** | {{ result.page_snapshot.title or "None" }} |
+| **Final URL** | `{{ result.page_snapshot.final_url }}` |
+| **HTTP Status** | {{ result.page_snapshot.status_code }} |
+{% if result.page_snapshot.redirect_chain %}
+| **Redirects** | {{ result.page_snapshot.redirect_chain | length }} hop(s) |
+{% endif %}
+{% if result.page_snapshot.technologies %}
+| **Technologies** | {{ result.page_snapshot.technologies | join(', ') }} |
+{% endif %}
+{% if result.page_snapshot.screenshot_path %}
+| **Screenshot** | [screenshot.png](screenshot.png) |
+{% endif %}
+{% if result.page_snapshot.redirect_chain %}
+
+### Redirect Chain
+
+{% for hop in result.page_snapshot.redirect_chain %}
+{{ loop.index }}. `{{ hop }}`
+{% endfor %}
+→ `{{ result.page_snapshot.final_url }}`
+{% endif %}
+{% if result.page_snapshot.form_fields %}
+
+### Form Fields Detected ({{ result.page_snapshot.form_fields | length }})
+
+This is the PII the site attempts to collect:
+
+| # | Type | Name | Label | Placeholder | Required |
+|---|------|------|-------|-------------|----------|
+{% for field in result.page_snapshot.form_fields %}
+| {{ loop.index }} | {{ field.field_type }} | `{{ field.name }}` | {{ field.label or "—" }} | {{ field.placeholder or "—" }} | {{ "Yes" if field.required else "No" }} |
+{% endfor %}
+{% endif %}
+{% if result.page_snapshot.external_resources %}
+
+### External Resources ({{ result.page_snapshot.external_resources | length }})
+
+{% for resource in result.page_snapshot.external_resources[:20] %}
+- `{{ resource }}`
+{% endfor %}
+{% if result.page_snapshot.external_resources | length > 20 %}
+... and {{ result.page_snapshot.external_resources | length - 20 }} more.
+{% endif %}
+{% endif %}
+{% endif %}
+
+---
+{% if result.threat_indicators %}
+
+## Threat Indicators ({{ result.threat_indicators | length }})
+
+| Type | Value | Context | Source |
+|------|-------|---------|--------|
+{% for ind in result.threat_indicators %}
+| {{ ind.indicator_type }} | `{{ ind.value[:60] }}` | {{ ind.context }} | {{ ind.source }} |
+{% endfor %}
+{% endif %}
+{% if result.brand_impersonation %}
+
+---
+
+## Brand Impersonation
+
+{{ result.brand_impersonation }}
+{% endif %}
+{% if result.downloads %}
+
+---
+
+## Downloaded Files ({{ result.downloads | length }})
+
+| # | Filename | SHA-256 | Size | Malicious | VT Result |
+|---|----------|---------|------|-----------|-----------|
+{% for dl in result.downloads %}
+| {{ loop.index }} | `{{ dl.filename }}` | `{{ dl.sha256[:16] }}...` | {{ dl.size_bytes }} bytes | {{ "**YES**" if dl.is_malicious else "No" }} | {{ dl.vt_context or "N/A" }} |
+{% endfor %}
+{% endif %}
+{% if result.agent_steps %}
+
+---
+
+## AI Agent Interaction ({{ result.agent_steps | length }} steps)
+
+| Step | Action | Element | Value | Reasoning |
+|------|--------|---------|-------|-----------|
+{% for step in result.agent_steps %}
+| {{ step.step }} | {{ step.action }} | {{ step.element if step.element is not none else "—" }} | {{ step.value[:40] if step.value else "—" }} | {{ step.reasoning[:60] if step.reasoning else "—" }} |
+{% endfor %}
+
+**Total tokens used:** {{ result.token_usage }}
+{% endif %}
+
+---
+
+## Evidence Artifacts
+
+| Artifact | Path |
+|----------|------|
+{% if result.report_path %}
+| Investigation JSON | [investigation.json](investigation.json) |
+{% endif %}
+{% if result.page_snapshot and result.page_snapshot.screenshot_path %}
+| Screenshot | [screenshot.png](screenshot.png) |
+{% endif %}
+{% if result.page_snapshot and result.page_snapshot.dom_snapshot_path %}
+| DOM Snapshot | [dom.html](dom.html) |
+{% endif %}
+{% if result.page_snapshot and result.page_snapshot.har_path %}
+| Network HAR | [network.har](network.har) |
+{% endif %}
+{% if not result.passive_only %}
+| Agent Video | [video/](video/) |
+{% endif %}
+
+---
+
+*Generated by SSI (Scam Site Investigator) — Intelligence For Good*
