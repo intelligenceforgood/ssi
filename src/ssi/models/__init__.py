@@ -1,0 +1,1 @@
+"""SSI domain models."""

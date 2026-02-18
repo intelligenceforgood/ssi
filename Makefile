@@ -1,0 +1,53 @@
+.PHONY: install install-dev test lint format clean browsers rehydrate
+
+# ---------- Setup ----------
+install:
+	pip install -e .
+
+install-dev:
+	pip install -e ".[dev,test]"
+	pre-commit install
+
+browsers:
+	playwright install chromium
+
+# ---------- Quality ----------
+test:
+	pytest tests/unit -v
+
+test-all:
+	pytest -v
+
+lint:
+	ruff check src/ tests/
+	mypy src/ssi/
+
+format:
+	black src/ tests/
+	isort src/ tests/
+
+# ---------- Run ----------
+serve:
+	uvicorn ssi.api.app:app --reload --port 8100
+
+investigate:
+	ssi investigate $(URL)
+
+# ---------- Docker ----------
+build-api:
+	docker build -f docker/ssi-api.Dockerfile -t ssi-api:local .
+
+build-job:
+	docker build -f docker/ssi-job.Dockerfile -t ssi-job:local .
+
+# ---------- Clean ----------
+clean:
+	rm -rf build/ dist/ *.egg-info .pytest_cache .mypy_cache htmlcov
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+
+# ---------- Rehydrate (Copilot session bootstrap) ----------
+rehydrate:
+	@echo "--- SSI Rehydrate ---"
+	git status -sb
+	@echo "--- Recent changes ---"
+	git log --oneline -5 2>/dev/null || true

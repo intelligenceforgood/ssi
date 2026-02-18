@@ -1,0 +1,61 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.sw[opnm]
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Runtime data
+data/
+*.db
+*.sqlite
+
+# Evidence output (can be large)
+output/
+
+# Playwright browsers
+playwright-browsers/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# mypy
+.mypy_cache/
+
+# Entire tool (AI session context)
+.entire/logs/
+.entire/metadata/
+.entire/tmp/
+.claud/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan

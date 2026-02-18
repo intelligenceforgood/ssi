@@ -1,0 +1,38 @@
+# SSI Default Settings
+# Override with settings.local.toml or SSI_* environment variables.
+
+[llm]
+max_tokens = 4096
+model = "llama3.3"
+ollama_base_url = "http://localhost:11434"
+provider = "ollama"
+temperature = 0.1
+token_budget_per_session = 50000
+
+[browser]
+headless = true
+record_har = true
+record_video = false
+sandbox = true
+timeout_ms = 30000
+
+[osint]
+dns_timeout_sec = 5
+whois_timeout_sec = 10
+
+[evidence]
+output_dir = "data/evidence"
+retain_days = 365
+storage_backend = "local"
+
+[identity]
+db_url = "sqlite:///data/identity_vault.db"
+default_locale = "en_US"
+rotate_per_session = true
+
+[api]
+cors_origins = ["http://localhost:3000", "http://localhost:5173"]
+host = "0.0.0.0"
+port = 8100
+rate_limit_per_minute = 30
+require_auth = false

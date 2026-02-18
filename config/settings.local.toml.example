@@ -1,0 +1,13 @@
+# Local developer overrides — not committed to git.
+# Copy this file to settings.local.toml and customize.
+
+# [osint]
+# virustotal_api_key = "your-key-here"
+# ipinfo_token = "your-token-here"
+
+# [llm]
+# provider = "ollama"
+# model = "llama3.3"
+
+# [browser]
+# headless = false  # Set to false to watch the browser during development
