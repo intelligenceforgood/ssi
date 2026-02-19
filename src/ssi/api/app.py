@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from ssi.api.routes import router
+from ssi.api.web import web_router
 from ssi.settings import get_settings
 
 try:
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     )
 
     application.include_router(router)
+    application.include_router(web_router)
     return application
 
 

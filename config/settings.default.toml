@@ -2,6 +2,8 @@
 # Override with settings.local.toml or SSI_* environment variables.
 
 [llm]
+gcp_location = "us-central1"
+gcp_project = ""
 max_tokens = 4096
 model = "llama3.1"
 ollama_base_url = "http://localhost:11434"

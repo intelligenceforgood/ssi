@@ -1,0 +1,40 @@
+# SSI Dev (GCP) Settings
+# Overrides defaults for Cloud Run deployment on i4g-dev.
+
+[llm]
+gcp_location = "us-central1"
+gcp_project = "i4g-dev"
+max_tokens = 4096
+model = "gemini-2.0-flash"
+provider = "gemini"
+temperature = 0.1
+token_budget_per_session = 100000
+
+[browser]
+headless = true 
+record_har = true 
+record_video = false 
+sandbox = false # Cloud Run runs as root; Chromium needs --no-sandbox
+
+[evidence]
+gcs_bucket = "i4g-dev-ssi-evidence"
+gcs_prefix = "investigations"
+output_dir = "data/evidence"
+retain_days = 365
+storage_backend = "gcs"
+
+[api]
+cors_origins = ["https://console.i4g.dev", "http://localhost:3000"]
+host = "0.0.0.0"
+port = 8100
+require_auth = false
+
+[integration]
+core_api_url = "https://api.i4g.dev"
+push_to_core = false
+trigger_dossier = false
+
+[cost]
+budget_per_investigation_usd = 2.0
+enabled = true
+warn_at_pct = 80

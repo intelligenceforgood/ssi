@@ -1,6 +1,7 @@
 """LLM client for the browser interaction agent.
 
-Calls Ollama (or compatible endpoint) and returns structured actions.
+Uses the pluggable ``ssi.llm`` provider layer so the agent works with
+both local Ollama and cloud-hosted Gemini models.
 Tracks token usage for budget enforcement and measurement.
 """
 
@@ -8,12 +9,10 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from dataclasses import dataclass
 
-import httpx
-
 from ssi.identity.vault import SyntheticIdentity
+from ssi.llm.base import LLMProvider
 from ssi.models.agent import ActionType, AgentAction, PageObservation
 
 logger = logging.getLogger(__name__)
@@ -73,47 +72,35 @@ class LLMResponse:
 
 
 class AgentLLMClient:
-    """Thin client for calling an Ollama-compatible LLM.
+    """LLM client for the browser interaction agent.
 
-    Uses Ollama's ``/api/chat`` endpoint directly for precise token
-    counting.  Falls back to langchain-ollama if needed in the future.
+    Delegates to the pluggable ``LLMProvider`` abstraction so the same
+    agent code works with Ollama, Gemini, or any future backend.
 
     Args:
-        base_url: Ollama base URL (e.g. ``http://localhost:11434``).
-        model: Model name (e.g. ``llama3.1``).
-        temperature: Sampling temperature.
-        max_tokens: Maximum generation tokens per call.
+        llm: An ``LLMProvider`` instance.  Defaults to one built from settings.
+        max_steps: Maximum agent interaction steps.
     """
 
     def __init__(
         self,
-        base_url: str = "http://localhost:11434",
-        model: str = "llama3.1",
-        temperature: float = 0.1,
-        max_tokens: int = 1024,
+        llm: LLMProvider | None = None,
         max_steps: int = 20,
     ) -> None:
-        self.base_url = base_url.rstrip("/")
-        self.model = model
-        self.temperature = temperature
-        self.max_tokens = max_tokens
+        if llm is None:
+            from ssi.llm.factory import create_llm_provider
+
+            llm = create_llm_provider()
+        self._llm = llm
         self.max_steps = max_steps
-        self._client = httpx.Client(timeout=120.0)
         self._system_prompt = _SYSTEM_PROMPT.format(max_steps=max_steps)
 
     @classmethod
     def from_settings(cls) -> "AgentLLMClient":
         """Create client from SSI settings."""
-        from ssi.settings import get_settings
+        from ssi.llm.factory import create_llm_provider
 
-        s = get_settings()
-        return cls(
-            base_url=s.llm.ollama_base_url,
-            model=s.llm.model,
-            temperature=s.llm.temperature,
-            max_tokens=s.llm.max_tokens,
-            max_steps=20,
-        )
+        return cls(llm=create_llm_provider(), max_steps=20)
 
     def decide_action(
         self,
@@ -133,35 +120,25 @@ class AgentLLMClient:
         """
         messages = self._build_messages(observation, identity, history)
 
-        start = time.monotonic()
-        raw = self._call_ollama(messages)
-        latency_ms = (time.monotonic() - start) * 1000
+        result = self._llm.chat(messages, json_mode=True)
 
-        action = self._parse_action(raw.get("message", {}).get("content", ""))
+        action = self._parse_action(result.content)
 
         return LLMResponse(
             action=action,
-            input_tokens=raw.get("prompt_eval_count", 0),
-            output_tokens=raw.get("eval_count", 0),
-            latency_ms=latency_ms,
-            raw_response=raw.get("message", {}).get("content", ""),
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            latency_ms=result.latency_ms,
+            raw_response=result.content,
         )
 
     def check_connectivity(self) -> bool:
-        """Verify the Ollama server is reachable and the model is available."""
-        try:
-            resp = self._client.get(f"{self.base_url}/api/tags")
-            if resp.status_code != 200:
-                return False
-            models = [m.get("name", "") for m in resp.json().get("models", [])]
-            # Check if any model name starts with our target (handles :latest tag)
-            return any(m.startswith(self.model.split(":")[0]) for m in models)
-        except Exception:
-            return False
+        """Verify the LLM provider is reachable and the model is available."""
+        return self._llm.check_connectivity()
 
     def close(self) -> None:
-        """Close the HTTP client."""
-        self._client.close()
+        """Close the LLM provider."""
+        self._llm.close()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -208,30 +185,6 @@ class AgentLLMClient:
         messages.append({"role": "user", "content": user_msg})
 
         return messages
-
-    def _call_ollama(self, messages: list[dict[str, str]]) -> dict:
-        """Make a synchronous call to Ollama's chat endpoint."""
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "stream": False,
-            "options": {
-                "temperature": self.temperature,
-                "num_predict": self.max_tokens,
-            },
-            "format": "json",
-        }
-
-        try:
-            resp = self._client.post(f"{self.base_url}/api/chat", json=payload)
-            resp.raise_for_status()
-            return resp.json()
-        except httpx.HTTPStatusError as e:
-            logger.error("Ollama HTTP error: %s %s", e.response.status_code, e.response.text[:500])
-            raise
-        except httpx.ConnectError:
-            logger.error("Cannot connect to Ollama at %s — is it running?", self.base_url)
-            raise
 
     def _parse_action(self, content: str) -> AgentAction:
         """Parse the LLM's JSON response into an ``AgentAction``.

@@ -234,6 +234,7 @@ class InvestigationResult(BaseModel):
     # Evidence packaging
     evidence_zip_path: str = ""
     report_path: str = ""
+    pdf_report_path: str = ""
     chain_of_custody: ChainOfCustody | None = None
 
     # Metadata

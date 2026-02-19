@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SSI — Scam Site Investigator</title>
+    <style>
+        :root {
+            --primary: #1a3a5c;
+            --primary-light: #2c5f8a;
+            --accent: #e67e22;
+            --bg: #f5f7fa;
+            --card-bg: #ffffff;
+            --text: #1a1a1a;
+            --text-muted: #6c757d;
+            --border: #dee2e6;
+            --danger: #c0392b;
+            --success: #27ae60;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            background: var(--primary);
+            color: white;
+            width: 100%;
+            padding: 1.5rem 2rem;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        header p {
+            opacity: 0.85;
+            font-size: 0.9rem;
+        }
+
+        main {
+            max-width: 640px;
+            width: 100%;
+            padding: 2rem 1rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            padding: 2rem;
+        }
+
+        .card h2 {
+            font-size: 1.25rem;
+            color: var(--primary);
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 0.4rem;
+            font-size: 0.9rem;
+        }
+
+        input[type="url"],
+        input[type="text"] {
+            width: 100%;
+            padding: 0.7rem 1rem;
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary-light);
+            box-shadow: 0 0 0 3px rgba(44, 95, 138, 0.15);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary);
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+            font-weight: 400;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 2rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            width: 100%;
+            margin-top: 0.5rem;
+        }
+
+        .btn:hover {
+            background: var(--primary-light);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .hint {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.3rem;
+        }
+
+        footer {
+            margin-top: auto;
+            padding: 1.5rem;
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🔍 Scam Site Investigator</h1>
+        <p>AI-driven scam URL reconnaissance and evidence packaging</p>
+    </header>
+
+    <main>
+        <div class="card">
+            <h2>Submit URL for Investigation</h2>
+            <form action="/submit" method="post" id="investigate-form">
+                <div class="form-group">
+                    <label for="url">Suspicious URL</label>
+                    <input
+                        type="url"
+                        id="url"
+                        name="url"
+                        placeholder="https://suspicious-site.example.com"
+                        required
+                        autofocus
+                    >
+                    <p class="hint">Enter the full URL including https://</p>
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="passive_only" name="passive_only" value="true" checked>
+                        <label for="passive_only">Passive reconnaissance only (no site interaction)</label>
+                    </div>
+                    <p class="hint">Uncheck to enable AI agent active interaction with the target site</p>
+                </div>
+
+                <button type="submit" class="btn" id="submit-btn">
+                    Investigate URL
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <footer>
+        SSI — Intelligence For Good &middot; Scam Site Investigator
+    </footer>
+
+    <script>
+        document.getElementById('investigate-form').addEventListener('submit', function() {
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Submitting…';
+        });
+    </script>
+</body>
+</html>

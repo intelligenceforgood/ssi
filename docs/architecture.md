@@ -11,12 +11,12 @@ This document captures the key architecture decisions and system design for the 
 
 ```
 ┌─────────────┐     ┌──────────────────┐     ┌───────────────────┐
-│ Analyst UI  │────▶│ SSI Orchestrator │────▶│ Sandboxed Browser │
-│ (CLI / API) │     │ (FastAPI)        │     │ (Playwright)      │
-└─────────────┘     └──────┬───────────┘     └────────┬──────────┘
-                           │                          │
+│  Web UI     │────▶│ SSI Orchestrator │────▶│ Sandboxed Browser │
+│ (HTML/CSS)  │     │ (FastAPI)        │     │ (Playwright)      │
+│ CLI / API   │     └──────┬───────────┘     └────────┬──────────┘
+└─────────────┘            │                          │
                     ┌──────▼───────────┐       ┌──────▼──────────┐
-                    │ AI Agent         │       │ Network Monitor │
+                    │ LLM Provider     │       │ Network Monitor │
                     │ (Ollama / Gemini)│       │ (HAR Recording) │
                     └──────┬───────────┘       └──────┬──────────┘
                            │                          │
@@ -29,6 +29,7 @@ This document captures the key architecture decisions and system design for the 
                                                ┌──────▼──────────┐
                                                │ Evidence Store  │
                                                │ + Report Gen    │
+                                               │ (MD + PDF)      │
                                                └─────────────────┘
 ```
 
@@ -105,13 +106,15 @@ This document captures the key architecture decisions and system design for the 
 
 | Component          | Local                               | Production (GCP)                     |
 | ------------------ | ----------------------------------- | ------------------------------------ |
-| LLM                | Ollama (Llama 3.3)                  | Vertex AI Gemini 2.0 Flash           |
+| LLM                | Ollama (Llama 3.1)                  | Vertex AI Gemini 2.0 Flash           |
+| LLM abstraction    | `ssi.llm.OllamaProvider`            | `ssi.llm.GeminiProvider`             |
 | Browser automation | Playwright (local)                  | Playwright in Cloud Run Job (gVisor) |
 | OSINT APIs         | Free tiers                          | Paid API keys in Secret Manager      |
 | Synthetic PII      | Faker + local generation            | Same                                 |
 | Evidence storage   | Local filesystem (`data/evidence/`) | Cloud Storage bucket                 |
 | Orchestrator API   | FastAPI (local uvicorn)             | Cloud Run service                    |
-| Report generation  | Jinja2 templates                    | Same                                 |
+| Web UI             | Built-in (Jinja2 templates)         | Same (served by Cloud Run service)   |
+| Report generation  | Jinja2 templates + WeasyPrint PDF   | Same                                 |
 | Cost tracking      | In-memory                           | Same (DB-backed in future)           |
 
 ---

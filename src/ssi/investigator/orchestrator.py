@@ -360,13 +360,28 @@ def _package_evidence(result: InvestigationResult, inv_dir: Path, *, report_form
     """Write result JSON, optional markdown report, and create evidence ZIP with chain-of-custody."""
     import json
 
+    md_content: str | None = None
+
     # Markdown report
-    if report_format in ("markdown", "both"):
+    if report_format in ("markdown", "both", "pdf"):
         from ssi.reports import render_markdown_report
 
         md_path = inv_dir / "report.md"
-        render_markdown_report(result, output_path=md_path)
+        md_content = render_markdown_report(result, output_path=md_path)
         logger.info("Markdown report written to %s", md_path)
+
+    # PDF report
+    if report_format in ("pdf", "both"):
+        try:
+            from ssi.reports.pdf import render_pdf_report
+
+            pdf_path = inv_dir / "report.pdf"
+            render_pdf_report(result, pdf_path, markdown_content=md_content)
+            result.pdf_report_path = str(pdf_path)
+        except ImportError:
+            logger.warning("weasyprint not installed — skipping PDF generation")
+        except Exception as e:
+            logger.warning("PDF generation failed: %s", e)
 
     # LEO evidence report (always generated when classification exists)
     if result.taxonomy_result or result.classification:

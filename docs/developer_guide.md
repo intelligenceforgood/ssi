@@ -106,7 +106,11 @@ ssi/
 ├── src/ssi/
 │   ├── api/                     # FastAPI REST API
 │   │   ├── app.py               # App factory, CORS, middleware
-│   │   └── routes.py            # /health, /investigate endpoints
+│   │   ├── routes.py            # /health, /investigate endpoints
+│   │   ├── web.py               # Web UI routes (form + status)
+│   │   └── web_templates/       # Jinja2 HTML templates
+│   │       ├── index.html       # Investigation submission form
+│   │       └── status.html      # Results + PDF download page
 │   ├── browser/                 # Playwright browser automation
 │   │   ├── actions.py           # Action executor (click, type, select, ...)
 │   │   ├── agent.py             # LLM-driven browser interaction agent
@@ -115,7 +119,7 @@ ssi/
 │   │   ├── dom_extractor.py     # DOM → numbered elements for LLM
 │   │   ├── downloads.py         # File download interception
 │   │   ├── har_analyzer.py      # HAR file IOC extraction
-│   │   ├── llm_client.py        # Ollama LLM client
+│   │   ├── llm_client.py        # LLM client (uses provider abstraction)
 │   │   └── stealth.py           # Anti-detection / proxy rotation
 │   ├── classification/          # Fraud taxonomy classification
 │   │   ├── classifier.py        # Five-axis LLM classifier
@@ -134,6 +138,12 @@ ssi/
 │   │   └── core_bridge.py       # HTTP push to core API
 │   ├── investigator/            # Investigation orchestration
 │   │   └── orchestrator.py      # Main pipeline (passive → agent → package)
+│   ├── llm/                     # LLM provider abstraction layer
+│   │   ├── __init__.py          # Public exports
+│   │   ├── base.py              # LLMProvider ABC + LLMResult
+│   │   ├── factory.py           # create_llm_provider() factory
+│   │   ├── gemini_provider.py   # Google Gemini via Vertex AI
+│   │   └── ollama_provider.py   # Local Ollama provider
 │   ├── models/                  # Pydantic domain models
 │   │   ├── agent.py             # AgentSession, AgentStep, ActionType
 │   │   └── investigation.py     # InvestigationResult, WHOISRecord, etc.
@@ -145,7 +155,9 @@ ssi/
 │   │   ├── urlscan.py
 │   │   ├── virustotal.py
 │   │   └── whois_lookup.py
-│   ├── reports/                 # Jinja2 report renderer
+│   ├── reports/                 # Report generation
+│   │   ├── __init__.py          # Jinja2 markdown renderer
+│   │   └── pdf.py               # WeasyPrint PDF renderer
 │   ├── settings/                # Pydantic settings with TOML layering
 │   │   └── config.py
 │   └── worker/                  # Cloud Run Job runner
@@ -345,9 +357,110 @@ make build-job
 
 Both use multi-stage builds with Playwright system dependencies pre-installed.
 
+### Pushing to Artifact Registry
+
+Build and push images to the `i4g-dev` Artifact Registry using the build script:
+
+```bash
+# Push API image
+make push-api
+# or: scripts/build_image.sh ssi-api dev
+
+# Push Job image
+make push-job
+# or: scripts/build_image.sh ssi-job dev
+```
+
+Requires `gcloud` auth: `gcloud auth login` and `gcloud auth configure-docker us-central1-docker.pkg.dev`.
+
 ---
 
-## 10. Make Targets
+## 10. LLM Provider Configuration
+
+SSI supports two LLM providers via a pluggable abstraction layer (see [src/ssi/llm/](../src/ssi/llm/)):
+
+| Provider   | Local | Cloud | Model Example      |
+| ---------- | ----- | ----- | ------------------ |
+| **Ollama** | Yes   | —     | `llama3.1`         |
+| **Gemini** | —     | Yes   | `gemini-2.0-flash` |
+
+### Switching providers
+
+Set the provider via environment variable or `config/settings.local.toml`:
+
+```bash
+# Ollama (default for local dev)
+export SSI_LLM__PROVIDER=ollama
+
+# Gemini (used on GCP)
+export SSI_LLM__PROVIDER=gemini
+export SSI_LLM__GCP_PROJECT=i4g-dev
+export SSI_LLM__GCP_LOCATION=us-central1
+export SSI_LLM__MODEL=gemini-2.0-flash
+```
+
+On Cloud Run, the Gemini provider authenticates via the service account's default credentials — no API key needed.
+
+---
+
+## 11. Web UI
+
+SSI includes a built-in web UI for submitting investigations and viewing results. Access it at the root URL when the API server is running:
+
+```bash
+uvicorn ssi.api.app:app --reload --port 8100
+# Open http://localhost:8100/
+```
+
+The UI provides:
+
+- **Submit form** — enter a URL and optionally enable passive-only mode
+- **Status page** — auto-refreshing progress with risk score display
+- **PDF download** — download the investigation report as a formatted PDF
+
+The web UI is served by FastAPI via Jinja2 templates in [src/ssi/api/web_templates/](../src/ssi/api/web_templates/).
+
+---
+
+## 12. GCP Deployment
+
+SSI runs on Google Cloud Run in the `i4g-dev` project alongside the core platform.
+
+### Infrastructure
+
+Terraform config lives in `infra/environments/app/dev/`:
+
+- Service account `sa-ssi` with Vertex AI, Storage, Logging, Monitoring roles
+- Cloud Run service `ssi-api` (the API + web UI)
+- Cloud Run job `ssi-investigate` (long-running investigations)
+- GCS bucket `i4g-dev-ssi-evidence` for evidence storage
+
+### Deploy workflow
+
+```bash
+# 1. Build and push images
+cd ssi/
+make push-api
+make push-job
+
+# 2. Apply Terraform
+cd ../infra/environments/app/dev/
+terraform apply
+```
+
+### Environment variables on Cloud Run
+
+The Cloud Run service receives `SSI_*` environment variables via Terraform (see `terraform.tfvars`). Key settings:
+
+- `SSI_ENV=dev` — environment profile
+- `SSI_LLM__PROVIDER=gemini` — use Gemini on GCP
+- `SSI_LLM__MODEL=gemini-2.0-flash` — model selection
+- `SSI_LLM__GCP_PROJECT=i4g-dev` — Vertex AI project
+- `SSI_EVIDENCE__STORAGE_BACKEND=gcs` — cloud storage for evidence
+
+---
+
+## 13. Make Targets
 
 | Target             | Description                              |
 | ------------------ | ---------------------------------------- |
@@ -362,5 +475,7 @@ Both use multi-stage builds with Playwright system dependencies pre-installed.
 | `make investigate` | Quick investigate (set `URL=` variable)  |
 | `make build-api`   | Build API Docker image                   |
 | `make build-job`   | Build Job Docker image                   |
+| `make push-api`    | Build + push API image to Artifact Reg   |
+| `make push-job`    | Build + push Job image to Artifact Reg   |
 | `make clean`       | Remove build artifacts and caches        |
 | `make rehydrate`   | Copilot session bootstrap                |

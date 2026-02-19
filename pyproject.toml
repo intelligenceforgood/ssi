@@ -7,6 +7,7 @@ dependencies = [
   # --- Web & API --------------------------------------------------------
   "fastapi",
   "uvicorn[standard]",
+  "python-multipart",
   "httpx", # --- Browser automation -----------------------------------------------
   "playwright", # --- OSINT / network intel --------------------------------------------
   "python-whois",
@@ -21,6 +22,8 @@ dependencies = [
   "typer[all]>=0.12.3",
   "rich", # --- Reporting & evidence ---------------------------------------------
   "jinja2",
+  "markdown",
+  "weasyprint",
   "pyyaml", # --- GCP (production) -------------------------------------------------
   "google-cloud-storage",
   "google-cloud-secret-manager",

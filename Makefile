@@ -40,6 +40,12 @@ build-api:
 build-job:
 	docker build -f docker/ssi-job.Dockerfile -t ssi-job:local .
 
+push-api:
+	scripts/build_image.sh ssi-api dev
+
+push-job:
+	scripts/build_image.sh ssi-job dev
+
 # ---------- Clean ----------
 clean:
 	rm -rf build/ dist/ *.egg-info .pytest_cache .mypy_cache htmlcov

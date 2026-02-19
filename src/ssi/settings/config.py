@@ -47,7 +47,12 @@ def _load_toml(path: Path) -> dict[str, Any]:
 
 
 class LLMSettings(BaseSettings):
-    """LLM provider configuration."""
+    """LLM provider configuration.
+
+    Supported providers:
+        - ``ollama``: Local Ollama server (default for local env).
+        - ``gemini``: Google Gemini via Vertex AI (default for cloud envs).
+    """
 
     model_config = SettingsConfigDict(env_prefix="SSI_LLM__")
 
@@ -57,6 +62,10 @@ class LLMSettings(BaseSettings):
     temperature: float = 0.1
     max_tokens: int = 4096
     token_budget_per_session: int = 50_000
+
+    # Gemini / Vertex AI settings
+    gcp_project: str = ""
+    gcp_location: str = "us-central1"
 
 
 class BrowserSettings(BaseSettings):

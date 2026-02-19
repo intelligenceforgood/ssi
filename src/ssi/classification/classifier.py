@@ -10,8 +10,6 @@ import json
 import logging
 from typing import Any
 
-import httpx
-
 from ssi.classification.prompts import CLASSIFICATION_SYSTEM_PROMPT, CLASSIFICATION_USER_TEMPLATE
 from ssi.models.investigation import InvestigationResult, ScamClassification
 
@@ -353,25 +351,23 @@ def _parse_llm_response(raw: str) -> FraudTaxonomyResult:
 def classify_investigation(
     result: InvestigationResult,
     *,
-    ollama_base_url: str | None = None,
-    model: str | None = None,
+    provider: str | None = None,
 ) -> FraudTaxonomyResult:
     """Classify an SSI investigation using the fraud taxonomy via LLM.
 
+    Delegates to the pluggable ``ssi.llm`` provider so classification works
+    with both local Ollama and cloud Gemini models.
+
     Args:
         result: Completed investigation result.
-        ollama_base_url: Override Ollama endpoint.
-        model: Override LLM model name.
+        provider: Override LLM provider name (``ollama`` or ``gemini``).
 
     Returns:
         A ``FraudTaxonomyResult`` with scored labels across all five axes.
     """
-    from ssi.settings import get_settings
+    from ssi.llm.factory import create_llm_provider
 
-    settings = get_settings()
-    base_url = (ollama_base_url or settings.llm.ollama_base_url).rstrip("/")
-    model_name = model or settings.llm.model
-
+    llm = create_llm_provider(provider)
     evidence_text = _build_evidence_text(result)
 
     messages = [
@@ -379,26 +375,9 @@ def classify_investigation(
         {"role": "user", "content": evidence_text},
     ]
 
-    payload = {
-        "model": model_name,
-        "messages": messages,
-        "stream": False,
-        "format": "json",
-        "options": {
-            "temperature": settings.llm.temperature,
-            "num_predict": settings.llm.max_tokens,
-        },
-    }
-
     try:
-        resp = httpx.post(
-            f"{base_url}/api/chat",
-            json=payload,
-            timeout=120.0,
-        )
-        resp.raise_for_status()
-        body = resp.json()
-        raw_content = body.get("message", {}).get("content", "")
+        llm_result = llm.chat(messages, json_mode=True)
+        raw_content = llm_result.content
 
         taxonomy = _parse_llm_response(raw_content)
         # Apply infrastructure-based boost on top of the LLM-derived base score
@@ -410,16 +389,11 @@ def classify_investigation(
         )
         return taxonomy
 
-    except httpx.HTTPError as e:
+    except Exception as e:
         logger.error("LLM classification request failed: %s", e)
-        # Return empty taxonomy with WEB channel set
         return FraudTaxonomyResult(
             channel=[ScoredLabel("CHANNEL.WEB", 1.0, "SSI investigates web-based scam sites.")],
             explanation=f"Classification failed: {e}",
         )
-    except (json.JSONDecodeError, KeyError, ValueError) as e:
-        logger.error("Failed to parse classification response: %s", e)
-        return FraudTaxonomyResult(
-            channel=[ScoredLabel("CHANNEL.WEB", 1.0, "SSI investigates web-based scam sites.")],
-            explanation=f"Classification parse error: {e}",
-        )
+    finally:
+        llm.close()
