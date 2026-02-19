@@ -12,6 +12,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from ssi.classification.labels import get_display_label
 from ssi.models.investigation import InvestigationResult
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ def render_markdown_report(
         lstrip_blocks=True,
         keep_trailing_newline=True,
     )
+    env.filters["display_label"] = get_display_label
 
     try:
         template = env.get_template(template_name)

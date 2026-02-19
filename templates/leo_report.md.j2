@@ -33,11 +33,11 @@ to document the site's infrastructure, behaviour, and threat indicators.
 | Metric | Value |
 |--------|-------|
 | **Risk Score** | {{ "%.1f"|format(result.taxonomy_result.risk_score) }} / 100 |
-| **Primary Intent** | {% for lbl in result.taxonomy_result.intent %}{{ lbl.label }} ({{ "%.0f"|format(lbl.confidence * 100) }}%){% if not loop.last %}, {% endif %}{% endfor %} |
-| **Delivery Channel** | {% for lbl in result.taxonomy_result.channel %}{{ lbl.label }}{% if not loop.last %}, {% endif %}{% endfor %} |
-| **Techniques** | {% for lbl in result.taxonomy_result.techniques %}{{ lbl.label }}{% if not loop.last %}, {% endif %}{% endfor %} |
-| **Requested Actions** | {% for lbl in result.taxonomy_result.actions %}{{ lbl.label }}{% if not loop.last %}, {% endif %}{% endfor %} |
-| **Claimed Persona** | {% for lbl in result.taxonomy_result.persona %}{{ lbl.label }}{% if not loop.last %}, {% endif %}{% endfor %} |
+| **Primary Intent** | {% for lbl in result.taxonomy_result.intent %}{{ lbl.label | display_label }} ({{ "%.0f"|format(lbl.confidence * 100) }}%){% if not loop.last %}, {% endif %}{% endfor %} |
+| **Delivery Channel** | {% for lbl in result.taxonomy_result.channel %}{{ lbl.label | display_label }}{% if not loop.last %}, {% endif %}{% endfor %} |
+| **Techniques** | {% for lbl in result.taxonomy_result.techniques %}{{ lbl.label | display_label }}{% if not loop.last %}, {% endif %}{% endfor %} |
+| **Requested Actions** | {% for lbl in result.taxonomy_result.actions %}{{ lbl.label | display_label }}{% if not loop.last %}, {% endif %}{% endfor %} |
+| **Claimed Persona** | {% for lbl in result.taxonomy_result.persona %}{{ lbl.label | display_label }}{% if not loop.last %}, {% endif %}{% endfor %} |
 
 {% if result.taxonomy_result.explanation %}
 **Classification Rationale:** {{ result.taxonomy_result.explanation }}

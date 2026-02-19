@@ -64,7 +64,11 @@ def investigate_url(
         if result.taxonomy_result:
             console.print(f"  Risk score: {result.taxonomy_result.risk_score:.1f}/100")
             if result.taxonomy_result.intent:
-                intents = ", ".join(f"{l.label} ({l.confidence:.0%})" for l in result.taxonomy_result.intent)
+                from ssi.classification.labels import get_display_label
+
+                intents = ", ".join(
+                    f"{get_display_label(l.label)} ({l.confidence:.0%})" for l in result.taxonomy_result.intent
+                )
                 console.print(f"  Intent: {intents}")
         elif result.classification:
             console.print(f"  Classification: {result.classification}")
