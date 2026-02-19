@@ -74,7 +74,7 @@ class GeminiProvider(LLMProvider):
         max_tokens: int | None = None,
         json_mode: bool = False,
     ) -> LLMResult:
-        from vertexai.generative_models import Content, GenerationConfig, Part
+        from vertexai.generative_models import Content, GenerationConfig, HarmBlockThreshold, HarmCategory, Part
 
         temp = temperature if temperature is not None else self.temperature
         tokens = max_tokens if max_tokens is not None else self.max_tokens
@@ -89,6 +89,16 @@ class GeminiProvider(LLMProvider):
                 max_output_tokens=tokens,
                 response_mime_type="application/json",
             )
+
+        # SSI is a fraud-analysis tool — prompts inherently discuss scams,
+        # social-engineering, extortion, etc.  Disable Gemini's safety
+        # filters so classification is not blocked.
+        safety_settings = {
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+        }
 
         # Convert chat messages to Vertex AI format.
         # Gemini expects: system instruction separately, then alternating user/model.
@@ -118,6 +128,7 @@ class GeminiProvider(LLMProvider):
             response = model.generate_content(
                 contents=contents,
                 generation_config=gen_config,
+                safety_settings=safety_settings,
             )
         except Exception as e:
             logger.error("Gemini API error: %s", e)
@@ -133,8 +144,26 @@ class GeminiProvider(LLMProvider):
         content_text = ""
         if response.candidates:
             candidate = response.candidates[0]
+            finish_reason = getattr(candidate, "finish_reason", None)
+            if finish_reason and str(finish_reason) not in ("1", "FinishReason.STOP", "STOP"):
+                logger.warning(
+                    "Gemini response finish_reason=%s (model=%s). "
+                    "Safety ratings: %s",
+                    finish_reason,
+                    self.model_name,
+                    getattr(candidate, "safety_ratings", "N/A"),
+                )
             if candidate.content and candidate.content.parts:
                 content_text = candidate.content.parts[0].text
+        else:
+            # No candidates at all — likely a complete safety block
+            block_reason = getattr(response, "prompt_feedback", None)
+            logger.error(
+                "Gemini returned no candidates (model=%s). "
+                "Prompt feedback: %s",
+                self.model_name,
+                block_reason,
+            )
 
         return LLMResult(
             content=content_text,
