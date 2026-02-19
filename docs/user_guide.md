@@ -13,10 +13,11 @@ This guide walks you through using the Scam Site Investigator (SSI) to investiga
 5. [Understanding the Results](#5-understanding-the-results)
 6. [Full Investigation (AI Agent)](#6-full-investigation-ai-agent)
 7. [Batch Investigations](#7-batch-investigations)
-8. [Using the API](#8-using-the-api)
-9. [Customizing Investigations](#9-customizing-investigations)
-10. [Configuration Reference](#10-configuration-reference)
-11. [Troubleshooting](#11-troubleshooting)
+8. [Using the Web UI](#8-using-the-web-ui)
+9. [Using the API](#9-using-the-api)
+10. [Customizing Investigations](#10-customizing-investigations)
+11. [Configuration Reference](#11-configuration-reference)
+12. [Troubleshooting](#12-troubleshooting)
 
 ---
 
@@ -26,7 +27,8 @@ Before using SSI, you need:
 
 - **Python 3.11 or later** — check with `python3 --version`
 - **Ollama** — a local LLM runtime (required for the AI agent). Download from [ollama.com](https://ollama.com)
-- **Llama 3.1 model** — pulled via Ollama (see below)
+- **Llama 3.3 model** — pulled via Ollama (see below)
+- **Native PDF libraries** — GLib, Cairo, and Pango (required by weasyprint for PDF report generation)
 
 ### Install Ollama and pull the model
 
@@ -34,14 +36,29 @@ Before using SSI, you need:
 # Install Ollama (macOS)
 brew install ollama
 
-# Start the Ollama service
+# Start the Ollama service (keep this running in a dedicated terminal)
 ollama serve
 
-# In a new terminal, pull the Llama 3.1 model (~5GB download)
-ollama pull llama3.1
+# In a new terminal, pull the Llama 3.3 model (~2 GB download)
+ollama pull llama3.3
 ```
 
-> **Note**: The Llama 3.1 8B model requires ~5GB of disk space and runs well on machines with 16GB+ RAM. On Apple Silicon Macs, it uses the GPU automatically.
+> **Note**: The Llama 3.3 model requires ~2 GB of disk space and runs well on machines with 16 GB+ RAM. On Apple Silicon Macs, it uses the GPU automatically.
+
+### Install native PDF libraries
+
+weasyprint generates the PDF investigation reports but needs OS-level libraries that pip cannot install:
+
+```bash
+# macOS — choose ONE:
+brew install glib cairo pango                    # Homebrew
+conda install -c conda-forge glib cairo pango    # conda (run inside your env)
+
+# Ubuntu / Debian
+sudo apt-get install libglib2.0-dev libcairo2-dev libpango1.0-dev
+```
+
+If these are missing, investigations will still complete but PDF generation will be skipped (you'll see a warning in the terminal).
 
 ---
 
@@ -53,20 +70,19 @@ cd /path/to/i4g/ssi
 
 # Create and activate a virtual environment (pick your preferred tool)
 #
-# Option A: conda / miniforge
-conda create -n i4g-ssi python=3.11
+# Option A: conda / miniforge (recommended)
+conda create -n i4g-ssi python=3.13
 conda activate i4g-ssi
 #
 # Option B: built-in venv
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Install SSI with all dependencies
-pip install -e ".[dev,test]"
-
-# Install the Playwright browser binary
-playwright install chromium
+# Install SSI with all dependencies + Playwright browser (one command)
+make setup
 ```
+
+`make setup` runs `pip install -e ".[dev,test]"` followed by `playwright install chromium`. All Python dependencies are declared in `pyproject.toml`.
 
 Verify the CLI is available:
 
@@ -294,7 +310,47 @@ Each URL gets its own timestamped subdirectory under the output folder.
 
 ---
 
-## 8. Using the API
+## 8. Using the Web UI
+
+If you prefer a browser-based workflow, SSI includes a web UI hosted in the i4g analyst console at `/ssi`. No account is required.
+
+### Starting the local services
+
+You need three processes running in separate terminals:
+
+```bash
+# Terminal 1 — Ollama (LLM runtime, keep running)
+ollama serve
+
+# Terminal 2 — SSI API (FastAPI on port 8100)
+cd ssi/
+make serve
+
+# Terminal 3 — i4g Console (Next.js on port 3000)
+cd ui/
+pnpm dev
+```
+
+Then open **http://localhost:3000/ssi** in your browser.
+
+### Using the web UI
+
+1. Paste a suspicious URL into the input field and click **Investigate**.
+2. A live progress tracker shows the investigation stages (Queued → Analysing → Generating Report).
+3. When complete, a result card displays:
+   - **Risk score** (0–100) with a colour-coded badge
+   - **Fraud classification** and taxonomy labels
+   - **WHOIS summary** (registrar, country, domain age)
+   - **Threat indicator count**
+4. Click **Download PDF report** to save the file, or **Open in browser** to preview it directly.
+
+### Production URL
+
+In production, the web UI is available at `https://app.intelligenceforgood.org/ssi` — no authentication required.
+
+---
+
+## 9. Using the API
 
 SSI also provides a REST API for integration with other tools.
 
@@ -351,7 +407,7 @@ curl http://localhost:8100/health
 
 ---
 
-## 9. Customizing Investigations
+## 10. Customizing Investigations
 
 ### Skip specific checks
 
@@ -403,7 +459,7 @@ ssi investigate url "https://example.com" --push-to-core --trigger-dossier
 
 ---
 
-## 10. Configuration Reference
+## 11. Configuration Reference
 
 SSI settings can be customized through environment variables, TOML config files, or CLI flags.
 
@@ -517,7 +573,7 @@ temperature = 0.1
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 ### "Connection refused" when running investigations
 

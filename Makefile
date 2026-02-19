@@ -1,6 +1,14 @@
-.PHONY: install install-dev test lint format clean browsers rehydrate
+.PHONY: setup install install-dev test lint format clean browsers rehydrate
 
 # ---------- Setup ----------
+# Full first-time setup: install Python deps + native libs + Playwright browser.
+# Prerequisites: Python 3.11+ environment already activated (conda, venv, etc.).
+# macOS native libs (required by weasyprint for PDF generation):
+#   conda:  conda install -c conda-forge glib cairo pango
+#   brew:   brew install glib cairo pango
+setup: install-dev browsers
+	@echo "✅ Setup complete. Run 'ssi --version' to verify."
+
 install:
 	pip install -e .
 

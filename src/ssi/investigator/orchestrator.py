@@ -6,9 +6,11 @@ Coordinates passive and active recon phases and produces an ``InvestigationResul
 from __future__ import annotations
 
 import logging
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 from ssi.models.investigation import DownloadArtifact, InvestigationResult, InvestigationStatus
 from ssi.monitoring import CostTracker
@@ -46,8 +48,12 @@ def run_investigation(
     result = InvestigationResult(url=url, passive_only=passive_only)
     result.status = InvestigationStatus.RUNNING
 
-    # Create per-investigation output directory
-    inv_dir = output_dir / str(result.investigation_id)
+    # Create per-investigation output directory with a human-readable prefix
+    # e.g. "example-com_a1b2c3d4" instead of just the raw UUID.
+    domain_slug = _domain_slug(url)
+    short_id = str(result.investigation_id).split("-")[0]  # first 8 hex chars
+    dir_name = f"{domain_slug}_{short_id}" if domain_slug else str(result.investigation_id)
+    inv_dir = output_dir / dir_name
     inv_dir.mkdir(parents=True, exist_ok=True)
     result.output_path = str(inv_dir)
 
@@ -565,3 +571,25 @@ def _to_download_artifacts(raw_downloads: list[dict]) -> list[DownloadArtifact]:
             )
         )
     return artifacts
+
+
+def _domain_slug(url: str, max_length: int = 60) -> str:
+    """Extract a filesystem-safe slug from a URL's hostname.
+
+    Examples:
+        ``https://example.com/page`` → ``example-com``
+        ``http://sub.evil-site.co.uk/phish`` → ``sub-evil-site-co-uk``
+
+    Returns an empty string if the hostname cannot be parsed.
+    """
+    try:
+        # Ensure scheme is present so urlparse works reliably
+        if not re.match(r"^https?://", url, re.IGNORECASE):
+            url = "https://" + url
+        hostname = urlparse(url).hostname or ""
+    except Exception:
+        return ""
+
+    # Replace dots and non-alphanumeric chars with hyphens, collapse runs
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", hostname).strip("-").lower()
+    return slug[:max_length] if slug else ""

@@ -37,6 +37,51 @@
 {% endif %}
 
 ---
+{% if result.taxonomy_result %}
+
+## Risk Assessment & Fraud Classification
+
+| Metric | Value |
+|--------|-------|
+| **Risk Score** | {{ "%.0f" | format(result.taxonomy_result.risk_score) }} / 100 |
+{% if result.taxonomy_result.intent %}
+| **Primary Intent** | {% for lbl in result.taxonomy_result.intent %}{{ lbl.label }} ({{ "%.0f" | format(lbl.confidence * 100) }}%){% if not loop.last %}, {% endif %}{% endfor %} |
+{% endif %}
+{% if result.taxonomy_result.channel %}
+| **Delivery Channel** | {% for lbl in result.taxonomy_result.channel %}{{ lbl.label }}{% if not loop.last %}, {% endif %}{% endfor %} |
+{% endif %}
+{% if result.taxonomy_result.techniques %}
+| **Techniques** | {% for lbl in result.taxonomy_result.techniques %}{{ lbl.label }}{% if not loop.last %}, {% endif %}{% endfor %} |
+{% endif %}
+{% if result.taxonomy_result.actions %}
+| **Requested Actions** | {% for lbl in result.taxonomy_result.actions %}{{ lbl.label }}{% if not loop.last %}, {% endif %}{% endfor %} |
+{% endif %}
+{% if result.taxonomy_result.persona %}
+| **Claimed Persona** | {% for lbl in result.taxonomy_result.persona %}{{ lbl.label }}{% if not loop.last %}, {% endif %}{% endfor %} |
+{% endif %}
+
+{% if result.taxonomy_result.explanation %}
+**Classification Rationale:** {{ result.taxonomy_result.explanation }}
+{% endif %}
+{% elif result.classification %}
+
+## Risk Assessment
+
+{% if result.classification.scam_type %}
+| Metric | Value |
+|--------|-------|
+| **Scam Type** | {{ result.classification.scam_type }} |
+{% if result.classification.confidence %}
+| **Confidence** | {{ "%.0f" | format(result.classification.confidence * 100) }}% |
+{% endif %}
+{% endif %}
+{% if result.classification.summary %}
+
+{{ result.classification.summary }}
+{% endif %}
+{% endif %}
+
+---
 {% if result.whois %}
 
 ## WHOIS / Domain Registration

@@ -22,9 +22,27 @@ This guide covers setting up a development environment, understanding the codeba
 ## 1. Prerequisites
 
 - **Python 3.11+** — SSI requires 3.11 for `tomllib` and improved typing features
-- **Ollama** — local LLM runtime ([ollama.com](https://ollama.com)). Pull the model: `ollama pull llama3.3`
+- **Ollama** — local LLM runtime ([ollama.com](https://ollama.com)). Install it, then pull a model:
+  ```bash
+  # macOS
+  brew install ollama
+  # Start the service (keep running in a dedicated terminal)
+  ollama serve
+  # Pull the default model (~2 GB download, runs well on 16 GB+ RAM)
+  ollama pull llama3.3
+  ```
+- **Native libraries for PDF generation** — weasyprint requires GLib, Cairo, and Pango at the OS level. These cannot be installed via pip.
+
+  ```bash
+  # macOS — choose ONE of these methods:
+  brew install glib cairo pango            # Homebrew
+  conda install -c conda-forge glib cairo pango  # conda-forge (run inside your env)
+
+  # Ubuntu / Debian
+  sudo apt-get install libglib2.0-dev libcairo2-dev libpango1.0-dev
+  ```
+
 - **Git** — for version control
-- **A virtual environment tool** — conda/miniforge, venv, or similar (see below)
 
 ---
 
@@ -37,56 +55,82 @@ Choose whichever virtual environment tool you normally use. The project's conda 
 **Option A — conda / miniforge (recommended)**:
 
 ```bash
-conda create -n i4g-ssi python=3.11
+conda create -n i4g-ssi python=3.13
 conda activate i4g-ssi
 ```
 
 **Option B — built-in venv**:
 
 ```bash
-python3.11 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate   # macOS / Linux
 # .venv\Scripts\activate    # Windows
 ```
 
-**Option C — pyenv + virtualenv**:
+### Step 2: Install everything
 
 ```bash
-pyenv install 3.11
-pyenv virtualenv 3.11 i4g-ssi
-pyenv activate i4g-ssi
+# From the ssi/ directory — installs SSI + dev/test deps + Playwright browser
+make setup
 ```
 
-### Step 2: Install dependencies
+This runs `pip install -e ".[dev,test]"` (editable install with all extras) and `playwright install chromium`. All Python dependencies are declared in `pyproject.toml` — there is no separate requirements file to manage.
 
-```bash
-# From the ssi/ directory
-pip install -e ".[dev,test]"
-```
-
-This installs SSI in editable mode with development and test dependencies (Black, isort, Ruff, mypy, pytest, etc.).
-
-### Step 3: Install Playwright browser
-
-```bash
-playwright install chromium
-```
-
-### Step 4: Set up pre-commit hooks
+### Step 3: Set up pre-commit hooks
 
 ```bash
 pre-commit install
 ```
 
-This enforces formatting and linting on every commit.
-
-### Step 5: Verify installation
+### Step 4: Verify installation
 
 ```bash
 ssi --version
 ssi settings validate
 pytest tests/unit -v --tb=short
 ```
+
+You should see:
+
+```
+✅ Settings valid
+   Environment: local
+   LLM provider: ollama
+   Evidence dir: data/evidence
+```
+
+If Ollama is not running you will see a warning — start it with `ollama serve`.
+
+---
+
+## 2b. Running the Full Local Stack
+
+To use the **web UI** (available at `http://localhost:3000/ssi`) you need two services running simultaneously:
+
+| Service                   | Port | Purpose                            |
+| ------------------------- | ---- | ---------------------------------- |
+| **SSI API** (FastAPI)     | 8100 | Investigation engine, PDF reports  |
+| **i4g console** (Next.js) | 3000 | Web UI that proxies to the SSI API |
+
+Open **three** terminal tabs:
+
+```bash
+# Terminal 1 — Ollama (LLM runtime)
+ollama serve
+
+# Terminal 2 — SSI API server (hot reload)
+conda activate i4g-ssi   # or source .venv/bin/activate
+cd ssi/
+make serve                # uvicorn ssi.api.app:app --reload --port 8100
+
+# Terminal 3 — i4g console (Next.js)
+cd ui/
+pnpm dev                  # starts at http://localhost:3000
+```
+
+Then open `http://localhost:3000/ssi` in your browser. The SSI page is public (no auth required).
+
+> **CLI-only usage**: If you just want the CLI and don't need the web UI, only Terminal 1 and 2 are needed. Run investigations with `ssi investigate url "<URL>" --passive`.
 
 ---
 
@@ -186,25 +230,9 @@ ssi/
 
 ## 4. Development Workflow
 
-### Start Ollama
+### Start the local services
 
-Keep Ollama running in a separate terminal:
-
-```bash
-ollama serve
-```
-
-### Run the API server (hot reload)
-
-```bash
-uvicorn ssi.api.app:app --reload --port 8100
-```
-
-Or:
-
-```bash
-make serve
-```
+Keep Ollama and the SSI API server running in separate terminals (see [§2b](#2b-running-the-full-local-stack) above).
 
 ### Run a quick investigation
 
@@ -405,18 +433,37 @@ On Cloud Run, the Gemini provider authenticates via the service account's defaul
 
 ## 11. Web UI
 
-SSI includes a built-in web UI for submitting investigations and viewing results. Access it at the root URL when the API server is running:
+SSI has two web interfaces:
+
+### Built-in FastAPI UI (port 8100)
+
+A minimal Jinja2 form served directly by the SSI API:
 
 ```bash
-uvicorn ssi.api.app:app --reload --port 8100
-# Open http://localhost:8100/
+make serve   # http://localhost:8100/
 ```
+
+### i4g Console UI (port 3000) — recommended
+
+A polished Next.js page at `/ssi` in the i4g analyst console. It proxies requests to the SSI API so the user never contacts port 8100 directly.
+
+```bash
+# Terminal 1: SSI API
+cd ssi/ && make serve
+
+# Terminal 2: i4g Console
+cd ui/ && pnpm dev
+# Open http://localhost:3000/ssi
+```
+
+The `/ssi` route is **public** — it bypasses IAP authentication so anyone can submit a URL. Set `SSI_API_URL` in `ui/apps/web/.env.local` if the SSI API is running on a different host. Default: `http://localhost:8100`.
 
 The UI provides:
 
-- **Submit form** — enter a URL and optionally enable passive-only mode
-- **Status page** — auto-refreshing progress with risk score display
-- **PDF download** — download the investigation report as a formatted PDF
+- **Submit form** — enter a URL, click Investigate
+- **Live status tracker** — 3-step progress (Queued → Analysing → Generating Report)
+- **Result card** — risk score, fraud classification, threat indicators, WHOIS summary
+- **PDF download / preview** — download or open the report in-browser
 
 The web UI is served by FastAPI via Jinja2 templates in [src/ssi/api/web_templates/](../src/ssi/api/web_templates/).
 
@@ -462,20 +509,21 @@ The Cloud Run service receives `SSI_*` environment variables via Terraform (see 
 
 ## 13. Make Targets
 
-| Target             | Description                              |
-| ------------------ | ---------------------------------------- |
-| `make install`     | Editable install (`pip install -e .`)    |
-| `make install-dev` | Dev + test deps + pre-commit hooks       |
-| `make browsers`    | Install Playwright Chromium              |
-| `make test`        | Run unit tests                           |
-| `make test-all`    | Run all tests (unit + integration)       |
-| `make lint`        | Ruff check + mypy strict                 |
-| `make format`      | Black + isort auto-format                |
-| `make serve`       | Start API server (hot reload, port 8100) |
-| `make investigate` | Quick investigate (set `URL=` variable)  |
-| `make build-api`   | Build API Docker image                   |
-| `make build-job`   | Build Job Docker image                   |
-| `make push-api`    | Build + push API image to Artifact Reg   |
-| `make push-job`    | Build + push Job image to Artifact Reg   |
-| `make clean`       | Remove build artifacts and caches        |
-| `make rehydrate`   | Copilot session bootstrap                |
+| Target             | Description                               |
+| ------------------ | ----------------------------------------- |
+| `make setup`       | Full first-time setup (install + browser) |
+| `make install`     | Editable install (`pip install -e .`)     |
+| `make install-dev` | Dev + test deps + pre-commit hooks        |
+| `make browsers`    | Install Playwright Chromium               |
+| `make test`        | Run unit tests                            |
+| `make test-all`    | Run all tests (unit + integration)        |
+| `make lint`        | Ruff check + mypy strict                  |
+| `make format`      | Black + isort auto-format                 |
+| `make serve`       | Start API server (hot reload, port 8100)  |
+| `make investigate` | Quick investigate (set `URL=` variable)   |
+| `make build-api`   | Build API Docker image                    |
+| `make build-job`   | Build Job Docker image                    |
+| `make push-api`    | Build + push API image to Artifact Reg    |
+| `make push-job`    | Build + push Job image to Artifact Reg    |
+| `make clean`       | Remove build artifacts and caches         |
+| `make rehydrate`   | Copilot session bootstrap                 |
