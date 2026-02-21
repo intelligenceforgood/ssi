@@ -139,6 +139,71 @@ class CaptchaSettings(BaseSettings):
     screenshot_on_detect: bool = True
 
 
+class ZenBrowserSettings(BaseSettings):
+    """Zendriver (undetected Chrome) browser settings for the active agent."""
+
+    model_config = SettingsConfigDict(env_prefix="SSI_ZEN_BROWSER__")
+
+    headless: bool = True
+    chrome_binary: str = ""
+    page_zoom: float = 0.75
+    action_timeout: int = 15
+    page_load_timeout: int = 45
+    screenshot_resize_width: int = 1280
+    screenshot_resize_height: int = 720
+
+
+class ProxySettings(BaseSettings):
+    """Residential proxy configuration (Decodo / SmartProxy)."""
+
+    model_config = SettingsConfigDict(env_prefix="SSI_PROXY__")
+
+    host: str = "gate.decodo.com"
+    port: str = "10001"
+    enabled: bool = False
+
+
+class AgentSettings(BaseSettings):
+    """Active browser agent (state machine) configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="SSI_AGENT__")
+
+    # Stuck detection thresholds per state
+    stuck_threshold_default: int = 10
+    stuck_threshold_load_site: int = 5
+    stuck_threshold_find_register: int = 8
+    stuck_threshold_fill_register: int = 12
+    stuck_threshold_submit_register: int = 15
+    stuck_threshold_check_email: int = 3
+    stuck_threshold_navigate_deposit: int = 10
+    stuck_threshold_extract_wallets: int = 20
+
+    max_repeated_actions: int = 3
+    max_actions_per_site: int = 80
+    max_context_messages: int = 6
+
+    # Blank page patience
+    blank_page_retries_default: int = 4
+    blank_page_retries_find_register: int = 8
+    blank_page_retries_navigate_deposit: int = 2
+
+    # DOM inspection
+    dom_inspection_enabled: bool = True
+    dom_direct_threshold: int = 75
+    dom_assisted_threshold: int = 40
+    overlay_dismiss_enabled: bool = True
+
+    # Prompt caching (for providers that support it)
+    prompt_cache_enabled: bool = True
+
+    # LLM model routing — states where the cheap/fast model is sufficient
+    cheap_model_states: list[str] = [
+        "FILL_REGISTER",
+        "SUBMIT_REGISTER",
+        "CHECK_EMAIL_VERIFICATION",
+    ]
+
+
 class CostSettings(BaseSettings):
     """Cost monitoring and budget enforcement."""
 
@@ -201,6 +266,9 @@ class Settings(BaseSettings):
 
     llm: LLMSettings = Field(default_factory=LLMSettings)
     browser: BrowserSettings = Field(default_factory=BrowserSettings)
+    zen_browser: ZenBrowserSettings = Field(default_factory=ZenBrowserSettings)
+    proxy: ProxySettings = Field(default_factory=ProxySettings)
+    agent: AgentSettings = Field(default_factory=AgentSettings)
     osint: OSINTSettings = Field(default_factory=OSINTSettings)
     evidence: EvidenceSettings = Field(default_factory=EvidenceSettings)
     identity: IdentityVaultSettings = Field(default_factory=IdentityVaultSettings)

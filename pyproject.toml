@@ -9,7 +9,10 @@ dependencies = [
   "uvicorn[standard]",
   "python-multipart",
   "httpx", # --- Browser automation -----------------------------------------------
-  "playwright", # --- OSINT / network intel --------------------------------------------
+  "playwright",
+  "zendriver>=0.15",
+  "Pillow>=10.0",
+  "openpyxl>=3.1", # --- OSINT / network intel --------------------------------------------
   "python-whois",
   "dnspython", # --- LLM & AI agent ---------------------------------------------------
   "langchain",

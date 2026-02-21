@@ -1,0 +1,162 @@
+{
+  "_comment": "Token-network allowlist for wallet extraction. Edit to add/remove approved pairs.",
+  "_version": "1.0.0",
+  "token_networks": [
+    {
+      "token_name": "BNB",
+      "token_symbol": "BNB",
+      "network": "BNB Smart Chain BEP-20",
+      "network_short": "bsc"
+    },
+    {
+      "token_name": "Bitcoin",
+      "token_symbol": "BTC",
+      "network": "Bitcoin",
+      "network_short": "btc"
+    },
+    {
+      "token_name": "Bitcoin Cash",
+      "token_symbol": "BCH",
+      "network": "Bitcoin Cash",
+      "network_short": "bch"
+    },
+    {
+      "token_name": "Cardano",
+      "token_symbol": "ADA",
+      "network": "Cardano",
+      "network_short": "ada"
+    },
+    {
+      "token_name": "Dash",
+      "token_symbol": "DASH",
+      "network": "Dash",
+      "network_short": "dash"
+    },
+    {
+      "token_name": "Dogecoin",
+      "token_symbol": "DOGE",
+      "network": "Dogecoin",
+      "network_short": "doge"
+    },
+    {
+      "token_name": "Ethereum",
+      "token_symbol": "ETH",
+      "network": "Ethereum",
+      "network_short": "eth"
+    },
+    {
+      "token_name": "Litecoin",
+      "token_symbol": "LTC",
+      "network": "Litecoin",
+      "network_short": "ltc"
+    },
+    {
+      "token_name": "Polygon",
+      "token_symbol": "MATIC",
+      "network": "Polygon PoS",
+      "network_short": "matic"
+    },
+    {
+      "token_name": "Ripple",
+      "token_symbol": "XRP",
+      "network": "XRP Ledger",
+      "network_short": "xrp"
+    },
+    {
+      "token_name": "Solana",
+      "token_symbol": "SOL",
+      "network": "Solana",
+      "network_short": "sol"
+    },
+    {
+      "token_name": "Tron",
+      "token_symbol": "TRX",
+      "network": "Tron",
+      "network_short": "trx"
+    },
+    {
+      "token_name": "Tether",
+      "token_symbol": "USDT",
+      "network": "Arbitrum One",
+      "network_short": "arb"
+    },
+    {
+      "token_name": "Tether",
+      "token_symbol": "USDT",
+      "network": "Avalanche C-Chain",
+      "network_short": "avax"
+    },
+    {
+      "token_name": "Tether",
+      "token_symbol": "USDT",
+      "network": "BNB Smart Chain BEP-20",
+      "network_short": "bsc"
+    },
+    {
+      "token_name": "Tether",
+      "token_symbol": "USDT",
+      "network": "Ethereum ERC-20",
+      "network_short": "eth"
+    },
+    {
+      "token_name": "Tether",
+      "token_symbol": "USDT",
+      "network": "Optimism",
+      "network_short": "op"
+    },
+    {
+      "token_name": "Tether",
+      "token_symbol": "USDT",
+      "network": "Polygon PoS",
+      "network_short": "matic"
+    },
+    {
+      "token_name": "Tether",
+      "token_symbol": "USDT",
+      "network": "Solana SPL",
+      "network_short": "sol"
+    },
+    {
+      "token_name": "Tether",
+      "token_symbol": "USDT",
+      "network": "Tron TRC-20",
+      "network_short": "trx"
+    },
+    {
+      "token_name": "USD Coin",
+      "token_symbol": "USDC",
+      "network": "Arbitrum One",
+      "network_short": "arb"
+    },
+    {
+      "token_name": "USD Coin",
+      "token_symbol": "USDC",
+      "network": "Avalanche C-Chain",
+      "network_short": "avax"
+    },
+    {
+      "token_name": "USD Coin",
+      "token_symbol": "USDC",
+      "network": "Ethereum ERC-20",
+      "network_short": "eth"
+    },
+    {
+      "token_name": "USD Coin",
+      "token_symbol": "USDC",
+      "network": "Optimism",
+      "network_short": "op"
+    },
+    {
+      "token_name": "USD Coin",
+      "token_symbol": "USDC",
+      "network": "Polygon PoS",
+      "network_short": "matic"
+    },
+    {
+      "token_name": "USD Coin",
+      "token_symbol": "USDC",
+      "network": "Solana SPL",
+      "network_short": "sol"
+    }
+  ]
+}

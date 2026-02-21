@@ -18,6 +18,42 @@ record_video = false
 sandbox = true
 timeout_ms = 30000
 
+[zen_browser]
+action_timeout = 15
+chrome_binary = ""
+headless = true
+page_load_timeout = 45
+page_zoom = 0.75
+screenshot_resize_height = 720
+screenshot_resize_width = 1280
+
+[proxy]
+enabled = false
+host = "gate.decodo.com"
+port = "10001"
+
+[agent]
+blank_page_retries_default = 4
+blank_page_retries_find_register = 8
+blank_page_retries_navigate_deposit = 2
+cheap_model_states = ["FILL_REGISTER", "SUBMIT_REGISTER", "CHECK_EMAIL_VERIFICATION"]
+dom_assisted_threshold = 40
+dom_direct_threshold = 75
+dom_inspection_enabled = true
+max_actions_per_site = 80
+max_context_messages = 6
+max_repeated_actions = 3
+overlay_dismiss_enabled = true
+prompt_cache_enabled = true
+stuck_threshold_check_email = 3
+stuck_threshold_default = 10
+stuck_threshold_extract_wallets = 20
+stuck_threshold_fill_register = 12
+stuck_threshold_find_register = 8
+stuck_threshold_load_site = 5
+stuck_threshold_navigate_deposit = 10
+stuck_threshold_submit_register = 15
+
 [osint]
 dns_timeout_sec = 5
 whois_timeout_sec = 10

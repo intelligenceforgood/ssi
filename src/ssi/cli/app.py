@@ -13,6 +13,7 @@ import typer
 from ssi.cli.investigate import investigate_app
 from ssi.cli.job import job_app
 from ssi.cli.settings_cmd import settings_app
+from ssi.cli.wallet_cmd import wallet_app
 
 try:
     from importlib.metadata import version
@@ -36,6 +37,7 @@ app = typer.Typer(add_completion=True, help=APP_HELP)
 app.add_typer(investigate_app, name="investigate")
 app.add_typer(job_app, name="job")
 app.add_typer(settings_app, name="settings")
+app.add_typer(wallet_app, name="wallet")
 
 
 @app.callback(invoke_without_command=True)

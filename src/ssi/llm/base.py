@@ -42,6 +42,33 @@ class LLMProvider(abc.ABC):
             An ``LLMResult`` with the generated text and token metrics.
         """
 
+    def chat_with_images(
+        self,
+        messages: list[dict],
+        *,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        json_mode: bool = False,
+    ) -> LLMResult:
+        """Send a multimodal chat request with inline images.
+
+        Messages may contain structured content parts::
+
+            [
+                {"role": "system", "content": "..."},
+                {"role": "user", "content": [
+                    {"type": "text", "text": "Describe this image"},
+                    {"type": "image", "media_type": "image/png", "data": "<base64>"},
+                ]},
+            ]
+
+        The default implementation raises ``NotImplementedError``.
+        Override in providers that support vision (Gemini, Ollama w/ llava, etc.).
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support multimodal chat"
+        )
+
     @abc.abstractmethod
     def check_connectivity(self) -> bool:
         """Return True if the provider is reachable and the model is available."""
