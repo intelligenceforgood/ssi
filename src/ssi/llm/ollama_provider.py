@@ -45,6 +45,17 @@ class OllamaProvider(LLMProvider):
         max_tokens: int | None = None,
         json_mode: bool = False,
     ) -> LLMResult:
+        """Send a chat completion request to the local Ollama server.
+
+        Args:
+            messages: Conversation history as a list of ``{"role": ..., "content": ...}`` dicts.
+            temperature: Sampling temperature override (``None`` uses the instance default).
+            max_tokens: Max output tokens override (``None`` uses the instance default).
+            json_mode: When ``True``, request a JSON-formatted response.
+
+        Returns:
+            An ``LLMResult`` with the response content and token usage metrics.
+        """
         temp = temperature if temperature is not None else self.temperature
         tokens = max_tokens if max_tokens is not None else self.max_tokens
 
@@ -85,6 +96,7 @@ class OllamaProvider(LLMProvider):
         )
 
     def check_connectivity(self) -> bool:
+        """Return ``True`` if Ollama is reachable and the configured model is available."""
         try:
             resp = self._client.get(f"{self.base_url}/api/tags")
             if resp.status_code != 200:
@@ -95,4 +107,5 @@ class OllamaProvider(LLMProvider):
             return False
 
     def close(self) -> None:
+        """Close the underlying HTTP client."""
         self._client.close()

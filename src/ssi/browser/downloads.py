@@ -16,11 +16,15 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from typing import TYPE_CHECKING
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
 # Maximum file size we're willing to capture (50 MB)
 _MAX_DOWNLOAD_SIZE_BYTES = 50 * 1024 * 1024
@@ -90,7 +94,7 @@ class DownloadInterceptor:
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def attach(self, page) -> None:
+    def attach(self, page: Page) -> None:
         """Register download event handler on a Playwright page.
 
         Must be called **before** ``page.goto(...)`` to capture downloads

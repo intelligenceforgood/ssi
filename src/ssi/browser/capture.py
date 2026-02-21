@@ -9,6 +9,11 @@ from pathlib import Path
 from ssi.browser.downloads import DownloadInterceptor
 from ssi.models.investigation import FormField, PageSnapshot
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Response as PWResponse
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,7 +76,8 @@ def capture_page(url: str, output_dir: Path) -> PageSnapshot:
             # Track redirects
             redirect_chain: list[str] = []
 
-            def on_response(response):
+            def on_response(response: PWResponse) -> None:
+                """Track HTTP redirect responses for the redirect chain."""
                 if 300 <= response.status < 400:
                     redirect_chain.append(response.url)
 

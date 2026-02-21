@@ -214,6 +214,16 @@ class CostSettings(BaseSettings):
     enabled: bool = True
 
 
+class StorageSettings(BaseSettings):
+    """Scan persistence and database configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="SSI_STORAGE__")
+
+    backend: str = "sqlite"  # sqlite | cloudsql | core_api
+    sqlite_path: str = "data/ssi_store.db"
+    persist_scans: bool = True
+
+
 class FeedbackSettings(BaseSettings):
     """Investigation feedback loop configuration."""
 
@@ -277,6 +287,7 @@ class Settings(BaseSettings):
     stealth: StealthSettings = Field(default_factory=StealthSettings)
     captcha: CaptchaSettings = Field(default_factory=CaptchaSettings)
     cost: CostSettings = Field(default_factory=CostSettings)
+    storage: StorageSettings = Field(default_factory=StorageSettings)
     feedback: FeedbackSettings = Field(default_factory=FeedbackSettings)
 
     @model_validator(mode="before")
@@ -311,6 +322,8 @@ class Settings(BaseSettings):
             self.identity.db_url = f"sqlite:///{root / rel}"
         if not Path(self.feedback.db_path).is_absolute():
             self.feedback.db_path = str(root / self.feedback.db_path)
+        if not Path(self.storage.sqlite_path).is_absolute():
+            self.storage.sqlite_path = str(root / self.storage.sqlite_path)
         return self
 
 

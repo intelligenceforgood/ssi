@@ -74,6 +74,17 @@ class GeminiProvider(LLMProvider):
         max_tokens: int | None = None,
         json_mode: bool = False,
     ) -> LLMResult:
+        """Send a chat completion request to the Gemini model.
+
+        Args:
+            messages: Conversation history as a list of ``{"role": ..., "content": ...}`` dicts.
+            temperature: Sampling temperature override (``None`` uses the instance default).
+            max_tokens: Max output tokens override (``None`` uses the instance default).
+            json_mode: When ``True``, request a JSON-formatted response.
+
+        Returns:
+            An ``LLMResult`` with the response content and token usage metrics.
+        """
         from vertexai.generative_models import Content, GenerationConfig, HarmBlockThreshold, HarmCategory, Part
 
         temp = temperature if temperature is not None else self.temperature

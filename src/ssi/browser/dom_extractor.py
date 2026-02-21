@@ -9,8 +9,13 @@ from __future__ import annotations
 
 import logging
 import re
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ssi.models.agent import InteractiveElement, PageObservation
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +188,7 @@ _EXTRACT_VISIBLE_TEXT_JS = """
 """
 
 
-def extract_page_observation(page, output_dir=None, step_number: int = 0) -> PageObservation:
+def extract_page_observation(page: Page, output_dir: str | Path | None = None, step_number: int = 0) -> PageObservation:
     """Extract a structured observation of the current page state.
 
     Args:

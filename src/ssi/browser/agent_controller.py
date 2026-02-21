@@ -122,6 +122,7 @@ class AutoSkipGuidance:
         suggested_actions: list[dict],
         current_url: str,
     ) -> GuidanceResponse:
+        """Return an auto-skip guidance response when no human handler is available."""
         logger.warning("Auto-skipping %s in state %s (no human handler)", site_url, state)
         return GuidanceResponse(action=HumanAction.SKIP, reason="No human handler — auto-skip")
 
@@ -140,15 +141,19 @@ class ScreenshotStore:
         self.paths: list[str] = []
 
     async def capture_milestone(self, b64_png: str, label: str) -> str:
+        """Save a milestone screenshot and return its file path."""
         return self._save(b64_png, f"milestone_{label}.png")
 
     async def capture_error(self, b64_png: str) -> str:
+        """Save an error screenshot and return its file path."""
         return self._save(b64_png, "error.png")
 
     async def capture_stuck(self, b64_png: str) -> str:
+        """Save a stuck-state screenshot and return its file path."""
         return self._save(b64_png, f"stuck_{int(time.time())}.png")
 
     def _save(self, b64_png: str, filename: str) -> str:
+        """Decode a base64 PNG and write it to the screenshot directory."""
         path = self._dir / filename
         path.write_bytes(base64.b64decode(b64_png))
         rel = str(path)

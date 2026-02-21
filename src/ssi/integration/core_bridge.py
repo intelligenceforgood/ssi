@@ -89,7 +89,9 @@ class CoreBridge:
             2. Attach evidence artifacts.
             3. Store taxonomy classification on the case.
             4. Create entity records for threat indicators.
-            5. Optionally queue dossier generation.
+            5. Create wallet indicators for harvested crypto addresses.
+            6. Create OSINT-derived entities (domains, IPs, registrants).
+            7. Optionally queue dossier generation.
 
         Args:
             result: Completed SSI investigation.
@@ -105,6 +107,8 @@ class CoreBridge:
         self._attach_evidence(case_id, result)
         self._store_classification(case_id, result)
         self._create_entities(case_id, result)
+        self._create_wallet_indicators(case_id, result, dataset=dataset)
+        self._create_osint_entities(case_id, result)
 
         if trigger_dossier:
             self._trigger_dossier(case_id, result)
@@ -243,6 +247,202 @@ class CoreBridge:
             logger.info("Created %d entities on case %s", len(entities), case_id)
         except httpx.HTTPError as e:
             logger.warning("Failed to create entities on case %s: %s", case_id, e)
+
+    # ------------------------------------------------------------------
+    # Wallet indicators (crypto_wallet IOCs)
+    # ------------------------------------------------------------------
+
+    def _create_wallet_indicators(
+        self,
+        case_id: str,
+        result: InvestigationResult,
+        *,
+        dataset: str = "ssi",
+    ) -> None:
+        """Create indicator records for harvested wallet addresses.
+
+        Each wallet is stored as an indicator with category ``crypto_wallet``
+        and a matching entity of type ``crypto_wallet``.
+        """
+        # Access wallets from agent_steps or from the result's threat indicators
+        # that are typed as crypto_wallet.
+        wallets: list[dict[str, Any]] = []
+
+        # Prefer direct wallet data if available on the result
+        if hasattr(result, "wallets") and result.wallets:
+            wallets = [
+                w.model_dump(mode="json") if hasattr(w, "model_dump") else w
+                for w in result.wallets
+            ]
+        else:
+            # Fall back to threat indicators with crypto_wallet type
+            if result.threat_indicators:
+                for ti in result.threat_indicators:
+                    if ti.indicator_type == "crypto_wallet":
+                        wallets.append(
+                            {
+                                "wallet_address": ti.value,
+                                "token_symbol": ti.context or "UNKNOWN",
+                                "network_short": "",
+                                "source": ti.source,
+                                "confidence": 0.9,
+                            }
+                        )
+
+        if not wallets:
+            return
+
+        indicators: list[dict[str, Any]] = []
+        for w in wallets:
+            addr = w.get("wallet_address", "")
+            if not addr:
+                continue
+            token = w.get("token_symbol", "UNKNOWN")
+            network = w.get("network_short", "")
+            indicators.append(
+                {
+                    "category": "crypto_wallet",
+                    "type": f"{token}/{network}" if network else token,
+                    "number": addr,
+                    "status": "active",
+                    "confidence": w.get("confidence", 0.9),
+                    "dataset": dataset,
+                    "metadata": {
+                        "token_symbol": token,
+                        "network_short": network,
+                        "source": w.get("source", ""),
+                        "token_label": w.get("token_label", ""),
+                        "network_label": w.get("network_label", ""),
+                    },
+                }
+            )
+
+        if not indicators:
+            return
+
+        try:
+            resp = self._client.post(
+                f"/cases/{case_id}/indicators/batch",
+                json={"indicators": indicators},
+            )
+            resp.raise_for_status()
+            logger.info("Created %d wallet indicators on case %s", len(indicators), case_id)
+        except httpx.HTTPError as e:
+            logger.warning("Failed to create wallet indicators on case %s: %s", case_id, e)
+
+    # ------------------------------------------------------------------
+    # OSINT-derived entities (domains, IPs, registrants)
+    # ------------------------------------------------------------------
+
+    def _create_osint_entities(self, case_id: str, result: InvestigationResult) -> None:
+        """Create entity records from OSINT reconnaissance data.
+
+        Extracts domains, IP addresses, and registrant information from
+        the passive recon results (WHOIS, DNS, SSL, GeoIP).
+        """
+        entities: list[dict[str, Any]] = []
+
+        # Domain entity from the target URL
+        if result.url:
+            from urllib.parse import urlparse
+
+            parsed = urlparse(result.url if "://" in result.url else f"https://{result.url}")
+            hostname = parsed.hostname
+            if hostname:
+                entities.append(
+                    {
+                        "entity_type": "domain",
+                        "canonical_value": hostname,
+                        "raw_value": result.url,
+                        "confidence": 1.0,
+                        "metadata": {"source": "target_url"},
+                    }
+                )
+
+        # IP addresses from DNS / GeoIP
+        if result.dns:
+            for record_type in ("a_records", "aaaa_records"):
+                records = getattr(result.dns, record_type, []) or []
+                for ip_addr in records:
+                    if isinstance(ip_addr, str):
+                        entities.append(
+                            {
+                                "entity_type": "ip_address",
+                                "canonical_value": ip_addr,
+                                "raw_value": ip_addr,
+                                "confidence": 1.0,
+                                "metadata": {"source": "dns", "record_type": record_type},
+                            }
+                        )
+
+        if result.geoip and hasattr(result.geoip, "ip") and result.geoip.ip:
+            # Avoid duplicate if already captured via DNS
+            ip_entity_exists = any(
+                e["canonical_value"] == result.geoip.ip for e in entities if e["entity_type"] == "ip_address"
+            )
+            if not ip_entity_exists:
+                entities.append(
+                    {
+                        "entity_type": "ip_address",
+                        "canonical_value": result.geoip.ip,
+                        "raw_value": result.geoip.ip,
+                        "confidence": 1.0,
+                        "metadata": {
+                            "source": "geoip",
+                            "asn": getattr(result.geoip, "asn", None),
+                            "country": getattr(result.geoip, "country", None),
+                        },
+                    }
+                )
+
+        # Registrant info from WHOIS
+        if result.whois:
+            registrant_name = getattr(result.whois, "registrant_name", None) or getattr(
+                result.whois, "registrant", None
+            )
+            registrant_email = getattr(result.whois, "registrant_email", None)
+            registrar = getattr(result.whois, "registrar", None)
+
+            if registrant_name and registrant_name.lower() not in ("redacted", "privacy", "n/a", ""):
+                entities.append(
+                    {
+                        "entity_type": "person",
+                        "canonical_value": registrant_name,
+                        "raw_value": registrant_name,
+                        "confidence": 0.7,
+                        "metadata": {"source": "whois", "role": "registrant"},
+                    }
+                )
+            if registrant_email and "@" in registrant_email:
+                entities.append(
+                    {
+                        "entity_type": "email",
+                        "canonical_value": registrant_email.lower(),
+                        "raw_value": registrant_email,
+                        "confidence": 0.7,
+                        "metadata": {"source": "whois", "role": "registrant"},
+                    }
+                )
+            if registrar:
+                entities.append(
+                    {
+                        "entity_type": "organization",
+                        "canonical_value": registrar,
+                        "raw_value": registrar,
+                        "confidence": 0.9,
+                        "metadata": {"source": "whois", "role": "registrar"},
+                    }
+                )
+
+        if not entities:
+            return
+
+        try:
+            resp = self._client.post(f"/cases/{case_id}/entities/batch", json={"entities": entities})
+            resp.raise_for_status()
+            logger.info("Created %d OSINT entities on case %s", len(entities), case_id)
+        except httpx.HTTPError as e:
+            logger.warning("Failed to create OSINT entities on case %s: %s", case_id, e)
 
     # ------------------------------------------------------------------
     # Dossier / LEO report trigger

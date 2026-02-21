@@ -37,11 +37,13 @@ class TokenNetwork(BaseModel):
     @field_validator("token_symbol")
     @classmethod
     def _normalize_symbol(cls, v: str) -> str:
+        """Strip whitespace and uppercase the token symbol."""
         return v.strip().upper()
 
     @field_validator("network_short")
     @classmethod
     def _normalize_network(cls, v: str) -> str:
+        """Strip whitespace and lowercase the network short code."""
         return v.strip().lower()
 
 
@@ -84,6 +86,7 @@ class WalletEntry(BaseModel):
     @field_validator("wallet_address")
     @classmethod
     def _wallet_address_not_empty(cls, v: str) -> str:
+        """Reject empty/whitespace-only wallet addresses."""
         v = v.strip()
         if not v:
             raise ValueError("wallet_address must not be empty")
@@ -92,14 +95,17 @@ class WalletEntry(BaseModel):
     @field_validator("token_symbol")
     @classmethod
     def _normalize_symbol(cls, v: str) -> str:
+        """Strip whitespace and uppercase the token symbol."""
         return v.strip().upper() if v else ""
 
     @field_validator("network_short")
     @classmethod
     def _normalize_network(cls, v: str) -> str:
+        """Strip whitespace and lowercase the network short code."""
         return v.strip().lower() if v else ""
 
     def model_post_init(self, __context: Any) -> None:
+        """Default ``harvested_at`` to UTC now when not explicitly provided."""
         if not self.harvested_at:
             self.harvested_at = datetime.now(timezone.utc)
 

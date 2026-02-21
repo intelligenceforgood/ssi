@@ -10,8 +10,12 @@ from __future__ import annotations
 import logging
 import random
 import time
+from typing import TYPE_CHECKING
 
 from ssi.models.agent import ActionType, AgentAction, InteractiveElement
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +29,7 @@ _POST_ACTION_DELAY = (300, 800)
 
 
 def execute_action(
-    page,
+    page: Page,
     action: AgentAction,
     elements: list[InteractiveElement],
 ) -> str:

@@ -98,6 +98,11 @@ budget_per_investigation_usd = 1.0
 enabled = true
 warn_at_pct = 80
 
+[storage]
+backend = "sqlite"
+persist_scans = true
+sqlite_path = "data/ssi_store.db"
+
 [feedback]
 db_path = "data/evidence/feedback.db"
 enabled = true

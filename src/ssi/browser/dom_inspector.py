@@ -73,6 +73,7 @@ class FindRegisterDetector:
     """
 
     def detect(self, scan_data: dict) -> list[DOMSignal]:
+        """Analyse DOM scan data and return weighted signals for register detection."""
         signals: list[DOMSignal] = []
 
         if scan_data.get("has_registration_form"):
@@ -161,6 +162,7 @@ class NavigateDepositDetector:
     """
 
     def detect(self, scan_data: dict) -> list[DOMSignal]:
+        """Analyse DOM scan data and return weighted signals for deposit navigation."""
         signals: list[DOMSignal] = []
 
         deposit_links = scan_data.get("deposit_links", [])
@@ -251,6 +253,7 @@ class CheckEmailDetector:
     """
 
     def detect(self, scan_data: dict) -> list[DOMSignal]:
+        """Analyse DOM scan data and return weighted signals for email verification detection."""
         signals: list[DOMSignal] = []
 
         if scan_data.get("email_verify_text_found"):

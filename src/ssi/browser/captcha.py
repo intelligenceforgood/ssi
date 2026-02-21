@@ -15,11 +15,15 @@ can be enabled via ``SSI_BROWSER__CAPTCHA_SOLVER`` when budget allows.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
 
 class CaptchaType(str, Enum):
@@ -81,7 +85,7 @@ _CAPTCHA_SIGNATURES: list[tuple[str, CaptchaType]] = [
 ]
 
 
-def detect_captcha(page) -> CaptchaDetection:
+def detect_captcha(page: Page) -> CaptchaDetection:
     """Scan the current page for CAPTCHA elements.
 
     Args:
@@ -129,7 +133,7 @@ def detect_captcha(page) -> CaptchaDetection:
 
 
 def handle_captcha(
-    page,
+    page: Page,
     detection: CaptchaDetection,
     *,
     strategy: CaptchaStrategy = CaptchaStrategy.SKIP,

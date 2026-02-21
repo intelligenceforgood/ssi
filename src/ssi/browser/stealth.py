@@ -24,7 +24,10 @@ import itertools
 import logging
 import random
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
 logger = logging.getLogger(__name__)
 
@@ -117,10 +120,12 @@ class ProxyPool:
 
     @property
     def available(self) -> bool:
+        """Return ``True`` if the pool has at least one proxy."""
         return bool(self._proxies)
 
     @property
     def size(self) -> int:
+        """Return the total number of proxies in the pool."""
         return len(self._proxies)
 
     def __len__(self) -> int:
@@ -252,7 +257,7 @@ def build_browser_profile(
     return profile
 
 
-def apply_stealth_scripts(page) -> None:
+def apply_stealth_scripts(page: Page) -> None:
     """Inject stealth JavaScript into a Playwright page.
 
     Call this **before** navigating to the target URL so the scripts

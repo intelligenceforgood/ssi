@@ -65,6 +65,28 @@ def run_investigation(
     if settings.cost.enabled:
         cost_tracker = CostTracker(budget_usd=settings.cost.budget_per_investigation_usd)
 
+    # Initialize scan store for persistence
+    scan_store = None
+    scan_id: str | None = None
+    if settings.storage.persist_scans:
+        try:
+            from ssi.store import build_scan_store
+
+            scan_store = build_scan_store()
+            scan_type = "passive" if passive_only else "full"
+            scan_id = scan_store.create_scan(
+                url=url,
+                scan_type=scan_type,
+                domain=domain_slug,
+                metadata={"output_dir": str(inv_dir), "investigation_id": str(result.investigation_id)},
+            )
+            logger.debug("Created scan record %s", scan_id)
+        except Exception:
+            logger.warning("Failed to initialise scan store — results will not be persisted", exc_info=True)
+            scan_store = None
+
+    site_result = None  # Populated if active interaction runs
+
     try:
         # --- Pre-flight: Domain resolution check ----------------------------
         domain_resolves = _check_domain_resolution(url)
@@ -166,6 +188,11 @@ def run_investigation(
         logger.exception("Investigation failed for %s", url)
         result.status = InvestigationStatus.FAILED
         result.error = str(e)
+        if scan_store and scan_id:
+            try:
+                scan_store.update_scan(scan_id, status="failed", error_message=str(e))
+            except Exception:
+                logger.warning("Failed to record scan failure for %s", scan_id, exc_info=True)
 
     # Record timing and cost *before* evidence packaging so the JSON is complete.
     elapsed = time.monotonic() - start
@@ -185,6 +212,13 @@ def run_investigation(
 
     # Package evidence last so the serialized JSON reflects final status, timing, and cost.
     _package_evidence(result, inv_dir, report_format=report_format)
+
+    # Persist results to the scan store
+    if scan_store and scan_id:
+        try:
+            scan_store.persist_investigation(scan_id, result, site_result=site_result)
+        except Exception:
+            logger.warning("Failed to persist scan %s to store", scan_id, exc_info=True)
 
     return result
 

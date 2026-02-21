@@ -158,12 +158,14 @@ class TokenUsage:
         self.api_calls += 1
 
     def reset(self) -> None:
+        """Reset all tracked token and latency counters to zero."""
         self.input_tokens = 0
         self.output_tokens = 0
         self.api_calls = 0
         self.total_latency_ms = 0.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, int | float]:
+        """Serialize token usage metrics to a plain dict."""
         return {
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
