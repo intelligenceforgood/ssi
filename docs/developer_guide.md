@@ -15,7 +15,11 @@ This guide covers setting up a development environment, understanding the codeba
 7. [Configuration for Development](#7-configuration-for-development)
 8. [Adding New Features](#8-adding-new-features)
 9. [Docker Builds](#9-docker-builds)
-10. [Make Targets](#10-make-targets)
+10. [LLM Provider Configuration](#10-llm-provider-configuration)
+11. [Web UI](#11-web-ui)
+12. [GCP Deployment](#12-gcp-deployment)
+13. [Make Targets](#13-make-targets)
+14. [Hardening & Resilience](#14-hardening--resilience)
 
 ---
 
@@ -74,7 +78,7 @@ source .venv/bin/activate   # macOS / Linux
 make setup
 ```
 
-This runs `pip install -e ".[dev,test]"` (editable install with all extras) and `playwright install chromium`. All Python dependencies are declared in `pyproject.toml` — there is no separate requirements file to manage.
+This runs `pip install -e ".[dev,test]"` (editable install with all extras) and installs the zendriver browser automation runtime. All Python dependencies are declared in `pyproject.toml` — there is no separate requirements file to manage.
 
 ### Step 3: Set up pre-commit hooks
 
@@ -155,7 +159,7 @@ ssi/
 │   │   └── web_templates/       # Jinja2 HTML templates
 │   │       ├── index.html       # Investigation submission form
 │   │       └── status.html      # Results + PDF download page
-│   ├── browser/                 # Playwright browser automation
+│   ├── browser/                 # zendriver browser automation
 │   │   ├── actions.py           # Action executor (click, type, select, ...)
 │   │   ├── agent.py             # LLM-driven browser interaction agent
 │   │   ├── captcha.py           # CAPTCHA detection and handling
@@ -175,6 +179,7 @@ ssi/
 │   │   └── settings_cmd.py      # settings show / validate commands
 │   ├── evidence/                # Evidence export
 │   │   └── stix.py              # STIX 2.1 IOC bundle generation
+│   ├── exceptions.py            # SSIError, BudgetExceededError, ConcurrentLimitError
 │   ├── feedback/                # Investigation outcome tracking
 │   ├── identity/                # Synthetic PII generation
 │   │   └── vault.py             # Faker-based identity vault
@@ -185,25 +190,42 @@ ssi/
 │   ├── llm/                     # LLM provider abstraction layer
 │   │   ├── __init__.py          # Public exports
 │   │   ├── base.py              # LLMProvider ABC + LLMResult
-│   │   ├── factory.py           # create_llm_provider() factory
+│   │   ├── factory.py           # create_llm_provider() factory + retry wrapping
 │   │   ├── gemini_provider.py   # Google Gemini via Vertex AI
-│   │   └── ollama_provider.py   # Local Ollama provider
+│   │   ├── ollama_provider.py   # Local Ollama provider
+│   │   └── retry.py             # RetryingLLMProvider (exponential backoff)
 │   ├── models/                  # Pydantic domain models
 │   │   ├── agent.py             # AgentSession, AgentStep, ActionType
 │   │   └── investigation.py     # InvestigationResult, WHOISRecord, etc.
-│   ├── monitoring/              # Cost tracking
-│   ├── osint/                   # Passive recon modules
+│   ├── monitoring/              # Cost tracking & budget enforcement
+│   │   ├── __init__.py          # CostTracker with check_budget()
+│   │   ├── adapters.py          # Cloud Monitoring adapters
+│   │   └── event_bus.py         # Async event bus
+│   ├── osint/                   # Passive recon modules (all retry-decorated)
+│   │   ├── __init__.py          # with_retries decorator
 │   │   ├── dns_lookup.py
 │   │   ├── geoip_lookup.py
 │   │   ├── ssl_inspect.py
 │   │   ├── urlscan.py
 │   │   ├── virustotal.py
 │   │   └── whois_lookup.py
+│   ├── playbook/                # JSON playbook engine
+│   │   ├── executor.py          # Step-by-step playbook runner
+│   │   ├── loader.py            # TOML/JSON playbook loader
+│   │   ├── matcher.py           # URL-to-playbook matching
+│   │   └── models.py            # Playbook, PlaybookStep models
 │   ├── reports/                 # Report generation
 │   │   ├── __init__.py          # Jinja2 markdown renderer
 │   │   └── pdf.py               # WeasyPrint PDF renderer
 │   ├── settings/                # Pydantic settings with TOML layering
 │   │   └── config.py
+│   ├── store/                   # Scan result persistence
+│   │   └── scan_store.py        # SQLAlchemy-backed ScanStore
+│   ├── wallet/                  # Cryptocurrency wallet extraction
+│   │   ├── allowlist.py         # Known-good wallet allowlist
+│   │   ├── export.py            # Wallet export / serialization
+│   │   ├── models.py            # WalletAddress, WalletChain models
+│   │   └── patterns.py          # Regex patterns for BTC/ETH/TRX/SOL/...
 │   └── worker/                  # Cloud Run Job runner
 │       └── jobs.py
 ├── templates/                   # Jinja2 report templates
@@ -225,6 +247,12 @@ ssi/
 | API server             | `src/ssi/api/app.py`                   |
 | Settings               | `src/ssi/settings/config.py`           |
 | Domain models          | `src/ssi/models/investigation.py`      |
+| Wallet extraction      | `src/ssi/wallet/patterns.py`           |
+| Cost tracker           | `src/ssi/monitoring/__init__.py`       |
+| LLM retry wrapper      | `src/ssi/llm/retry.py`                 |
+| Playbook engine        | `src/ssi/playbook/executor.py`         |
+| Scan persistence       | `src/ssi/store/scan_store.py`          |
+| Custom exceptions      | `src/ssi/exceptions.py`                |
 
 ---
 
@@ -272,7 +300,21 @@ pytest tests/unit/test_osint.py -v
 pytest tests/unit -k "whois" -v
 ```
 
-Integration tests may require network access and running services (Ollama, etc.). They are marked with `@pytest.mark.integration`.
+### Integration tests
+
+Integration tests live in `tests/integration/` and exercise cross-module behaviour (end-to-end pipeline, API routes, wallet extraction against HTML fixtures). They are marked with `@pytest.mark.integration`.
+
+```bash
+# Run integration tests only
+pytest tests/integration/ -v
+
+# Run a specific integration suite
+pytest tests/integration/test_wallet_extraction.py -v
+```
+
+HTML fixture pages for wallet extraction tests are in `tests/fixtures/scam_sites/`. Integration tests mock external network calls but exercise real OSINT parsing, wallet regex, and persistence logic.
+
+> **Custom markers**: `integration` (cross-module tests) and `slow` (long-running tests) are registered in `conftest.py`. Filter with `-m "not slow"` for fast feedback loops.
 
 ---
 
@@ -383,7 +425,7 @@ make build-job
 # or: docker build -f docker/ssi-job.Dockerfile -t ssi-job .
 ```
 
-Both use multi-stage builds with Playwright system dependencies pre-installed.
+Both use multi-stage builds with zendriver browser runtime pre-installed.
 
 ### Pushing to Artifact Registry
 
@@ -514,7 +556,7 @@ The Cloud Run service receives `SSI_*` environment variables via Terraform (see 
 | `make setup`       | Full first-time setup (install + browser) |
 | `make install`     | Editable install (`pip install -e .`)     |
 | `make install-dev` | Dev + test deps + pre-commit hooks        |
-| `make browsers`    | Install Playwright Chromium               |
+| `make browsers`    | Install browser automation runtime        |
 | `make test`        | Run unit tests                            |
 | `make test-all`    | Run all tests (unit + integration)        |
 | `make lint`        | Ruff check + mypy strict                  |
@@ -527,3 +569,38 @@ The Cloud Run service receives `SSI_*` environment variables via Terraform (see 
 | `make push-job`    | Build + push Job image to Artifact Reg    |
 | `make clean`       | Remove build artifacts and caches         |
 | `make rehydrate`   | Copilot session bootstrap                 |
+
+---
+
+## 14. Hardening & Resilience
+
+SSI includes several production-hardening features. See [architecture.md](architecture.md#hardening--resilience) for the full design.
+
+### Cost budget enforcement
+
+`CostTracker.check_budget()` raises `BudgetExceededError` when cumulative LLM + API spend exceeds the configured budget. Budget gates are placed between investigation phases so partial results are preserved rather than discarded.
+
+```python
+from ssi.monitoring import CostTracker
+from ssi.exceptions import BudgetExceededError
+
+tracker = CostTracker(budget_usd=2.0)
+# ... record costs ...
+tracker.check_budget()  # raises BudgetExceededError if over budget
+```
+
+### Concurrent investigation limit
+
+The API enforces `max_concurrent_investigations` (default: 5, configurable via `SSI_API__MAX_CONCURRENT_INVESTIGATIONS`). When at capacity, new submissions receive HTTP 429. This prevents resource exhaustion on shared infrastructure.
+
+### LLM retry with backoff
+
+All LLM calls are automatically retried via `RetryingLLMProvider` (see [src/ssi/llm/retry.py](../src/ssi/llm/retry.py)). Retryable errors include connection failures and HTTP 429/5xx responses. The factory wires retry wrapping by default — no manual configuration needed.
+
+### OSINT retry decorator
+
+Each OSINT module is decorated with `@with_retries` (see [src/ssi/osint/**init**.py](../src/ssi/osint/__init__.py)), providing exponential-backoff retry for transient network errors. Configure per-module via the decorator arguments.
+
+### Error sanitisation
+
+API error responses never expose internal details (stack traces, file paths, connection strings). Log messages in retry paths use `type(exc).__name__` instead of `str(exc)` to avoid leaking sensitive data into log aggregation systems.

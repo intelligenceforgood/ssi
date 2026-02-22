@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from ssi.models.investigation import ThreatIndicator
+from ssi.osint import with_retries
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ _POLL_TIMEOUT = 60
 _POLL_INTERVAL = 5
 
 
+@with_retries(max_retries=2, backoff_seconds=1.0, retryable_exceptions=(httpx.TransportError, httpx.HTTPStatusError))
 def scan_url(url: str) -> dict[str, Any]:
     """Submit *url* to urlscan.io and return the full result.
 
@@ -196,7 +198,7 @@ def _submit_and_poll(url: str, api_key: str) -> dict[str, Any]:
         return {}
 
     except httpx.HTTPStatusError as e:
-        logger.warning("urlscan.io API error: %s %s", e.response.status_code, e.response.text[:300])
+        logger.warning("urlscan.io API error: HTTP %s", e.response.status_code)
         return {}
     except Exception as e:
         logger.warning("urlscan.io scan failed: %s", e)

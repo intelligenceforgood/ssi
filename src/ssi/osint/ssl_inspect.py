@@ -9,6 +9,7 @@ import ssl
 from urllib.parse import urlparse
 
 from ssi.models.investigation import SSLInfo
+from ssi.osint import with_retries
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ def _extract_host_port(url: str) -> tuple[str, int]:
     return host, port
 
 
+@with_retries(max_retries=2, backoff_seconds=1.0, retryable_exceptions=(socket.timeout, ConnectionError, OSError))
 def inspect_ssl(url: str) -> SSLInfo:
     """Connect to *url* and extract TLS certificate details.
 

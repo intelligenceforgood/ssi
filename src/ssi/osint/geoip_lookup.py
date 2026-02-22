@@ -7,10 +7,12 @@ import logging
 import httpx
 
 from ssi.models.investigation import GeoIPInfo
+from ssi.osint import with_retries
 
 logger = logging.getLogger(__name__)
 
 
+@with_retries(max_retries=2, backoff_seconds=1.0, retryable_exceptions=(httpx.TransportError, httpx.HTTPStatusError))
 def lookup_geoip(ip: str) -> GeoIPInfo:
     """Look up geolocation and ASN data for an IP address.
 

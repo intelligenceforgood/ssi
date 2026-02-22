@@ -1,0 +1,47 @@
+<!--
+    Minimal phishing page — collects credit card info.
+    Used by SSI tests to exercise form field inventory and PII detection.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Verify Your Account</title>
+    <style>
+        body { font-family: sans-serif; background: #f5f5f5; margin: 0; }
+        .container { max-width: 400px; margin: 60px auto; padding: 24px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #1a73e8; }
+        label { display: block; margin: 10px 0 4px; font-size: 14px; color: #555; }
+        input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; margin-top: 16px; background: #1a73e8; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .urgency { color: #d32f2f; font-weight: bold; text-align: center; margin: 12px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Verify Your Account</h2>
+        <p class="urgency">⚠️ Your account will be suspended in 24 hours if not verified!</p>
+        <form>
+            <label for="card-name">Cardholder Name</label>
+            <input type="text" id="card-name" name="card_name" placeholder="John Doe">
+
+            <label for="card-number">Credit Card Number</label>
+            <input type="text" id="card-number" name="card_number" placeholder="4242 4242 4242 4242">
+
+            <label for="expiry">Expiry Date</label>
+            <input type="text" id="expiry" name="expiry" placeholder="MM/YY">
+
+            <label for="cvv">CVV</label>
+            <input type="text" id="cvv" name="cvv" placeholder="123">
+
+            <label for="billing-zip">Billing ZIP</label>
+            <input type="text" id="billing-zip" name="billing_zip" placeholder="10001">
+
+            <label for="dob">Date of Birth</label>
+            <input type="text" id="dob" name="dob" placeholder="MM/DD/YYYY">
+
+            <button type="submit">Verify Account</button>
+        </form>
+    </div>
+</body>
+</html>

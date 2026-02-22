@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +68,10 @@ class InvestigationStatusResponse(BaseModel):
 
 _TASKS: dict[str, dict[str, Any]] = {}
 
+# Concurrent investigation limiter
+_ACTIVE_INVESTIGATIONS = 0
+_ACTIVE_LOCK = threading.Lock()
+
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -82,6 +87,18 @@ def health() -> dict[str, str]:
 def submit_investigation(req: InvestigateRequest, background_tasks: BackgroundTasks) -> InvestigateResponse:
     """Submit a URL for investigation. Returns immediately with a task ID."""
     from uuid import uuid4
+
+    settings = get_settings()
+    max_concurrent = settings.api.max_concurrent_investigations
+
+    global _ACTIVE_INVESTIGATIONS  # noqa: PLW0603
+    with _ACTIVE_LOCK:
+        if _ACTIVE_INVESTIGATIONS >= max_concurrent:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Server is at capacity ({max_concurrent} concurrent investigations). Try again later.",
+            )
+        _ACTIVE_INVESTIGATIONS += 1
 
     task_id = str(uuid4())
     _TASKS[task_id] = {"status": "pending"}
@@ -112,6 +129,8 @@ def _run_investigation_task(task_id: str, req: InvestigateRequest) -> None:
     """Background task that executes the investigation."""
     from ssi.investigator.orchestrator import run_investigation
 
+    global _ACTIVE_INVESTIGATIONS  # noqa: PLW0603
+
     _TASKS[task_id]["status"] = "running"
     settings = get_settings()
     output_dir = Path(settings.evidence.output_dir)
@@ -134,8 +153,14 @@ def _run_investigation_task(task_id: str, req: InvestigateRequest) -> None:
             _push_to_core(task_id, result, dataset=req.dataset, trigger_dossier=req.trigger_dossier)
 
     except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).exception("Investigation task %s failed", task_id)
         _TASKS[task_id]["status"] = "failed"
-        _TASKS[task_id]["result"] = {"error": str(e)}
+        _TASKS[task_id]["result"] = {"error": "Internal investigation error. Check server logs for details."}
+    finally:
+        with _ACTIVE_LOCK:
+            _ACTIVE_INVESTIGATIONS = max(0, _ACTIVE_INVESTIGATIONS - 1)
 
 
 def _push_to_core(task_id: str, result: Any, *, dataset: str, trigger_dossier: bool) -> None:
@@ -152,5 +177,5 @@ def _push_to_core(task_id: str, result: Any, *, dataset: str, trigger_dossier: b
         _TASKS[task_id]["core_case_id"] = case_id
         logger.info("Pushed investigation %s to core case %s", task_id, case_id)
     except Exception as e:
-        logger.warning("Failed to push to core: %s", e)
-        _TASKS[task_id]["core_push_error"] = str(e)
+        logger.warning("Failed to push to core: %s", type(e).__name__)
+        _TASKS[task_id]["core_push_error"] = "core_push_failed"

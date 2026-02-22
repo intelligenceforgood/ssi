@@ -12,12 +12,15 @@ logger = logging.getLogger(__name__)
 def create_llm_provider(provider: str | None = None) -> LLMProvider:
     """Create an LLM provider from settings or an explicit provider name.
 
+    The returned provider is automatically wrapped with
+    ``RetryingLLMProvider`` for resilience against transient errors.
+
     Args:
         provider: Override provider name (``ollama`` or ``gemini``).
             If None, reads from ``get_settings().llm.provider``.
 
     Returns:
-        A configured ``LLMProvider`` instance.
+        A configured ``LLMProvider`` instance (with retry wrapper).
 
     Raises:
         ValueError: If the provider name is not recognized.
@@ -27,20 +30,22 @@ def create_llm_provider(provider: str | None = None) -> LLMProvider:
     settings = get_settings()
     provider_name = (provider or settings.llm.provider).lower().strip()
 
+    base: LLMProvider
+
     if provider_name == "ollama":
         from ssi.llm.ollama_provider import OllamaProvider
 
-        return OllamaProvider(
+        base = OllamaProvider(
             base_url=settings.llm.ollama_base_url,
             model=settings.llm.model,
             temperature=settings.llm.temperature,
             max_tokens=settings.llm.max_tokens,
         )
 
-    if provider_name == "gemini":
+    elif provider_name == "gemini":
         from ssi.llm.gemini_provider import GeminiProvider
 
-        return GeminiProvider(
+        base = GeminiProvider(
             model=settings.llm.model,
             project=settings.llm.gcp_project,
             location=settings.llm.gcp_location,
@@ -48,7 +53,13 @@ def create_llm_provider(provider: str | None = None) -> LLMProvider:
             max_tokens=settings.llm.max_tokens,
         )
 
-    raise ValueError(
-        f"Unknown LLM provider: {provider_name!r}. "
-        f"Supported: ollama, gemini"
-    )
+    else:
+        raise ValueError(
+            f"Unknown LLM provider: {provider_name!r}. "
+            f"Supported: ollama, gemini"
+        )
+
+    # Wrap with retry logic for resilience
+    from ssi.llm.retry import RetryingLLMProvider
+
+    return RetryingLLMProvider(base, max_retries=3, base_delay=1.0)

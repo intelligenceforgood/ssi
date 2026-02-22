@@ -6,6 +6,7 @@ import logging
 from urllib.parse import urlparse
 
 from ssi.models.investigation import DNSRecords
+from ssi.osint import with_retries
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ def _extract_domain(url: str) -> str:
     return parsed.hostname or url
 
 
+@with_retries(max_retries=2, backoff_seconds=1.0)
 def lookup_dns(url: str) -> DNSRecords:
     """Resolve common DNS record types for the domain in *url*.
 

@@ -267,6 +267,7 @@ class APISettings(BaseSettings):
     port: int = 8100
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
     rate_limit_per_minute: int = 30
+    max_concurrent_investigations: int = 5
     require_auth: bool = False
 
 

@@ -180,6 +180,10 @@ def run_investigation(
             if cost_tracker:
                 cost_tracker.record_api_call("urlscan")
 
+        # Budget gate: abort before expensive active phase if already over budget.
+        if cost_tracker:
+            cost_tracker.check_budget()
+
         # --- Phase 2: Active Interaction (AI Agent) -------------------------
         if run_active:
             logger.info("Phase 2: Active interaction via AI agent")
@@ -220,6 +224,10 @@ def run_investigation(
         # --- Phase 2.5: HAR Analysis ----------------------------------------
         _run_har_analysis(result)
 
+        # Budget gate: abort before wallet extraction / classification if over budget.
+        if cost_tracker:
+            cost_tracker.check_budget()
+
         # --- Phase 2.6: Wallet Extraction -----------------------------------
         _extract_wallets(result, url)
 
@@ -231,9 +239,17 @@ def run_investigation(
         result.success = True
 
     except Exception as e:
-        logger.exception("Investigation failed for %s", url)
-        result.status = InvestigationStatus.FAILED
-        result.error = str(e)
+        from ssi.exceptions import BudgetExceededError
+
+        if isinstance(e, BudgetExceededError):
+            logger.warning("Investigation aborted — %s", e)
+            result.status = InvestigationStatus.COMPLETED
+            result.success = True  # partial success — data collected so far is valid
+            result.warnings.append(f"Investigation aborted early: {e}")
+        else:
+            logger.exception("Investigation failed for %s", url)
+            result.status = InvestigationStatus.FAILED
+            result.error = str(e)
         if scan_store and scan_id:
             try:
                 scan_store.update_scan(scan_id, status="failed", error_message=str(e))

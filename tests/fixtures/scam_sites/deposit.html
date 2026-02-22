@@ -1,0 +1,117 @@
+<!--
+    Fake crypto exchange — deposit page with wallet addresses.
+    Used by SSI integration/E2E tests to exercise wallet extraction.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoMaxx - Deposit Funds</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #0d1117; color: #e6edf3; }
+        .header { background: #161b22; padding: 16px 32px; display: flex; align-items: center; border-bottom: 1px solid #30363d; }
+        .header h1 { margin: 0; color: #58a6ff; font-size: 22px; }
+        .container { max-width: 560px; margin: 40px auto; padding: 32px; background: #161b22; border-radius: 8px; border: 1px solid #30363d; }
+        .container h2 { margin-top: 0; text-align: center; }
+        .welcome { text-align: center; color: #8b949e; margin-bottom: 24px; }
+        .coin-tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 24px; }
+        .coin-tab { padding: 8px 18px; background: #21262d; border: 1px solid #30363d; border-radius: 4px;
+            cursor: pointer; color: #8b949e; font-weight: bold; }
+        .coin-tab.active { background: #388bfd26; color: #58a6ff; border-color: #58a6ff; }
+        .wallet-card { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 12px 0; }
+        .wallet-card h3 { margin-top: 0; color: #58a6ff; }
+        .wallet-address { font-family: monospace; background: #161b22; padding: 12px; border-radius: 4px;
+            word-break: break-all; font-size: 13px; color: #f0883e; border: 1px solid #30363d; }
+        .deposit-amount { margin-top: 16px; }
+        .deposit-amount label { color: #8b949e; font-size: 14px; }
+        .deposit-amount input { width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d;
+            border-radius: 4px; color: #e6edf3; box-sizing: border-box; margin-top: 4px; }
+        .min-deposit { color: #f85149; font-size: 12px; margin-top: 4px; }
+        .confirm-btn { width: 100%; padding: 12px; margin-top: 20px; background: #238636; color: #fff;
+            border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+        .hidden { display: none; }
+        .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #484f58; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>CryptoMaxx</h1>
+    </div>
+
+    <div class="container">
+        <h2>Deposit Funds</h2>
+        <div class="welcome">Welcome! To start trading, deposit crypto to the address below.</div>
+
+        <div class="coin-tabs">
+            <div class="coin-tab active" data-coin="btc" onclick="showCoin('btc')">BTC</div>
+            <div class="coin-tab" data-coin="eth" onclick="showCoin('eth')">ETH</div>
+            <div class="coin-tab" data-coin="trx" onclick="showCoin('trx')">TRX</div>
+            <div class="coin-tab" data-coin="sol" onclick="showCoin('sol')">SOL</div>
+        </div>
+
+        <!-- BTC wallet -->
+        <div id="wallet-btc" class="wallet-card">
+            <h3>Bitcoin (BTC) Deposit</h3>
+            <p>Network: <strong>Bitcoin</strong></p>
+            <div class="wallet-address" data-testid="btc-address">bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh</div>
+            <div class="deposit-amount">
+                <label>Amount (BTC)</label>
+                <input type="text" placeholder="0.001" name="btc_amount">
+                <div class="min-deposit">Minimum deposit: 0.001 BTC</div>
+            </div>
+        </div>
+
+        <!-- ETH wallet -->
+        <div id="wallet-eth" class="wallet-card hidden">
+            <h3>Ethereum (ETH) Deposit</h3>
+            <p>Network: <strong>Ethereum (ERC-20)</strong></p>
+            <div class="wallet-address" data-testid="eth-address">0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18</div>
+            <div class="deposit-amount">
+                <label>Amount (ETH)</label>
+                <input type="text" placeholder="0.01" name="eth_amount">
+                <div class="min-deposit">Minimum deposit: 0.01 ETH</div>
+            </div>
+        </div>
+
+        <!-- TRX wallet -->
+        <div id="wallet-trx" class="wallet-card hidden">
+            <h3>Tron (TRX / USDT-TRC20) Deposit</h3>
+            <p>Network: <strong>Tron (TRC-20)</strong></p>
+            <div class="wallet-address" data-testid="trx-address">TQn9Y2khEsLJW1ChVWFMSMzKC9BhFoqqvd</div>
+            <div class="deposit-amount">
+                <label>Amount (USDT)</label>
+                <input type="text" placeholder="50" name="usdt_amount">
+                <div class="min-deposit">Minimum deposit: 50 USDT</div>
+            </div>
+        </div>
+
+        <!-- SOL wallet -->
+        <div id="wallet-sol" class="wallet-card hidden">
+            <h3>Solana (SOL) Deposit</h3>
+            <p>Network: <strong>Solana</strong></p>
+            <div class="wallet-address" data-testid="sol-address">4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA</div>
+            <div class="deposit-amount">
+                <label>Amount (SOL)</label>
+                <input type="text" placeholder="1" name="sol_amount">
+                <div class="min-deposit">Minimum deposit: 1 SOL</div>
+            </div>
+        </div>
+
+        <button class="confirm-btn" onclick="alert('Deposit confirmed! Please wait 10-30 minutes for confirmation.')">
+            I Have Made the Deposit
+        </button>
+
+        <div class="footer">&copy; 2026 CryptoMaxx — All rights reserved</div>
+    </div>
+
+    <script>
+        function showCoin(coin) {
+            document.querySelectorAll('.wallet-card').forEach(c => c.classList.add('hidden'));
+            document.getElementById('wallet-' + coin).classList.remove('hidden');
+            document.querySelectorAll('.coin-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector('[data-coin="' + coin + '"]').classList.add('active');
+        }
+    </script>
+</body>
+</html>

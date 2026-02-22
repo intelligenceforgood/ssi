@@ -1,6 +1,6 @@
 # SSI Architecture
 
-> **Last Updated**: February 18, 2026
+> **Last Updated**: June 2025
 > **Status**: Accepted
 
 This document captures the key architecture decisions and system design for the Scam Site Investigator (SSI).
@@ -10,27 +10,35 @@ This document captures the key architecture decisions and system design for the 
 ## System Overview
 
 ```
-┌─────────────┐     ┌──────────────────┐     ┌───────────────────┐
-│  Web UI     │────▶│ SSI Orchestrator │────▶│ Sandboxed Browser │
-│ (HTML/CSS)  │     │ (FastAPI)        │     │ (Playwright)      │
-│ CLI / API   │     └──────┬───────────┘     └────────┬──────────┘
-└─────────────┘            │                          │
-                    ┌──────▼───────────┐       ┌──────▼──────────┐
-                    │ LLM Provider     │       │ Network Monitor │
-                    │ (Ollama / Gemini)│       │ (HAR Recording) │
-                    └──────┬───────────┘       └──────┬──────────┘
-                           │                          │
-                    ┌──────▼───────────┐       ┌──────▼──────────┐
-                    │ Synthetic PII    │       │ OSINT Enrichment│
-                    │ Vault            │       │ (WHOIS, DNS,    │
-                    └──────────────────┘       │  GeoIP, VT)     │
-                                               └──────┬──────────┘
-                                                      │
-                                               ┌──────▼──────────┐
-                                               │ Evidence Store  │
-                                               │ + Report Gen    │
-                                               │ (MD + PDF)      │
-                                               └─────────────────┘
+┌─────────────┐     ┌──────────────────────┐     ┌───────────────────┐
+│  Web UI     │────▶│  SSI Orchestrator    │────▶│ Sandboxed Browser │
+│  CLI / API  │     │  (FastAPI / Typer)   │     │ (zendriver)       │
+└─────────────┘     └──────┬───────────────┘     └────────┬──────────┘
+                           │                              │
+         ┌─────────────────┼─────────────────┐            │
+         │                 │                 │            │
+  ┌──────▼───────┐  ┌─────▼──────┐  ┌──────▼──────┐  ┌──▼──────────────┐
+  │ LLM Provider │  │ Cost       │  │ Playbook    │  │ Network Monitor │
+  │ + Retry      │  │ Tracker    │  │ Engine      │  │ (HAR Recording) │
+  │ (Ollama /    │  │ (Budget    │  │ (JSON       │  └──┬──────────────┘
+  │  Gemini)     │  │  Enforce)  │  │  Playbooks) │     │
+  └──────┬───────┘  └────────────┘  └─────────────┘     │
+         │                                               │
+  ┌──────▼───────┐  ┌──────────────┐  ┌─────────────┐   │
+  │ Synthetic    │  │ Wallet       │  │ OSINT       │◀──┘
+  │ PII Vault    │  │ Extraction   │  │ Enrichment  │
+  │              │  │ (Regex + QR) │  │ + Retry     │
+  └──────────────┘  └──────┬───────┘  │ (WHOIS, DNS,│
+                           │          │  SSL, GeoIP, │
+                    ┌──────▼───────┐  │  VT, urlscan)│
+                    │ Scan Store   │  └──────┬───────┘
+                    │ (SQLite /    │         │
+                    │  PostgreSQL) │  ┌──────▼───────┐
+                    └──────────────┘  │ Evidence     │
+                                      │ Store +      │
+                                      │ Report Gen   │
+                                      │ (MD+PDF+STIX)│
+                                      └──────────────┘
 ```
 
 ---
@@ -121,28 +129,44 @@ This document captures the key architecture decisions and system design for the 
 
 ## Investigation Pipeline
 
-The orchestrator executes three phases sequentially:
+The orchestrator executes three phases sequentially, with cost budget gates
+between phases to abort early if the investigation exceeds its cap.
 
 ### Phase 1 — Passive Reconnaissance
 
-1. WHOIS/RDAP lookup
-2. DNS record resolution (A, AAAA, MX, TXT, NS, CNAME)
-3. SSL/TLS certificate inspection
-4. GeoIP lookup via ipinfo.io
-5. Browser capture (screenshot, DOM, HAR, forms, external resources, redirects)
-6. VirusTotal URL reputation check
-7. urlscan.io page analysis
+1. WHOIS/RDAP lookup (with retry)
+2. DNS record resolution — A, AAAA, MX, TXT, NS, CNAME (with retry)
+3. SSL/TLS certificate inspection (with retry)
+4. GeoIP lookup via ipinfo.io (with retry)
+5. Browser capture — screenshot, DOM, HAR, forms, external resources, redirects
+6. VirusTotal URL reputation check (with retry)
+7. urlscan.io page analysis (with retry)
+
+**Budget gate** — if cost tracker reports budget exceeded, the investigation
+skips Phase 2 and proceeds to evidence packaging.
 
 ### Phase 2 — Active Agent Interaction
 
-1. Launch browser agent with Ollama LLM
+1. Launch browser agent with LLM (Ollama or Gemini, wrapped in retry provider)
 2. Generate synthetic identity for form filling
-3. Execute observe → decide → act loop (up to 20 steps, 50K token budget):
+3. Execute observe → decide → act loop (configurable step limit and token budget):
    - **Observe**: extract numbered interactive elements from DOM
    - **Decide**: send observation to LLM, receive JSON action decision
    - **Act**: execute action (click, type, select, scroll, submit, navigate)
 4. Track PII fields submitted, pages visited, downloads captured
 5. Record per-step screenshots and session data
+
+**Budget gate** — second check after HAR analysis.
+
+### Phase 2.5 — Wallet Extraction
+
+1. Scan all text sources for cryptocurrency wallet addresses:
+   - Page snapshot DOM text
+   - Agent step observations and filled values
+   - QR/barcode decoded data from inline images
+2. Match against 10+ blockchain patterns (BTC, ETH, TRX, SOL, XRP, ADA, LTC, DOGE, BCH, DASH)
+3. Deduplicate and classify each address by token symbol
+4. QR-decoded addresses receive higher confidence scores
 
 ### Phase 3 — Classification & Evidence Packaging
 
@@ -154,6 +178,7 @@ The orchestrator executes three phases sequentially:
    - `leo_evidence_report.md` — law enforcement summary
    - `stix_bundle.json` — STIX 2.1 IOC bundle
    - `evidence.zip` — all artifacts with SHA-256 manifest
+4. Persist results to ScanStore (SQLite / PostgreSQL)
 
 ---
 
@@ -180,3 +205,50 @@ Settings follow a layered precedence model (highest wins):
 Key configuration sections: `llm`, `browser`, `osint`, `evidence`, `identity`, `api`, `integration`, `stealth`, `captcha`, `cost`, `feedback`.
 
 See the [user guide](user_guide.md) for a complete environment variable reference.
+
+---
+
+## Hardening & Resilience
+
+The following production-hardening features protect against runaway costs,
+resource exhaustion, and transient external failures.
+
+### Cost Budget Enforcement
+
+`CostTracker` tracks per-investigation costs (LLM tokens, OSINT API calls,
+compute seconds). A `check_budget()` method raises `BudgetExceededError`
+between pipeline phases. The orchestrator catches this and marks the
+investigation as completed-with-warning rather than failed — all data
+collected before the budget trip is preserved.
+
+Configuration: `SSI_COST__BUDGET_PER_INVESTIGATION_USD` (default: `1.0`).
+
+### Concurrent Investigation Limit
+
+The API enforces a configurable ceiling on simultaneous investigations via a
+thread-safe counter in the routes layer. When at capacity, new requests
+receive HTTP 429. The counter is decremented in a `finally` block to avoid
+leaks on crashes.
+
+Configuration: `SSI_API__MAX_CONCURRENT_INVESTIGATIONS` (default: `5`).
+
+### LLM Retry with Backoff
+
+`RetryingLLMProvider` wraps any `LLMProvider` with exponential-backoff retry
+for transient network / provider errors (`ConnectionError`, `TimeoutError`,
+HTTP 429/5xx). The factory wires this automatically — callers receive a
+resilient provider without extra code.
+
+### OSINT Retry Decorator
+
+`ssi.osint.with_retries` is a shared decorator applied to all OSINT modules
+(VirusTotal, urlscan, DNS, SSL, GeoIP). It retries on transient errors with
+configurable backoff, matching the existing whois retry pattern.
+
+### Error Sanitisation
+
+API error responses return generic messages (e.g., "Internal investigation
+error") instead of raw exception strings that might expose internal paths,
+database connection strings, or API keys. Full details are logged server-side
+only. Log messages for retries and provider errors use `type(e).__name__`
+instead of `str(e)` to avoid leaking secrets in error messages.

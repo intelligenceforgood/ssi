@@ -157,6 +157,23 @@ class CostTracker:
             return False
         return self._total_usd >= self._budget_usd
 
+    def check_budget(self) -> None:
+        """Raise ``BudgetExceededError`` if the budget has been exceeded.
+
+        Call this between investigation phases to abort early when costs
+        spiral beyond the configured cap.
+
+        Raises:
+            BudgetExceededError: When accumulated cost meets or exceeds the budget.
+        """
+        if self.budget_exceeded:
+            from ssi.exceptions import BudgetExceededError
+
+            raise BudgetExceededError(
+                spent_usd=self._total_usd,
+                budget_usd=self._budget_usd,
+            )
+
     @property
     def budget_remaining_usd(self) -> float:
         if self._budget_usd <= 0:

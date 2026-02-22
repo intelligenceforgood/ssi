@@ -7,12 +7,14 @@ import logging
 import httpx
 
 from ssi.models.investigation import ThreatIndicator
+from ssi.osint import with_retries
 
 logger = logging.getLogger(__name__)
 
 VT_API_BASE = "https://www.virustotal.com/api/v3"
 
 
+@with_retries(max_retries=2, backoff_seconds=1.0, retryable_exceptions=(httpx.TransportError, httpx.HTTPStatusError))
 def check_url(url: str) -> list[ThreatIndicator]:
     """Submit *url* to VirusTotal and return any threat indicators.
 
