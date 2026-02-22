@@ -23,7 +23,7 @@
 {% else %}
 Automated investigation of the target URL was conducted using the Scam Site
 Investigator (SSI). The tool performed
-{% if result.passive_only %}passive reconnaissance{% else %}passive and active reconnaissance{% endif %}
+{% if result.scan_type == 'passive' %}passive reconnaissance{% elif result.scan_type == 'active' %}active browser reconnaissance{% else %}passive and active reconnaissance{% endif %}
 to document the site's infrastructure, behaviour, and threat indicators.
 {% endif %}
 

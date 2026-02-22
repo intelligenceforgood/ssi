@@ -302,7 +302,7 @@
                 </div>
                 <div class="summary-item">
                     <div class="label">Mode</div>
-                    <div class="value">{{ "Passive" if result.passive_only else "Full" }}</div>
+                    <div class="value">{{ result.scan_type | default("Passive") | capitalize }}</div>
                 </div>
                 {% if result.taxonomy_result and result.taxonomy_result.intent %}
                 <div class="summary-item" style="grid-column: span 2;">

@@ -1,28 +1,53 @@
-"""Gemini (Google Generative AI / Vertex AI) LLM provider for SSI.
+"""Gemini LLM provider for SSI using the ``google-genai`` unified SDK.
 
-Uses the ``google-genai`` unified SDK which works with both:
-- **Vertex AI** (``SSI_LLM__GEMINI_BACKEND=vertex``, default for cloud envs)
-- **Google Generative AI** (``SSI_LLM__GEMINI_BACKEND=genai``, API-key auth)
+Works with both backends:
+- **Vertex AI** (default for cloud envs — uses ADC / service-account auth)
+- **Google AI Studio** (API-key auth via ``SSI_LLM__GEMINI_API_KEY``)
 
-The provider is selected at runtime based on ``SSI_LLM__PROVIDER=gemini``.
+The provider is selected at runtime via ``SSI_LLM__PROVIDER=gemini``.
 """
 
 from __future__ import annotations
 
 import logging
 import time
+from typing import TYPE_CHECKING
 
 from ssi.llm.base import LLMProvider, LLMResult
+
+if TYPE_CHECKING:
+    from google.genai import types
 
 logger = logging.getLogger(__name__)
 
 
-class GeminiProvider(LLMProvider):
-    """LLM provider backed by Google Gemini via the Vertex AI Python SDK.
+# Build the safety-settings list once — used by both chat() and chat_with_images().
+def _safety_off() -> list["types.SafetySetting"]:
+    """Return safety settings that disable all content filters.
 
-    Uses ``google.cloud.aiplatform`` (Vertex AI) for authentication in
-    Cloud Run, or ``google.generativeai`` for local development with an
-    API key.
+    SSI is a fraud-analysis tool whose prompts inherently discuss scams,
+    social-engineering, extortion, etc.  Disabling Gemini's safety
+    filters prevents classification from being blocked.
+    """
+    from google.genai import types
+
+    categories = [
+        types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+        types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+    ]
+    return [
+        types.SafetySetting(category=cat, threshold=types.HarmBlockThreshold.OFF)
+        for cat in categories
+    ]
+
+
+class GeminiProvider(LLMProvider):
+    """LLM provider backed by Google Gemini via the ``google-genai`` SDK.
+
+    Uses Vertex AI (ADC) for authentication in Cloud Run, or
+    Google AI Studio with an API key for local development.
 
     Args:
         model: Gemini model name (e.g. ``gemini-2.0-flash``).
@@ -49,15 +74,17 @@ class GeminiProvider(LLMProvider):
         self._init_client()
 
     def _init_client(self) -> None:
-        """Initialize the Vertex AI generative model client."""
+        """Initialize the ``google-genai`` client."""
         try:
-            import vertexai
-            from vertexai.generative_models import GenerativeModel
+            from google import genai
 
-            vertexai.init(project=self.project, location=self.location)
-            self._client = GenerativeModel(self.model_name)
+            self._client = genai.Client(
+                vertexai=True,
+                project=self.project,
+                location=self.location,
+            )
             logger.info(
-                "Gemini provider initialized: model=%s project=%s location=%s",
+                "Gemini provider initialized (google-genai): model=%s project=%s location=%s",
                 self.model_name,
                 self.project,
                 self.location,
@@ -65,6 +92,10 @@ class GeminiProvider(LLMProvider):
         except Exception as e:
             logger.error("Failed to initialize Gemini provider: %s", e)
             raise
+
+    # ------------------------------------------------------------------
+    # Text chat
+    # ------------------------------------------------------------------
 
     def chat(
         self,
@@ -85,36 +116,14 @@ class GeminiProvider(LLMProvider):
         Returns:
             An ``LLMResult`` with the response content and token usage metrics.
         """
-        from vertexai.generative_models import Content, GenerationConfig, HarmBlockThreshold, HarmCategory, Part
+        from google.genai import types
 
         temp = temperature if temperature is not None else self.temperature
         tokens = max_tokens if max_tokens is not None else self.max_tokens
 
-        gen_config = GenerationConfig(
-            temperature=temp,
-            max_output_tokens=tokens,
-        )
-        if json_mode:
-            gen_config = GenerationConfig(
-                temperature=temp,
-                max_output_tokens=tokens,
-                response_mime_type="application/json",
-            )
-
-        # SSI is a fraud-analysis tool — prompts inherently discuss scams,
-        # social-engineering, extortion, etc.  Disable Gemini's safety
-        # filters so classification is not blocked.
-        safety_settings = {
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-        }
-
-        # Convert chat messages to Vertex AI format.
-        # Gemini expects: system instruction separately, then alternating user/model.
+        # Extract system instruction and build content list.
         system_instruction = None
-        contents: list[Content] = []
+        contents: list[types.Content] = []
 
         for msg in messages:
             role = msg["role"]
@@ -122,82 +131,76 @@ class GeminiProvider(LLMProvider):
             if role == "system":
                 system_instruction = text
             elif role == "assistant":
-                contents.append(Content(role="model", parts=[Part.from_text(text)]))
+                contents.append(types.Content(role="model", parts=[types.Part.from_text(text=text)]))
             else:
-                contents.append(Content(role="user", parts=[Part.from_text(text)]))
+                contents.append(types.Content(role="user", parts=[types.Part.from_text(text=text)]))
+
+        config = types.GenerateContentConfig(
+            temperature=temp,
+            max_output_tokens=tokens,
+            safety_settings=_safety_off(),
+            system_instruction=system_instruction,
+            response_mime_type="application/json" if json_mode else None,
+        )
 
         start = time.monotonic()
         try:
-            # Re-create model with system instruction if provided
-            if system_instruction:
-                from vertexai.generative_models import GenerativeModel
-
-                model = GenerativeModel(self.model_name, system_instruction=system_instruction)
-            else:
-                model = self._client
-
-            response = model.generate_content(
+            response = self._client.models.generate_content(
+                model=self.model_name,
                 contents=contents,
-                generation_config=gen_config,
-                safety_settings=safety_settings,
+                config=config,
             )
         except Exception as e:
             logger.error("Gemini API error: %s", e)
             raise
 
-        latency_ms = (time.monotonic() - start) * 1000
+        return self._parse_response(response, time.monotonic() - start)
 
-        # Extract token usage from response metadata
-        usage = getattr(response, "usage_metadata", None)
-        input_tokens = getattr(usage, "prompt_token_count", 0) if usage else 0
-        output_tokens = getattr(usage, "candidates_token_count", 0) if usage else 0
-
-        content_text = ""
-        if response.candidates:
-            candidate = response.candidates[0]
-            finish_reason = getattr(candidate, "finish_reason", None)
-            if finish_reason and str(finish_reason) not in ("1", "FinishReason.STOP", "STOP"):
-                logger.warning(
-                    "Gemini response finish_reason=%s (model=%s). "
-                    "Safety ratings: %s",
-                    finish_reason,
-                    self.model_name,
-                    getattr(candidate, "safety_ratings", "N/A"),
-                )
-            if candidate.content and candidate.content.parts:
-                content_text = candidate.content.parts[0].text
-        else:
-            # No candidates at all — likely a complete safety block
-            block_reason = getattr(response, "prompt_feedback", None)
-            logger.error(
-                "Gemini returned no candidates (model=%s). "
-                "Prompt feedback: %s",
-                self.model_name,
-                block_reason,
-            )
-
-        return LLMResult(
-            content=content_text,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            latency_ms=latency_ms,
-            model=self.model_name,
-            raw_response={"text": content_text},
-        )
+    # ------------------------------------------------------------------
+    # Connectivity probe
+    # ------------------------------------------------------------------
 
     def check_connectivity(self) -> bool:
         """Verify that Gemini is reachable with a minimal request."""
-        try:
-            from vertexai.generative_models import GenerationConfig
+        from google.genai import types
 
-            response = self._client.generate_content(
-                "Say hello in one word.",
-                generation_config=GenerationConfig(max_output_tokens=10),
+        try:
+            response = self._client.models.generate_content(
+                model=self.model_name,
+                contents="Say hello in one word.",
+                config=types.GenerateContentConfig(max_output_tokens=10),
             )
-            return bool(response.candidates)
+            ok = bool(response.candidates)
+            if ok:
+                logger.info(
+                    "Gemini connectivity OK: model=%s project=%s location=%s",
+                    self.model_name,
+                    self.project,
+                    self.location,
+                )
+            else:
+                logger.error(
+                    "Gemini returned no candidates during connectivity check: "
+                    "model=%s project=%s location=%s prompt_feedback=%s",
+                    self.model_name,
+                    self.project,
+                    self.location,
+                    getattr(response, "prompt_feedback", "N/A"),
+                )
+            return ok
         except Exception as e:
-            logger.warning("Gemini connectivity check failed: %s", e)
+            logger.error(
+                "Gemini connectivity check failed: model=%s project=%s location=%s error=%s",
+                self.model_name,
+                self.project,
+                self.location,
+                e,
+            )
             return False
+
+    # ------------------------------------------------------------------
+    # Multimodal chat (text + images)
+    # ------------------------------------------------------------------
 
     def chat_with_images(
         self,
@@ -218,38 +221,13 @@ class GeminiProvider(LLMProvider):
         """
         import base64
 
-        from vertexai.generative_models import (
-            Content,
-            GenerationConfig,
-            GenerativeModel,
-            HarmBlockThreshold,
-            HarmCategory,
-            Part,
-        )
+        from google.genai import types
 
         temp = temperature if temperature is not None else self.temperature
         tokens = max_tokens if max_tokens is not None else self.max_tokens
 
-        gen_config = GenerationConfig(
-            temperature=temp,
-            max_output_tokens=tokens,
-        )
-        if json_mode:
-            gen_config = GenerationConfig(
-                temperature=temp,
-                max_output_tokens=tokens,
-                response_mime_type="application/json",
-            )
-
-        safety_settings = {
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-        }
-
         system_instruction = None
-        contents: list[Content] = []
+        contents: list[types.Content] = []
 
         for msg in messages:
             role = msg["role"]
@@ -262,38 +240,51 @@ class GeminiProvider(LLMProvider):
             gemini_role = "model" if role == "assistant" else "user"
 
             if isinstance(raw_content, str):
-                contents.append(Content(role=gemini_role, parts=[Part.from_text(raw_content)]))
+                contents.append(
+                    types.Content(role=gemini_role, parts=[types.Part.from_text(text=raw_content)])
+                )
                 continue
 
             # Structured content parts (text + images)
-            parts: list[Part] = []
+            parts: list[types.Part] = []
             for part in raw_content:
                 if part.get("type") == "text":
-                    parts.append(Part.from_text(part["text"]))
+                    parts.append(types.Part.from_text(text=part["text"]))
                 elif part.get("type") == "image":
                     image_bytes = base64.b64decode(part["data"])
                     media_type = part.get("media_type", "image/png")
-                    parts.append(Part.from_data(data=image_bytes, mime_type=media_type))
+                    parts.append(types.Part.from_bytes(data=image_bytes, mime_type=media_type))
             if parts:
-                contents.append(Content(role=gemini_role, parts=parts))
+                contents.append(types.Content(role=gemini_role, parts=parts))
+
+        config = types.GenerateContentConfig(
+            temperature=temp,
+            max_output_tokens=tokens,
+            safety_settings=_safety_off(),
+            system_instruction=system_instruction,
+            response_mime_type="application/json" if json_mode else None,
+        )
 
         start = time.monotonic()
         try:
-            if system_instruction:
-                model = GenerativeModel(self.model_name, system_instruction=system_instruction)
-            else:
-                model = self._client
-
-            response = model.generate_content(
+            response = self._client.models.generate_content(
+                model=self.model_name,
                 contents=contents,
-                generation_config=gen_config,
-                safety_settings=safety_settings,
+                config=config,
             )
         except Exception as e:
             logger.error("Gemini multimodal API error: %s", e)
             raise
 
-        latency_ms = (time.monotonic() - start) * 1000
+        return self._parse_response(response, time.monotonic() - start)
+
+    # ------------------------------------------------------------------
+    # Shared response parsing
+    # ------------------------------------------------------------------
+
+    def _parse_response(self, response: "types.GenerateContentResponse", elapsed_s: float) -> LLMResult:
+        """Extract text and usage from a ``GenerateContentResponse``."""
+        latency_ms = elapsed_s * 1000
 
         usage = getattr(response, "usage_metadata", None)
         input_tokens = getattr(usage, "prompt_token_count", 0) if usage else 0
@@ -303,9 +294,9 @@ class GeminiProvider(LLMProvider):
         if response.candidates:
             candidate = response.candidates[0]
             finish_reason = getattr(candidate, "finish_reason", None)
-            if finish_reason and str(finish_reason) not in ("1", "FinishReason.STOP", "STOP"):
+            if finish_reason and str(finish_reason) not in ("STOP", "FinishReason.STOP", "1"):
                 logger.warning(
-                    "Gemini multimodal finish_reason=%s (model=%s). Safety: %s",
+                    "Gemini response finish_reason=%s (model=%s). Safety ratings: %s",
                     finish_reason,
                     self.model_name,
                     getattr(candidate, "safety_ratings", "N/A"),
@@ -315,7 +306,7 @@ class GeminiProvider(LLMProvider):
         else:
             block_reason = getattr(response, "prompt_feedback", None)
             logger.error(
-                "Gemini multimodal returned no candidates (model=%s). Prompt feedback: %s",
+                "Gemini returned no candidates (model=%s). Prompt feedback: %s",
                 self.model_name,
                 block_reason,
             )

@@ -182,7 +182,9 @@ def _do_navigate(page, action: AgentAction, elements: list[InteractiveElement]) 
         from urllib.parse import urljoin
 
         url = urljoin(page.url, url)
-    page.goto(url, wait_until="networkidle", timeout=30_000)
+    from ssi.browser.navigation import resilient_goto
+
+    resilient_goto(page, url, timeout_ms=30_000)
     return f"Navigated to {url}"
 
 

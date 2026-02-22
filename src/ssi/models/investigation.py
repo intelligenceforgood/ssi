@@ -12,6 +12,19 @@ from pydantic import BaseModel, Field
 from ssi.wallet.models import WalletEntry
 
 
+class ScanType(str, Enum):
+    """Investigation scan modes.
+
+    - ``passive``: OSINT only (WHOIS, DNS, SSL, screenshot) — no AI agent.
+    - ``active``: AI agent browser interaction + wallet extraction — skips passive recon.
+    - ``full``: Both passive recon and active AI agent interaction.
+    """
+
+    PASSIVE = "passive"
+    ACTIVE = "active"
+    FULL = "full"
+
+
 class InvestigationStatus(str, Enum):
     """Investigation lifecycle states."""
 
@@ -241,7 +254,8 @@ class InvestigationResult(BaseModel):
     chain_of_custody: ChainOfCustody | None = None
 
     # Metadata
-    passive_only: bool = True
+    scan_type: ScanType = ScanType.PASSIVE
+    passive_only: bool = True  # Kept for backward compatibility; derived from scan_type.
     agent_steps: list[dict[str, Any]] = Field(default_factory=list)
     token_usage: int = 0
     duration_seconds: float = 0.0

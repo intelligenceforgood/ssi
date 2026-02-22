@@ -16,6 +16,22 @@ record_har = true
 record_video = false 
 sandbox = false # Cloud Run runs as root; Chromium needs --no-sandbox
 
+[zen_browser]
+headless = true
+page_zoom = 0.75
+screenshot_resize_height = 720
+screenshot_resize_width = 1280
+
+[proxy]
+enabled = true
+host = "gate.decodo.com"
+port = "10001"
+
+[agent]
+dom_inspection_enabled = true
+max_actions_per_site = 80
+overlay_dismiss_enabled = true
+
 [evidence]
 gcs_bucket = "i4g-dev-ssi-evidence"
 gcs_prefix = "investigations"
@@ -24,13 +40,13 @@ retain_days = 365
 storage_backend = "gcs"
 
 [api]
-cors_origins = ["https://console.i4g.dev", "http://localhost:3000"]
+cors_origins = ["https://console.i4g.dev", "https://app.intelligenceforgood.org", "http://localhost:3000"]
 host = "0.0.0.0"
 port = 8100
 require_auth = false
 
 [integration]
-core_api_url = "https://api.i4g.dev"
+core_api_url = "https://api.intelligenceforgood.org"
 push_to_core = false
 trigger_dossier = false
 
@@ -38,3 +54,17 @@ trigger_dossier = false
 budget_per_investigation_usd = 2.0
 enabled = true
 warn_at_pct = 80
+
+[storage]
+backend = "sqlite"
+persist_scans = true
+
+[playbook]
+enabled = true
+fallback_to_llm = true
+
+[monitoring]
+enabled = true
+max_event_history = 1000
+snapshot_screenshots = true
+websocket_enabled = true

@@ -175,11 +175,13 @@
                 </div>
 
                 <div class="form-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="passive_only" name="passive_only" value="true" checked>
-                        <label for="passive_only">Passive reconnaissance only (no site interaction)</label>
-                    </div>
-                    <p class="hint">Uncheck to enable AI agent active interaction with the target site</p>
+                    <label for="scan_type">Scan Mode</label>
+                    <select id="scan_type" name="scan_type">
+                        <option value="passive" selected>Passive — OSINT only (WHOIS, DNS, SSL, screenshot)</option>
+                        <option value="active">Active — AI agent + wallet extraction (skip passive recon)</option>
+                        <option value="full">Full — Passive recon + active AI agent</option>
+                    </select>
+                    <p class="hint">Choose what depth of investigation to run</p>
                 </div>
 
                 <button type="submit" class="btn" id="submit-btn">

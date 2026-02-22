@@ -13,6 +13,7 @@ from ssi.models.investigation import (
     InvestigationStatus,
     PageSnapshot,
     ScamClassification,
+    ScanType,
     SSLInfo,
     TaxonomyScoredLabel,
     ThreatIndicator,
@@ -27,7 +28,16 @@ class TestInvestigationResult:
         assert result.status == InvestigationStatus.PENDING
         assert result.success is False
         assert result.passive_only is True
+        assert result.scan_type == ScanType.PASSIVE
         assert result.investigation_id is not None
+
+    def test_scan_type_active(self):
+        result = InvestigationResult(url="https://example.com", scan_type=ScanType.ACTIVE)
+        assert result.scan_type == ScanType.ACTIVE
+
+    def test_scan_type_full(self):
+        result = InvestigationResult(url="https://example.com", scan_type=ScanType.FULL)
+        assert result.scan_type == ScanType.FULL
 
     def test_serialization_roundtrip(self):
         result = InvestigationResult(

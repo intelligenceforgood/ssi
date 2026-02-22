@@ -243,7 +243,9 @@ def _handle_accessibility(
                     }
                 ]
             )
-            page.reload(wait_until="networkidle", timeout=15_000)
+            from ssi.browser.navigation import resilient_reload
+
+            resilient_reload(page, timeout_ms=15_000)
             recheck = detect_captcha(page)
             result.solved = not recheck.detected
 

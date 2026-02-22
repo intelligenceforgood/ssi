@@ -83,7 +83,9 @@ def capture_page(url: str, output_dir: Path) -> PageSnapshot:
             page.on("response", on_response)
 
             # Navigate
-            response = page.goto(url, wait_until="networkidle", timeout=settings.browser.timeout_ms)
+            from ssi.browser.navigation import resilient_goto
+
+            response = resilient_goto(page, url, timeout_ms=settings.browser.timeout_ms)
 
             # Check for CAPTCHA
             from ssi.browser.captcha import CaptchaStrategy, detect_captcha, handle_captcha

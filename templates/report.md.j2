@@ -4,8 +4,10 @@
 > **Date:** {{ result.started_at.strftime('%Y-%m-%d %H:%M UTC') }}
 > **Status:** {{ result.status.value | upper }}
 > **Duration:** {{ "%.1f" | format(result.duration_seconds) }}s
-{% if result.passive_only %}
+{% if result.scan_type == 'passive' %}
 > **Mode:** Passive Reconnaissance Only
+{% elif result.scan_type == 'active' %}
+> **Mode:** Active Investigation (AI Agent + Wallet Extraction)
 {% else %}
 > **Mode:** Full Investigation (Passive + Active Agent)
 {% endif %}
@@ -314,7 +316,7 @@ This is the PII the site attempts to collect:
 {% if result.page_snapshot and result.page_snapshot.har_path %}
 | Network HAR | `network.har` |
 {% endif %}
-{% if not result.passive_only %}
+{% if result.scan_type != 'passive' %}
 | Agent Video | `video/` |
 {% endif %}
 

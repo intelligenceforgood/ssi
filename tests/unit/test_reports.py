@@ -197,6 +197,7 @@ class TestRenderMarkdownReport:
         ]
         full_result.token_usage = 500
         full_result.passive_only = False
+        full_result.scan_type = "active"
 
         md = render_markdown_report(full_result)
         assert "AI Agent Interaction" in md

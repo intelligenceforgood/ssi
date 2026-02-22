@@ -13,8 +13,14 @@ from ssi.models.agent import ActionType, InteractiveElement, PageObservation
 
 @pytest.fixture()
 def llm_client():
-    """Create client without needing Ollama running."""
-    return AgentLLMClient(base_url="http://localhost:11434", model="llama3.3")
+    """Create client with a mock LLM provider (no real backend needed)."""
+    from unittest.mock import MagicMock
+
+    from ssi.llm.base import LLMProvider
+
+    mock_llm = MagicMock(spec=LLMProvider)
+    mock_llm.check_connectivity.return_value = True
+    return AgentLLMClient(llm=mock_llm)
 
 
 @pytest.fixture()

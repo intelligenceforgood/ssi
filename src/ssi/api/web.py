@@ -30,7 +30,7 @@ async def index(request: Request) -> HTMLResponse:
 async def submit_investigation(
     request: Request,
     url: str = Form(...),
-    passive_only: bool = Form(True),
+    scan_type: str = Form("passive"),
 ) -> RedirectResponse:
     """Handle form submission and redirect to the status page."""
     from uuid import uuid4
@@ -38,7 +38,7 @@ async def submit_investigation(
     task_id = str(uuid4())
     _TASKS[task_id] = {"status": "pending"}
 
-    req = InvestigateRequest(url=url, passive_only=passive_only)
+    req = InvestigateRequest(url=url, scan_type=scan_type)
 
     import asyncio
 

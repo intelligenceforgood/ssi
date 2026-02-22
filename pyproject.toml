@@ -31,7 +31,7 @@ dependencies = [
   "pyzbar>=0.1.9", # --- GCP (production) -------------------------------------------------
   "google-cloud-storage",
   "google-cloud-secret-manager",
-  "google-cloud-aiplatform>=1.70.0,<3.0",
+  "google-genai>=1.0.0,<2.0",
 ]
 description = "Scam Site Investigator — AI-driven scam URL reconnaissance and evidence packaging."
 dynamic = ["version"]

@@ -23,7 +23,13 @@ console = Console()
 def investigate_url(
     url: str = typer.Argument(..., help="The suspicious URL to investigate."),
     output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Directory for evidence output."),
-    passive_only: bool = typer.Option(False, "--passive", help="Run passive reconnaissance only (no site interaction)."),
+    scan_type: str = typer.Option(
+        "full",
+        "--scan-type",
+        "-t",
+        help="Investigation mode: passive, active, or full.",
+    ),
+    passive_only: bool = typer.Option(False, "--passive", help="Shorthand for --scan-type passive."),
     skip_whois: bool = typer.Option(False, "--skip-whois", help="Skip WHOIS/RDAP lookup."),
     skip_screenshot: bool = typer.Option(False, "--skip-screenshot", help="Skip screenshot capture."),
     skip_virustotal: bool = typer.Option(False, "--skip-virustotal", help="Skip VirusTotal check."),
@@ -38,6 +44,9 @@ def investigate_url(
     from ssi.investigator.orchestrator import run_investigation
     from ssi.settings import get_settings
 
+    # --passive flag overrides --scan-type to "passive"
+    effective_scan_type = "passive" if passive_only else scan_type
+
     settings = get_settings()
     effective_output = output_dir or Path(settings.evidence.output_dir)
     effective_output.mkdir(parents=True, exist_ok=True)
@@ -49,7 +58,7 @@ def investigate_url(
         result = run_investigation(
             url=url,
             output_dir=effective_output,
-            passive_only=passive_only,
+            scan_type=effective_scan_type,
             skip_whois=skip_whois,
             skip_screenshot=skip_screenshot,
             skip_virustotal=skip_virustotal,
@@ -94,7 +103,13 @@ def investigate_url(
 def investigate_batch(
     file: Path = typer.Argument(..., help="File with URLs (plain text) or JSON batch manifest."),
     output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Directory for evidence output."),
-    passive_only: bool = typer.Option(False, "--passive", help="Run passive reconnaissance only."),
+    scan_type: str = typer.Option(
+        "full",
+        "--scan-type",
+        "-t",
+        help="Default investigation mode: passive, active, or full.",
+    ),
+    passive_only: bool = typer.Option(False, "--passive", help="Shorthand for --scan-type passive."),
     format: str = typer.Option("text", "--format", "-f", help="Input format: text (one URL per line) or json."),
     concurrency: int = typer.Option(1, "--concurrency", "-c", min=1, max=10, help="Max concurrent investigations."),
     events: bool = typer.Option(False, "--events", help="Emit JSONL events to stderr."),
@@ -110,7 +125,7 @@ def investigate_batch(
     JSON format example::
 
         [
-          {"url": "https://example.com", "passive_only": false, "tags": ["crypto"]},
+          {"url": "https://example.com", "scan_type": "active", "tags": ["crypto"]},
           {"url": "https://scam.site", "playbook_override": "okdc_cluster_v1"}
         ]
     """
@@ -118,7 +133,10 @@ def investigate_batch(
         console.print(f"[red]File not found:[/red] {file}")
         raise typer.Exit(code=1)
 
-    entries = _load_batch_entries(file, format, passive_only)
+    # --passive flag overrides --scan-type to "passive"
+    effective_scan_type = "passive" if passive_only else scan_type
+
+    entries = _load_batch_entries(file, format, effective_scan_type)
     if not entries:
         console.print("[yellow]No URLs to process.[/yellow]")
         raise typer.Exit(code=0)
@@ -308,11 +326,11 @@ def _push_to_core_cli(result: Any, *, trigger_dossier: bool = False) -> None:
         console.print(f" [red]✗[/red] {e}")
 
 
-def _load_batch_entries(file: Path, fmt: str, default_passive: bool) -> list[dict[str, Any]]:
+def _load_batch_entries(file: Path, fmt: str, default_scan_type: str) -> list[dict[str, Any]]:
     """Parse a batch input file into a list of investigation entries.
 
     Returns:
-        List of dicts with at minimum ``url`` and ``passive_only`` keys.
+        List of dicts with at minimum ``url`` and ``scan_type`` keys.
     """
     raw = file.read_text(encoding="utf-8")
 
@@ -322,16 +340,19 @@ def _load_batch_entries(file: Path, fmt: str, default_passive: bool) -> list[dic
             entries: list[dict[str, Any]] = []
             for item in data:
                 if isinstance(item, str):
-                    entries.append({"url": item, "passive_only": default_passive})
+                    entries.append({"url": item, "scan_type": default_scan_type})
                 elif isinstance(item, dict) and "url" in item:
-                    item.setdefault("passive_only", default_passive)
+                    # Support legacy passive_only key
+                    if "scan_type" not in item and "passive_only" in item:
+                        item["scan_type"] = "passive" if item.pop("passive_only") else "full"
+                    item.setdefault("scan_type", default_scan_type)
                     entries.append(item)
             return entries
         return []
 
     # Plain text: one URL per line, # comments
     return [
-        {"url": line.strip(), "passive_only": default_passive}
+        {"url": line.strip(), "scan_type": default_scan_type}
         for line in raw.splitlines()
         if line.strip() and not line.strip().startswith("#")
     ]
@@ -370,7 +391,7 @@ def _run_single_investigation(
         result = run_investigation(
             url=url,
             output_dir=effective_output,
-            passive_only=entry.get("passive_only", True),
+            scan_type=entry.get("scan_type", "full"),
             skip_whois=entry.get("skip_whois", False),
             skip_screenshot=entry.get("skip_screenshot", False),
             skip_virustotal=entry.get("skip_virustotal", False),

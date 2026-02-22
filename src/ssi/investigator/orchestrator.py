@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
-from ssi.models.investigation import DownloadArtifact, InvestigationResult, InvestigationStatus
+from ssi.models.investigation import DownloadArtifact, InvestigationResult, InvestigationStatus, ScanType
 from ssi.monitoring import CostTracker
 
 if TYPE_CHECKING:
@@ -32,19 +32,36 @@ logger = logging.getLogger(__name__)
 def run_investigation(
     url: str,
     output_dir: Path,
-    passive_only: bool = True,
+    scan_type: str = "passive",
+    passive_only: bool | None = None,
     skip_whois: bool = False,
     skip_screenshot: bool = False,
     skip_virustotal: bool = False,
     skip_urlscan: bool = False,
     report_format: str = "json",
 ) -> InvestigationResult:
-    """Execute a full (or passive-only) investigation against *url*.
+    """Execute an investigation against *url*.
+
+    The investigation behaviour is controlled by *scan_type*:
+
+    * ``passive`` — OSINT only (WHOIS, DNS, SSL, screenshot, VirusTotal,
+      urlscan). No AI-agent interaction.
+    * ``active`` — AI-agent browser interaction, wallet extraction, and a
+      basic page capture (screenshot). Skips passive recon steps.
+    * ``full`` — Runs **both** passive recon and active AI-agent interaction.
+
+    The legacy *passive_only* flag is still accepted for backward
+    compatibility: when *passive_only* is ``True`` it maps to
+    ``scan_type="passive"``; when ``False`` it maps to ``"full"``.
+    Callers should prefer *scan_type* directly.
 
     Args:
         url: The suspicious URL to investigate.
         output_dir: Directory where evidence artifacts are written.
-        passive_only: When True, skip AI-agent active interaction.
+        scan_type: Investigation mode — ``passive``, ``active``, or ``full``.
+        passive_only: **Deprecated.** Legacy toggle kept for backward
+            compatibility.  Ignored when *scan_type* is explicitly provided
+            by callers that also pass *passive_only*.
         skip_whois: Skip WHOIS/RDAP lookup.
         skip_screenshot: Skip Playwright screenshot capture.
         skip_virustotal: Skip VirusTotal API check.
@@ -55,8 +72,21 @@ def run_investigation(
         An ``InvestigationResult`` populated with all collected intelligence.
     """
 
+    # Resolve scan_type from the legacy passive_only flag when the caller
+    # has not explicitly set scan_type (i.e. it still has the default value).
+    if passive_only is not None and scan_type == "passive":
+        scan_type = "passive" if passive_only else "full"
+
+    resolved_scan_type = ScanType(scan_type)
+    run_passive = resolved_scan_type in (ScanType.PASSIVE, ScanType.FULL)
+    run_active = resolved_scan_type in (ScanType.ACTIVE, ScanType.FULL)
+
     start = time.monotonic()
-    result = InvestigationResult(url=url, passive_only=passive_only)
+    result = InvestigationResult(
+        url=url,
+        scan_type=resolved_scan_type,
+        passive_only=resolved_scan_type == ScanType.PASSIVE,
+    )
     result.status = InvestigationStatus.RUNNING
 
     # Create per-investigation output directory with a human-readable prefix
@@ -84,10 +114,10 @@ def run_investigation(
             from ssi.store import build_scan_store
 
             scan_store = build_scan_store()
-            scan_type = "passive" if passive_only else "full"
+            scan_type_label = resolved_scan_type.value
             scan_id = scan_store.create_scan(
                 url=url,
-                scan_type=scan_type,
+                scan_type=scan_type_label,
                 domain=domain_slug,
                 metadata={"output_dir": str(inv_dir), "investigation_id": str(result.investigation_id)},
             )
@@ -96,7 +126,7 @@ def run_investigation(
             logger.warning("Failed to initialise scan store — results will not be persisted", exc_info=True)
             scan_store = None
 
-    site_result = None  # Populated if active interaction runs
+    site_result = None  # TODO: Populate from agent_session once SiteResult model is wired
 
     try:
         # --- Pre-flight: Domain resolution check ----------------------------
@@ -109,25 +139,28 @@ def run_investigation(
             logger.warning("Domain does not resolve — OSINT data will be limited")
 
         # --- Phase 1: Passive Reconnaissance --------------------------------
-        logger.info("Phase 1: Passive recon for %s", url)
+        logger.info("Phase 1: Passive recon for %s (scan_type=%s)", url, resolved_scan_type.value)
 
-        if not skip_whois:
+        if run_passive and not skip_whois:
             result.whois = _run_whois(url)
             if cost_tracker:
                 cost_tracker.record_api_call("whois")
 
-        result.dns = _run_dns(url)
-        if cost_tracker:
-            cost_tracker.record_api_call("dns")
+        if run_passive:
+            result.dns = _run_dns(url)
+            if cost_tracker:
+                cost_tracker.record_api_call("dns")
 
-        result.ssl = _run_ssl(url)
-        if cost_tracker:
-            cost_tracker.record_api_call("ssl")
+            result.ssl = _run_ssl(url)
+            if cost_tracker:
+                cost_tracker.record_api_call("ssl")
 
-        result.geoip = _run_geoip(result.dns)
-        if cost_tracker:
-            cost_tracker.record_api_call("geoip")
+            result.geoip = _run_geoip(result.dns)
+            if cost_tracker:
+                cost_tracker.record_api_call("geoip")
 
+        # Screenshot is captured for all scan types (passive, active, full)
+        # unless explicitly skipped by the caller.
         if not skip_screenshot:
             result.page_snapshot = _run_browser_capture(url, inv_dir)
 
@@ -137,22 +170,21 @@ def run_investigation(
                     _to_download_artifacts(result.page_snapshot.captured_downloads)
                 )
 
-        if not skip_virustotal:
+        if run_passive and not skip_virustotal:
             _run_virustotal(url, result)
             if cost_tracker:
                 cost_tracker.record_api_call("virustotal")
 
-        if not skip_urlscan:
+        if run_passive and not skip_urlscan:
             _run_urlscan(url, result)
             if cost_tracker:
                 cost_tracker.record_api_call("urlscan")
 
         # --- Phase 2: Active Interaction (AI Agent) -------------------------
-        if not passive_only:
+        if run_active:
             logger.info("Phase 2: Active interaction via AI agent")
             agent_session = _run_agent_interaction(url, inv_dir)
             if agent_session:
-                result.agent_steps = [step.to_dict() if hasattr(step, "to_dict") else {} for step in []]
                 # Store raw agent session metrics on the result
                 result.token_usage = (
                     agent_session.metrics.total_input_tokens + agent_session.metrics.total_output_tokens
@@ -245,7 +277,6 @@ def run_investigation(
 def _check_domain_resolution(url: str) -> bool:
     """Return True if the domain in *url* resolves to at least one A/AAAA record."""
     import socket
-    from urllib.parse import urlparse
 
     parsed = urlparse(url if "://" in url else f"https://{url}")
     host = parsed.hostname or url
@@ -351,8 +382,6 @@ def _run_har_analysis(result: InvestigationResult) -> None:
         har_paths.append(result.page_snapshot.har_path)
 
     # Extract target domain for third-party detection
-    from urllib.parse import urlparse
-
     target_domain = urlparse(result.url).hostname or ""
 
     for har_path_str in har_paths:
@@ -668,10 +697,20 @@ def _run_agent_interaction(url: str, output_dir: Path) -> AgentSession | None:
 
     try:
         llm = AgentLLMClient.from_settings()
+
+        from ssi.settings import get_settings
+
+        provider_name = get_settings().llm.provider
+
         if not llm.check_connectivity():
-            logger.warning("Ollama not available — skipping active interaction")
+            logger.error(
+                "LLM provider '%s' connectivity check failed — skipping active interaction. "
+                "Verify the provider is configured correctly (model, project, credentials).",
+                provider_name,
+            )
             return None
 
+        logger.info("LLM provider '%s' connectivity verified — starting agent", provider_name)
         agent = BrowserAgent(llm_client=llm, output_dir=output_dir / "agent")
         session = agent.run(url)
         llm.close()

@@ -135,6 +135,7 @@ class CoreBridge:
             "source_url": result.url,
             "metadata": {
                 "ssi_investigation_id": str(result.investigation_id),
+                "scan_type": result.scan_type if isinstance(result.scan_type, str) else result.scan_type.value,
                 "passive_only": result.passive_only,
                 "started_at": result.started_at.isoformat() if result.started_at else None,
                 "completed_at": result.completed_at.isoformat() if result.completed_at else None,

@@ -48,12 +48,12 @@ class TestMain:
         mock_run.assert_called_once()
         call_kwargs = mock_run.call_args
         assert call_kwargs[1]["url"] == "https://scam.example.com"
-        assert call_kwargs[1]["passive_only"] is False
+        assert call_kwargs[1]["scan_type"] == "full"
 
     @patch("ssi.settings.get_settings")
     @patch("ssi.investigator.orchestrator.run_investigation")
-    def test_passive_only_flag(self, mock_run, mock_settings, monkeypatch):
-        """SSI_JOB__PASSIVE_ONLY=true sets passive_only."""
+    def test_passive_only_flag_legacy(self, mock_run, mock_settings, monkeypatch):
+        """SSI_JOB__PASSIVE_ONLY=true maps to scan_type=passive (legacy compat)."""
         monkeypatch.setenv("SSI_JOB__URL", "https://scam.example.com")
         monkeypatch.setenv("SSI_JOB__PASSIVE_ONLY", "true")
 
@@ -69,7 +69,50 @@ class TestMain:
         mock_run.return_value = mock_result
 
         assert main() == 0
-        assert mock_run.call_args[1]["passive_only"] is True
+        assert mock_run.call_args[1]["scan_type"] == "passive"
+
+    @patch("ssi.settings.get_settings")
+    @patch("ssi.investigator.orchestrator.run_investigation")
+    def test_scan_type_env_var(self, mock_run, mock_settings, monkeypatch):
+        """SSI_JOB__SCAN_TYPE=active sets scan_type directly."""
+        monkeypatch.setenv("SSI_JOB__URL", "https://scam.example.com")
+        monkeypatch.setenv("SSI_JOB__SCAN_TYPE", "active")
+
+        mock_settings_instance = MagicMock()
+        mock_settings_instance.evidence.output_dir = "/tmp/ssi-test"
+        mock_settings.return_value = mock_settings_instance
+
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.investigation_id = "test-123"
+        mock_result.status.value = "complete"
+        mock_result.taxonomy_result = None
+        mock_run.return_value = mock_result
+
+        assert main() == 0
+        assert mock_run.call_args[1]["scan_type"] == "active"
+
+    @patch("ssi.settings.get_settings")
+    @patch("ssi.investigator.orchestrator.run_investigation")
+    def test_scan_type_overrides_passive_only(self, mock_run, mock_settings, monkeypatch):
+        """SSI_JOB__SCAN_TYPE takes priority over SSI_JOB__PASSIVE_ONLY."""
+        monkeypatch.setenv("SSI_JOB__URL", "https://scam.example.com")
+        monkeypatch.setenv("SSI_JOB__SCAN_TYPE", "active")
+        monkeypatch.setenv("SSI_JOB__PASSIVE_ONLY", "true")
+
+        mock_settings_instance = MagicMock()
+        mock_settings_instance.evidence.output_dir = "/tmp/ssi-test"
+        mock_settings.return_value = mock_settings_instance
+
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.investigation_id = "test-123"
+        mock_result.status.value = "complete"
+        mock_result.taxonomy_result = None
+        mock_run.return_value = mock_result
+
+        assert main() == 0
+        assert mock_run.call_args[1]["scan_type"] == "active"
 
     @patch("ssi.settings.get_settings")
     @patch("ssi.investigator.orchestrator.run_investigation")

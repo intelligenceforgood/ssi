@@ -22,7 +22,7 @@ class TestLoadBatchEntries:
 
         f = tmp_path / "urls.txt"
         f.write_text("https://a.com\nhttps://b.com\nhttps://c.com\n")
-        entries = _load_batch_entries(f, "text", default_passive=False)
+        entries = _load_batch_entries(f, "text", default_scan_type="full")
         assert len(entries) == 3
         assert entries[0]["url"] == "https://a.com"
         assert entries[2]["url"] == "https://c.com"
@@ -34,9 +34,9 @@ class TestLoadBatchEntries:
         content = "# header comment\nhttps://a.com\n\n# another comment\nhttps://b.com\n   \n"
         f = tmp_path / "urls.txt"
         f.write_text(content)
-        entries = _load_batch_entries(f, "text", default_passive=True)
+        entries = _load_batch_entries(f, "text", default_scan_type="passive")
         assert len(entries) == 2
-        assert all(e["passive_only"] is True for e in entries)
+        assert all(e["scan_type"] == "passive" for e in entries)
 
     def test_json_format_string_array(self, tmp_path: Path) -> None:
         """JSON format: array of plain URL strings."""
@@ -44,27 +44,27 @@ class TestLoadBatchEntries:
 
         f = tmp_path / "batch.json"
         f.write_text(json.dumps(["https://a.com", "https://b.com"]))
-        entries = _load_batch_entries(f, "json", default_passive=True)
+        entries = _load_batch_entries(f, "json", default_scan_type="passive")
         assert len(entries) == 2
         assert entries[0]["url"] == "https://a.com"
-        assert entries[0]["passive_only"] is True
+        assert entries[0]["scan_type"] == "passive"
 
     def test_json_format_object_array(self, tmp_path: Path) -> None:
         """JSON format: array of objects with per-URL options."""
         from ssi.cli.investigate import _load_batch_entries
 
         data = [
-            {"url": "https://a.com", "passive_only": False, "tags": ["crypto"]},
+            {"url": "https://a.com", "scan_type": "active", "tags": ["crypto"]},
             {"url": "https://b.com", "playbook_override": "okdc_cluster_v1"},
         ]
         f = tmp_path / "batch.json"
         f.write_text(json.dumps(data))
-        entries = _load_batch_entries(f, "json", default_passive=True)
+        entries = _load_batch_entries(f, "json", default_scan_type="passive")
         assert len(entries) == 2
-        assert entries[0]["passive_only"] is False
+        assert entries[0]["scan_type"] == "active"
         assert entries[0]["tags"] == ["crypto"]
         assert entries[1]["playbook_override"] == "okdc_cluster_v1"
-        assert entries[1]["passive_only"] is True  # default applied
+        assert entries[1]["scan_type"] == "passive"  # default applied
 
     def test_json_format_mixed(self, tmp_path: Path) -> None:
         """JSON format: mix of strings and objects."""
@@ -73,7 +73,7 @@ class TestLoadBatchEntries:
         data = ["https://a.com", {"url": "https://b.com", "skip_whois": True}]
         f = tmp_path / "batch.json"
         f.write_text(json.dumps(data))
-        entries = _load_batch_entries(f, "json", default_passive=False)
+        entries = _load_batch_entries(f, "json", default_scan_type="full")
         assert len(entries) == 2
         assert entries[0]["url"] == "https://a.com"
         assert entries[1]["skip_whois"] is True
@@ -84,7 +84,7 @@ class TestLoadBatchEntries:
 
         f = tmp_path / "empty.txt"
         f.write_text("")
-        entries = _load_batch_entries(f, "text", default_passive=False)
+        entries = _load_batch_entries(f, "text", default_scan_type="full")
         assert entries == []
 
     def test_empty_json_array(self, tmp_path: Path) -> None:
@@ -93,7 +93,7 @@ class TestLoadBatchEntries:
 
         f = tmp_path / "empty.json"
         f.write_text("[]")
-        entries = _load_batch_entries(f, "json", default_passive=False)
+        entries = _load_batch_entries(f, "json", default_scan_type="full")
         assert entries == []
 
 

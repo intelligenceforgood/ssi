@@ -134,8 +134,10 @@ class BrowserAgent:
 
             try:
                 # Initial navigation
+                from ssi.browser.navigation import resilient_goto
+
                 logger.info("Agent navigating to %s", url)
-                page.goto(url, wait_until="networkidle", timeout=settings.browser.timeout_ms)
+                resilient_goto(page, url, timeout_ms=settings.browser.timeout_ms)
 
                 # Check for CAPTCHA before agent loop
                 from ssi.browser.captcha import CaptchaStrategy, detect_captcha, handle_captcha

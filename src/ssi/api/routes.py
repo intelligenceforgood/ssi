@@ -19,14 +19,34 @@ router = APIRouter()
 
 
 class InvestigateRequest(BaseModel):
+    """Parameters for a ``POST /investigate`` request."""
+
     url: str = Field(..., description="The suspicious URL to investigate.")
-    passive_only: bool = Field(True, description="Limit to passive reconnaissance.")
+    scan_type: str = Field(
+        "passive",
+        description="Investigation mode: passive, active, or full.",
+        pattern="^(passive|active|full)$",
+    )
+    passive_only: bool | None = Field(
+        None,
+        description="Deprecated — use scan_type instead. Kept for backward compatibility.",
+    )
     skip_whois: bool = False
     skip_screenshot: bool = False
     skip_virustotal: bool = False
     push_to_core: bool = Field(False, description="Push results to i4g core platform.")
     trigger_dossier: bool = Field(False, description="Queue dossier generation after push.")
     dataset: str = Field("ssi", description="Dataset label for the core case.")
+
+    def resolved_scan_type(self) -> str:
+        """Return the effective scan_type, honouring the legacy passive_only flag.
+
+        If *passive_only* is explicitly set and *scan_type* is still the default,
+        derive scan_type from the boolean for backward compatibility.
+        """
+        if self.passive_only is not None and self.scan_type == "passive":
+            return "passive" if self.passive_only else "full"
+        return self.scan_type
 
 
 class InvestigateResponse(BaseModel):
@@ -100,7 +120,7 @@ def _run_investigation_task(task_id: str, req: InvestigateRequest) -> None:
         result = run_investigation(
             url=req.url,
             output_dir=output_dir,
-            passive_only=req.passive_only,
+            scan_type=req.resolved_scan_type(),
             skip_whois=req.skip_whois,
             skip_screenshot=req.skip_screenshot,
             skip_virustotal=req.skip_virustotal,

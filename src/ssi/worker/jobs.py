@@ -6,7 +6,9 @@ core platform via the API.
 
 Environment variables:
     SSI_JOB__URL:           Target URL to investigate (required).
-    SSI_JOB__PASSIVE_ONLY:  Limit to passive recon (default: false).
+    SSI_JOB__SCAN_TYPE:     Investigation mode: passive, active, or full
+                            (default: full).
+    SSI_JOB__PASSIVE_ONLY:  Legacy — maps to scan_type passive/full.
     SSI_JOB__PUSH_TO_CORE:  Push results to i4g core (default: false).
     SSI_JOB__TRIGGER_DOSSIER: Queue dossier generation (default: false).
     SSI_JOB__DATASET:       Dataset label for the case (default: ssi).
@@ -19,6 +21,10 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ssi.models.investigation import InvestigationResult
 
 logger = logging.getLogger(__name__)
 
@@ -40,15 +46,20 @@ def main() -> int:
         logger.error("SSI_JOB__URL is required")
         return 1
 
-    passive_only = os.environ.get("SSI_JOB__PASSIVE_ONLY", "false").lower() in ("true", "1", "yes")
+    # Prefer SSI_JOB__SCAN_TYPE; fall back to legacy SSI_JOB__PASSIVE_ONLY.
+    scan_type = os.environ.get("SSI_JOB__SCAN_TYPE", "").strip().lower()
+    if not scan_type:
+        passive_only = os.environ.get("SSI_JOB__PASSIVE_ONLY", "false").lower() in ("true", "1", "yes")
+        scan_type = "passive" if passive_only else "full"
+
     push_to_core = os.environ.get("SSI_JOB__PUSH_TO_CORE", "false").lower() in ("true", "1", "yes")
     trigger_dossier = os.environ.get("SSI_JOB__TRIGGER_DOSSIER", "false").lower() in ("true", "1", "yes")
     dataset = os.environ.get("SSI_JOB__DATASET", "ssi")
 
     logger.info(
-        "SSI Job starting: url=%s passive_only=%s push_to_core=%s",
+        "SSI Job starting: url=%s scan_type=%s push_to_core=%s",
         url,
-        passive_only,
+        scan_type,
         push_to_core,
     )
 
@@ -64,7 +75,7 @@ def main() -> int:
         result = run_investigation(
             url=url,
             output_dir=output_dir,
-            passive_only=passive_only,
+            scan_type=scan_type,
             report_format="both",
         )
 
@@ -94,7 +105,7 @@ def main() -> int:
 
 
 def _push_to_core(
-    result,
+    result: InvestigationResult,
     *,
     dataset: str = "ssi",
     trigger_dossier: bool = False,
@@ -122,14 +133,55 @@ def _push_to_core(
 
 
 def _configure_logging() -> None:
-    """Set up structured logging for the job."""
+    """Set up logging for the job.
+
+    On Cloud Run (``SSI_ENV != local``), emits JSON-structured logs
+    compatible with Cloud Logging severity parsing::
+
+        {"severity": "INFO", "message": "...", "logger": "..."}
+
+    Locally, uses a human-readable plain-text format.
+    """
+    import json as _json
+
     log_level = os.environ.get("SSI_LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(
-        level=getattr(logging, log_level, logging.INFO),
-        format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S",
-        stream=sys.stderr,
-    )
+    env = os.environ.get("SSI_ENV", "local").strip()
+
+    if env != "local":
+        # Cloud Logging JSON format — severity is parsed automatically
+        class _CloudFormatter(logging.Formatter):
+            _LEVEL_MAP = {
+                "DEBUG": "DEBUG",
+                "INFO": "INFO",
+                "WARNING": "WARNING",
+                "ERROR": "ERROR",
+                "CRITICAL": "CRITICAL",
+            }
+
+            def format(self, record: logging.LogRecord) -> str:
+                entry = {
+                    "severity": self._LEVEL_MAP.get(record.levelname, "DEFAULT"),
+                    "message": record.getMessage(),
+                    "logger": record.name,
+                    "time": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+                }
+                if record.exc_info and record.exc_info[1]:
+                    entry["exception"] = self.formatException(record.exc_info)
+                return _json.dumps(entry, default=str)
+
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(_CloudFormatter())
+        logging.root.handlers.clear()
+        logging.root.addHandler(handler)
+        logging.root.setLevel(getattr(logging, log_level, logging.INFO))
+    else:
+        logging.basicConfig(
+            level=getattr(logging, log_level, logging.INFO),
+            format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S",
+            stream=sys.stderr,
+        )
+
     # Quieten noisy libraries
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
