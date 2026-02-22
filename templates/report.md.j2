@@ -12,6 +12,8 @@
 > **Mode:** Full Investigation (Passive + Active Agent)
 {% endif %}
 
+[TOC]
+
 ---
 
 ## Summary
@@ -188,7 +190,7 @@
 | **Technologies** | {{ result.page_snapshot.technologies | join(', ') }} |
 {% endif %}
 {% if result.page_snapshot.screenshot_path %}
-| **Screenshot** | `screenshot.png` |
+| **Screenshot** | [screenshot.png](#appendix-screenshot) |
 {% endif %}
 {% if result.page_snapshot.redirect_chain %}
 
@@ -254,6 +256,14 @@ This is the PII the site attempts to collect:
 
 ## Cryptocurrency Wallets ({{ result.wallets | length }})
 
+{% set networks = result.wallets | map(attribute='network_short') | unique | list %}
+{% set tokens = result.wallets | map(attribute='token_symbol') | unique | list %}
+| Summary | Value |
+|---------|-------|
+| **Total Addresses** | {{ result.wallets | length }} |
+| **Unique Networks** | {{ networks | join(', ') }} |
+| **Unique Tokens** | {{ tokens | join(', ') }} |
+
 | # | Token | Network | Wallet Address | Source | Confidence |
 |---|-------|---------|----------------|--------|------------|
 {% for w in result.wallets %}
@@ -262,6 +272,24 @@ This is the PII the site attempts to collect:
 
 > **Note:** These wallet addresses were extracted from the scam site during investigation.
 > They may be used for receiving fraudulent payments from victims.
+> A machine-readable manifest is included in the evidence package as `wallet_manifest.json`.
+{% endif %}
+{% if result.pii_exposures %}
+
+---
+
+## PII Exposure Analysis ({{ result.pii_exposures | length }} fields)
+
+The following personal information fields were identified that the scam site actively collects from victims:
+
+| # | Field Type | Label | Page URL | Required | Submitted |
+|---|-----------|-------|----------|----------|-----------|
+{% for pii in result.pii_exposures %}
+| {{ loop.index }} | {{ pii.field_type }} | {{ pii.field_label or "—" }} | `{{ pii.page_url | truncate(60) if pii.page_url else "—" }}` | {{ "Yes" if pii.is_required else "No" }} | {{ "Yes" if pii.was_submitted else "No" }} |
+{% endfor %}
+
+> **Risk Assessment:** This site collects {{ result.pii_exposures | length }} PII field(s)
+> from visitors.{% set required_count = result.pii_exposures | selectattr('is_required') | list | length %} {{ required_count }} field(s) are marked as required.
 {% endif %}
 {% if result.brand_impersonation %}
 
@@ -300,24 +328,28 @@ This is the PII the site attempts to collect:
 
 ---
 
-## Evidence Artifacts
+## Evidence Artifacts {: #evidence-artifacts}
 
 | Artifact | Path |
 |----------|------|
-{% if result.report_path %}
-| Investigation JSON | `investigation.json` |
-{% endif %}
+| Investigation Summary | [investigation.json](#appendix-investigation-json) |
 {% if result.page_snapshot and result.page_snapshot.screenshot_path %}
-| Screenshot | `screenshot.png` |
+| Screenshot | [screenshot.png](#appendix-screenshot) |
 {% endif %}
 {% if result.page_snapshot and result.page_snapshot.dom_snapshot_path %}
-| DOM Snapshot | `dom.html` |
+| DOM Snapshot | [dom.html](#appendix-dom) |
 {% endif %}
 {% if result.page_snapshot and result.page_snapshot.har_path %}
-| Network HAR | `network.har` |
+| Network Activity | [network.har](#appendix-har-summary) |
+{% endif %}
+{% if result.wallets %}
+| Wallet Manifest | [wallet_manifest.json](#appendix-wallet-manifest) |
+{% endif %}
+{% if result.threat_indicators %}
+| STIX IOC Bundle | [stix_bundle.json](#appendix-stix-bundle) |
 {% endif %}
 {% if result.scan_type != 'passive' %}
-| Agent Video | `video/` |
+| Agent Video | *(video — see evidence ZIP)* |
 {% endif %}
 
 ---

@@ -8,9 +8,12 @@ without needing direct DB access.
 from __future__ import annotations
 
 import logging
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 
 from ssi.store import build_scan_store
 
@@ -106,3 +109,100 @@ def search_wallets(
             if hasattr(val, "isoformat"):
                 wallet[key] = val.isoformat()
     return {"items": wallets, "count": len(wallets)}
+
+
+# ---------------------------------------------------------------------------
+# Wallet export (XLSX / CSV)
+# ---------------------------------------------------------------------------
+
+
+@investigation_router.get(
+    "/investigations/{scan_id}/wallets.xlsx",
+    tags=["export"],
+    response_class=FileResponse,
+    responses={
+        200: {"content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}}},
+        404: {"description": "Investigation not found or has no wallets."},
+    },
+)
+def export_wallets_xlsx(scan_id: str) -> FileResponse:
+    """Export wallet addresses for a single investigation as XLSX.
+
+    Returns a downloadable XLSX file with all wallet entries associated
+    with the given ``scan_id``.
+    """
+    return _export_wallets(scan_id, fmt="xlsx")
+
+
+@investigation_router.get(
+    "/investigations/{scan_id}/wallets.csv",
+    tags=["export"],
+    response_class=FileResponse,
+    responses={
+        200: {"content": {"text/csv": {}}},
+        404: {"description": "Investigation not found or has no wallets."},
+    },
+)
+def export_wallets_csv(scan_id: str) -> FileResponse:
+    """Export wallet addresses for a single investigation as CSV."""
+    return _export_wallets(scan_id, fmt="csv")
+
+
+def _export_wallets(scan_id: str, *, fmt: str) -> FileResponse:
+    """Shared implementation for wallet export endpoints.
+
+    Args:
+        scan_id: Investigation scan ID.
+        fmt: Export format — ``"xlsx"`` or ``"csv"``.
+
+    Returns:
+        A ``FileResponse`` streaming the exported file.
+
+    Raises:
+        HTTPException: If the investigation or its wallets are not found.
+    """
+    from ssi.wallet.export import WalletExporter
+    from ssi.wallet.models import WalletEntry
+
+    store = build_scan_store()
+    scan = store.get_scan(scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail="Investigation not found.")
+
+    wallet_rows = store.get_wallets(scan_id)
+    if not wallet_rows:
+        raise HTTPException(status_code=404, detail="No wallets found for this investigation.")
+
+    # Convert store rows back to WalletEntry model instances
+    entries: list[WalletEntry] = []
+    for row in wallet_rows:
+        entries.append(
+            WalletEntry(
+                site_url=row.get("site_url", scan.get("url", "")),
+                token_symbol=row.get("token_symbol", ""),
+                network_short=row.get("network_short", ""),
+                wallet_address=row.get("wallet_address", ""),
+                source=row.get("source", ""),
+                confidence=float(row.get("confidence", 0.0)),
+            )
+        )
+
+    exporter = WalletExporter()
+    tmp_dir = Path(tempfile.mkdtemp(prefix="ssi_export_"))
+    filename = f"wallets_{scan_id[:8]}.{fmt}"
+    output_path = tmp_dir / filename
+
+    if fmt == "xlsx":
+        exporter.to_xlsx(entries, output_path, apply_filter=False)
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    elif fmt == "csv":
+        exporter.to_csv(entries, output_path, apply_filter=False)
+        media_type = "text/csv"
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {fmt}")
+
+    return FileResponse(
+        path=str(output_path),
+        filename=filename,
+        media_type=media_type,
+    )

@@ -44,7 +44,7 @@ class TestIndicatorToPattern:
             ("domain", "scam.example.com", "[domain-name:value = 'scam.example.com']"),
             ("email", "bad@evil.com", "[email-addr:value = 'bad@evil.com']"),
             ("url", "https://evil.com/payload", "[url:value = 'https://evil.com/payload']"),
-            ("crypto_wallet", "bc1qxy2k", "[artifact:payload_bin = 'bc1qxy2k']"),
+            ("crypto_wallet", "bc1qxy2k", "[cryptocurrency-wallet:address = 'bc1qxy2k']"),
             ("sha256", "abcdef123456", "[file:hashes.'SHA-256' = 'abcdef123456']"),
             ("md5", "d41d8cd", "[file:hashes.MD5 = 'd41d8cd']"),
             ("unknown_type", "somevalue", "[artifact:payload_bin = 'somevalue']"),

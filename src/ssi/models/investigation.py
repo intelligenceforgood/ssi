@@ -140,6 +140,30 @@ class FormField(BaseModel):
     pii_category: str = ""
 
 
+class PiiExposure(BaseModel):
+    """A PII field that the scam site collects from victims.
+
+    Richer than ``FormField`` — captures whether the field was actually
+    submitted during AI agent interaction and the specific page URL where
+    it was found.
+
+    Attributes:
+        field_type: Type of the form field (text, email, password, tel, etc.).
+        field_label: Label or placeholder describing the field.
+        form_action: The form's ``action`` URL if known.
+        page_url: URL of the page containing the field.
+        is_required: Whether the field is marked as required.
+        was_submitted: Whether the AI agent submitted data to this field.
+    """
+
+    field_type: str = ""
+    field_label: str = ""
+    form_action: str = ""
+    page_url: str = ""
+    is_required: bool = False
+    was_submitted: bool = False
+
+
 class PageSnapshot(BaseModel):
     """Captured state of a single page visit."""
 
@@ -245,12 +269,14 @@ class InvestigationResult(BaseModel):
     threat_indicators: list[ThreatIndicator] = Field(default_factory=list)
     brand_impersonation: str = ""
     wallets: list[WalletEntry] = Field(default_factory=list)
+    pii_exposures: list[PiiExposure] = Field(default_factory=list)
     downloads: list[DownloadArtifact] = Field(default_factory=list)
 
     # Evidence packaging
     evidence_zip_path: str = ""
     report_path: str = ""
     pdf_report_path: str = ""
+    wallet_manifest_path: str = ""
     chain_of_custody: ChainOfCustody | None = None
 
     # Metadata

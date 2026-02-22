@@ -14,6 +14,8 @@
 | **Status** | {{ result.status.value }} |
 | **Collection Method** | Automated (SSI — Scam Site Investigator) |
 
+[TOC]
+
 ---
 
 ## 1. Executive Summary
@@ -140,10 +142,62 @@ The following personal information fields were identified on the target site:
 {% else %}
 No form fields were identified during the investigation.
 {% endif %}
+{% if result.pii_exposures %}
+
+### PII Exposure Detail
+
+The AI agent confirmed the following PII fields are actively collected and submitted by the site:
+
+| # | Field Type | Label | Page URL | Required | Submitted to Server |
+|---|-----------|-------|----------|----------|---------------------|
+{% for pii in result.pii_exposures %}
+| {{ loop.index }} | {{ pii.field_type }} | {{ pii.field_label or '—' }} | `{{ pii.page_url | truncate(50) if pii.page_url else '—' }}` | {{ '✓' if pii.is_required else '—' }} | {{ '✓' if pii.was_submitted else '—' }} |
+{% endfor %}
+
+{% set submitted_count = result.pii_exposures | selectattr('was_submitted') | list | length %}
+**Total exposures:** {{ result.pii_exposures | length }} fields detected, {{ submitted_count }} confirmed submitted to server.
+{% endif %}
 
 ---
 
-## 4. Threat Indicators (IOCs)
+## 4. Cryptocurrency Wallet Addresses & Blockchain Intelligence
+
+{% if result.wallets %}
+The following cryptocurrency wallet addresses were extracted from the target site.
+These addresses are believed to be used for receiving fraudulent payments from victims.
+
+{% set networks = result.wallets | map(attribute='network_short') | unique | list %}
+{% set tokens = result.wallets | map(attribute='token_symbol') | unique | list %}
+| Summary | Value |
+|---------|-------|
+| **Total Addresses Extracted** | {{ result.wallets | length }} |
+| **Blockchain Networks** | {{ networks | join(', ') | upper }} |
+| **Token Types** | {{ tokens | join(', ') }} |
+
+### Wallet Address Table
+
+| # | Token | Network | Wallet Address | Extraction Method | Confidence |
+|---|-------|---------|----------------|-------------------|------------|
+{% for w in result.wallets %}
+| {{ loop.index }} | {{ w.token_symbol }} | {{ w.network_short | upper }} | `{{ w.wallet_address }}` | {{ w.source }} | {{ "%.0f" | format(w.confidence * 100) }}% |
+{% endfor %}
+
+### Recommended Actions
+
+- Submit wallet addresses to blockchain analytics platforms (Chainalysis, Crystal, Elliptic) for transaction tracing
+- Check addresses against known scam/darknet wallet databases
+- Request exchange cooperation for addresses linked to centralised exchanges
+- Preserve blockchain transaction records as supplementary evidence
+
+> **Machine-readable export:** The evidence package includes `wallet_manifest.json` with
+> structured wallet data suitable for automated ingestion into blockchain analysis tools.
+{% else %}
+No cryptocurrency wallet addresses were identified during the investigation.
+{% endif %}
+
+---
+
+## 5. Threat Indicators (IOCs)
 
 {% if result.threat_indicators %}
 | # | Type | Value | Context | Source |
@@ -159,7 +213,7 @@ No threat indicators were identified.
 
 ---
 
-## 5. Downloaded Files
+## 6. Downloaded Files
 
 {% if result.downloads %}
 | # | Filename | SHA-256 | Malicious | VT Detections |
@@ -174,7 +228,7 @@ No files were downloaded during the investigation.
 ---
 
 {% if result.agent_steps %}
-## 6. AI Agent Interaction Log
+## 7. AI Agent Interaction Log
 
 The following steps were recorded during active interaction with the target site:
 
@@ -189,7 +243,7 @@ The following steps were recorded during active interaction with the target site
 
 ---
 
-## 7. Brand Impersonation
+## 8. Brand Impersonation
 
 {% if result.brand_impersonation %}
 {{ result.brand_impersonation }}
@@ -199,7 +253,7 @@ No brand impersonation was detected.
 
 ---
 
-## 8. Evidence Package Contents
+## 9. Evidence Package Contents
 
 {% if result.chain_of_custody %}
 | Field | Value |

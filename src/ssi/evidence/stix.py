@@ -11,13 +11,13 @@ References:
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid5, NAMESPACE_URL
 
 from ssi.models.investigation import InvestigationResult, ThreatIndicator
+from ssi.wallet.models import WalletEntry
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,8 @@ def _indicator_to_pattern(indicator: ThreatIndicator) -> str:
     elif itype == "url":
         return f"[url:value = '{value}']"
     elif itype == "crypto_wallet":
-        return f"[artifact:payload_bin = '{value}']"
+        # Use cryptocurrency-wallet SCO pattern for proper TIP ingestion
+        return f"[cryptocurrency-wallet:address = '{value}']"
     elif itype == "sha256":
         return f"[file:hashes.'SHA-256' = '{value}']"
     elif itype == "md5":
@@ -114,6 +115,8 @@ def _create_infrastructure_sdo(result: InvestigationResult) -> dict[str, Any] | 
         description_parts.append(f"Hosted by: {result.geoip.org} ({result.geoip.country}).")
     if result.ssl and result.ssl.issuer:
         description_parts.append(f"SSL issuer: {result.ssl.issuer}.")
+    if result.wallets:
+        description_parts.append(f"Extracted {len(result.wallets)} cryptocurrency wallet address(es).")
 
     return {
         "type": "infrastructure",
@@ -124,6 +127,52 @@ def _create_infrastructure_sdo(result: InvestigationResult) -> dict[str, Any] | 
         "name": result.url,
         "description": " ".join(description_parts),
         "infrastructure_types": ["phishing"],
+    }
+
+
+def _create_wallet_indicator_sdo(wallet: WalletEntry, investigation_url: str) -> dict[str, Any]:
+    """Create a STIX Indicator SDO for a harvested cryptocurrency wallet.
+
+    Uses the ``cryptocurrency-wallet`` SCO pattern for proper ingestion
+    by threat intelligence platforms with blockchain-analysis support.
+
+    Args:
+        wallet: The extracted wallet entry.
+        investigation_url: The scam site URL for external references.
+
+    Returns:
+        A STIX Indicator SDO dictionary.
+    """
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    pattern = f"[cryptocurrency-wallet:address = '{wallet.wallet_address}']"
+    stix_id = _make_stix_id("indicator", f"crypto_wallet:{wallet.wallet_address}")
+
+    description = (
+        f"{wallet.token_symbol} wallet on {wallet.network_short} network "
+        f"extracted from {investigation_url}. "
+        f"Source: {wallet.source}, confidence: {wallet.confidence:.0%}."
+    )
+
+    return {
+        "type": "indicator",
+        "spec_version": "2.1",
+        "id": stix_id,
+        "created": now,
+        "modified": now,
+        "name": f"Crypto wallet: {wallet.token_symbol}/{wallet.network_short} — {wallet.wallet_address[:16]}…",
+        "description": description,
+        "indicator_types": ["malicious-activity"],
+        "pattern": pattern,
+        "pattern_type": "stix",
+        "valid_from": now,
+        "labels": ["scam-infrastructure", "cryptocurrency", wallet.network_short],
+        "external_references": [
+            {
+                "source_name": "SSI Investigation",
+                "description": f"Extracted via {wallet.source} from scam site",
+                "url": investigation_url,
+            }
+        ],
     }
 
 
@@ -202,6 +251,38 @@ def investigation_to_stix_bundle(result: InvestigationResult) -> dict[str, Any]:
                     "malware_types": ["trojan"],
                     "is_family": False,
                     "hashes": {"SHA-256": dl.sha256, "MD5": dl.md5} if dl.md5 else {"SHA-256": dl.sha256},
+                }
+            )
+
+    # Wallet Indicator SDOs — created directly from result.wallets for
+    # richer metadata (token, network, confidence) than threat_indicators alone.
+    seen_wallet_addrs: set[str] = set()
+    for wallet in result.wallets:
+        if wallet.wallet_address in seen_wallet_addrs:
+            continue
+        seen_wallet_addrs.add(wallet.wallet_address)
+
+        # Skip if already emitted via threat_indicators
+        ti_key = f"crypto_wallet:{wallet.wallet_address}"
+        if ti_key in seen_values:
+            continue
+        seen_values.add(ti_key)
+
+        sdo = _create_wallet_indicator_sdo(wallet, result.url)
+        objects.append(sdo)
+
+        if infra:
+            rel_id = _make_stix_id("relationship", f"{sdo['id']}--indicates--{infra['id']}")
+            objects.append(
+                {
+                    "type": "relationship",
+                    "spec_version": "2.1",
+                    "id": rel_id,
+                    "created": now,
+                    "modified": now,
+                    "relationship_type": "indicates",
+                    "source_ref": sdo["id"],
+                    "target_ref": infra["id"],
                 }
             )
 

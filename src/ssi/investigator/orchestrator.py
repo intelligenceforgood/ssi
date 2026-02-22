@@ -561,6 +561,10 @@ def _package_evidence(result: InvestigationResult, inv_dir: Path, *, report_form
     if result.threat_indicators:
         _write_stix_bundle(result, inv_dir)
 
+    # Wallet manifest (standalone JSON for cross-referencing)
+    if result.wallets:
+        _write_wallet_manifest(result, inv_dir)
+
     # Create ZIP archive with chain-of-custody manifest
     _create_evidence_zip(result, inv_dir)
 
@@ -593,6 +597,53 @@ def _write_stix_bundle(result: InvestigationResult, inv_dir: Path) -> None:
         logger.warning("STIX bundle generation failed: %s", e)
 
 
+def _write_wallet_manifest(result: InvestigationResult, inv_dir: Path) -> None:
+    """Write a wallet manifest JSON file summarising all extracted wallets.
+
+    The manifest includes per-wallet metadata (token, network, address,
+    confidence, source) along with aggregate statistics — suitable for
+    ingestion into blockchain-analysis platforms or direct inclusion in
+    the evidence ZIP.
+    """
+    try:
+        wallets_data = []
+        networks: set[str] = set()
+        tokens: set[str] = set()
+
+        for w in result.wallets:
+            wallets_data.append({
+                "token_symbol": w.token_symbol,
+                "token_label": w.token_label,
+                "network_short": w.network_short,
+                "network_label": w.network_label,
+                "wallet_address": w.wallet_address,
+                "source": w.source,
+                "confidence": w.confidence,
+                "harvested_at": w.harvested_at.isoformat() if w.harvested_at else None,
+                "site_url": w.site_url,
+            })
+            if w.network_short:
+                networks.add(w.network_short)
+            if w.token_symbol:
+                tokens.add(w.token_symbol)
+
+        manifest = {
+            "investigation_id": str(result.investigation_id),
+            "target_url": result.url,
+            "wallet_count": len(wallets_data),
+            "unique_networks": sorted(networks),
+            "unique_tokens": sorted(tokens),
+            "wallets": wallets_data,
+        }
+
+        manifest_path = inv_dir / "wallet_manifest.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2))
+        result.wallet_manifest_path = str(manifest_path)
+        logger.info("Wallet manifest written to %s (%d wallets)", manifest_path, len(wallets_data))
+    except Exception as e:
+        logger.warning("Wallet manifest generation failed: %s", e)
+
+
 def _create_evidence_zip(result: InvestigationResult, inv_dir: Path) -> None:
     """Create a ZIP archive of all evidence artifacts with chain-of-custody metadata.
 
@@ -614,8 +665,10 @@ def _create_evidence_zip(result: InvestigationResult, inv_dir: Path) -> None:
     _DESCRIPTIONS: dict[str, str] = {
         "investigation.json": "Complete investigation result in structured JSON",
         "report.md": "Human-readable investigation report (Markdown)",
+        "report.pdf": "Human-readable investigation report (PDF)",
         "leo_evidence_report.md": "Law enforcement evidence summary report",
         "stix_bundle.json": "Threat indicators in STIX 2.1 format",
+        "wallet_manifest.json": "Cryptocurrency wallet addresses extracted during investigation",
         "screenshot.png": "Full-page screenshot of target site",
         "dom_snapshot.html": "Complete DOM snapshot of target page",
         "manifest.json": "Chain-of-custody manifest with SHA-256 hashes",
