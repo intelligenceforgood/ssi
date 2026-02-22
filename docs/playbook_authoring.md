@@ -1,5 +1,7 @@
 # Playbook Authoring Guide
 
+> **Audience:** Developers creating and testing playbooks. For a high-level overview of how playbooks work, see the [Playbooks page](../../docs/book/ssi/playbooks.md) on the docs site.
+
 This guide explains how to create, test, and maintain JSON playbooks for the SSI playbook engine. Playbooks encode deterministic step sequences for known scam-site patterns, allowing fast, repeatable investigations without LLM reasoning for every click.
 
 ---

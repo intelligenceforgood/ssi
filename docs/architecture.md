@@ -1,5 +1,7 @@
 # SSI Architecture
 
+> **Audience:** Developers and system architects. For end-user documentation, see the [docs site](../../docs/book/ssi/README.md).
+
 > **Last Updated**: June 2025
 > **Status**: Accepted
 
@@ -17,18 +19,18 @@ This document captures the key architecture decisions and system design for the 
                            │                              │
          ┌─────────────────┼─────────────────┐            │
          │                 │                 │            │
-  ┌──────▼───────┐  ┌─────▼──────┐  ┌──────▼──────┐  ┌──▼──────────────┐
+  ┌──────▼───────┐  ┌──────▼─────┐  ┌────────▼────┐  ┌────▼────────────┐
   │ LLM Provider │  │ Cost       │  │ Playbook    │  │ Network Monitor │
   │ + Retry      │  │ Tracker    │  │ Engine      │  │ (HAR Recording) │
-  │ (Ollama /    │  │ (Budget    │  │ (JSON       │  └──┬──────────────┘
-  │  Gemini)     │  │  Enforce)  │  │  Playbooks) │     │
-  └──────┬───────┘  └────────────┘  └─────────────┘     │
-         │                                               │
-  ┌──────▼───────┐  ┌──────────────┐  ┌─────────────┐   │
-  │ Synthetic    │  │ Wallet       │  │ OSINT       │◀──┘
-  │ PII Vault    │  │ Extraction   │  │ Enrichment  │
-  │              │  │ (Regex + QR) │  │ + Retry     │
-  └──────────────┘  └──────┬───────┘  │ (WHOIS, DNS,│
+  │ (Ollama /    │  │ (Budget    │  │ (JSON       │  └────┬────────────┘
+  │  Gemini)     │  │  Enforce)  │  │  Playbooks) │       │
+  └──────┬───────┘  └────────────┘  └─────────────┘       │
+         │                                                │
+  ┌──────▼───────┐  ┌──────────────┐  ┌──────────────┐    │
+  │ Synthetic    │  │ Wallet       │  │ OSINT        │◀───┘
+  │ PII Vault    │  │ Extraction   │  │ Enrichment   │
+  │              │  │ (Regex + QR) │  │ + Retry      │
+  └──────────────┘  └──────┬───────┘  │ (WHOIS, DNS, │
                            │          │  SSL, GeoIP, │
                     ┌──────▼───────┐  │  VT, urlscan)│
                     │ Scan Store   │  └──────┬───────┘
@@ -204,7 +206,7 @@ Settings follow a layered precedence model (highest wins):
 
 Key configuration sections: `llm`, `browser`, `osint`, `evidence`, `identity`, `api`, `integration`, `stealth`, `captcha`, `cost`, `feedback`.
 
-See the [user guide](user_guide.md) for a complete environment variable reference.
+See the [Configuration page](../../docs/book/ssi/configuration.md) on the docs site for a complete environment variable reference.
 
 ---
 

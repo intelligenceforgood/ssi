@@ -1,5 +1,7 @@
 # SSI API Reference
 
+> **Audience:** Developers integrating with the SSI REST API. For end-user CLI usage, see the [CLI Reference](../../docs/book/ssi/cli-reference.md).
+
 REST API endpoints exposed by the SSI FastAPI server (default: `http://localhost:8100`).
 
 ---

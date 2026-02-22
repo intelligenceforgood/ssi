@@ -160,8 +160,8 @@ def run_investigation(
                 cost_tracker.record_api_call("geoip")
 
         # Screenshot is captured for all scan types (passive, active, full)
-        # unless explicitly skipped by the caller.
-        if not skip_screenshot:
+        # unless explicitly skipped by the caller or the domain is unreachable.
+        if not skip_screenshot and domain_resolves:
             result.page_snapshot = _run_browser_capture(url, inv_dir)
 
             # Collect passive-capture downloads
@@ -185,41 +185,45 @@ def run_investigation(
             cost_tracker.check_budget()
 
         # --- Phase 2: Active Interaction (AI Agent) -------------------------
-        if run_active:
+        agent_session = None
+        if run_active and domain_resolves:
             logger.info("Phase 2: Active interaction via AI agent")
             agent_session = _run_agent_interaction(url, inv_dir)
-            if agent_session:
-                # Store raw agent session metrics on the result
-                result.token_usage = (
-                    agent_session.metrics.total_input_tokens + agent_session.metrics.total_output_tokens
+        elif run_active and not domain_resolves:
+            logger.info("Phase 2: Skipping active interaction — domain does not resolve")
+
+        if agent_session:
+            # Store raw agent session metrics on the result
+            result.token_usage = (
+                agent_session.metrics.total_input_tokens + agent_session.metrics.total_output_tokens
+            )
+            result.agent_steps = [
+                {
+                    "step": s.step_number,
+                    "action": s.action.action_type.value,
+                    "element": s.action.element_index,
+                    "value": s.action.value[:50] if s.action.value else "",
+                    "reasoning": s.action.reasoning,
+                    "tokens": s.input_tokens + s.output_tokens,
+                    "duration_ms": s.duration_ms,
+                    "error": s.error,
+                }
+                for s in agent_session.steps
+            ]
+
+            # Record LLM cost from agent tokens
+            if cost_tracker:
+                cost_tracker.record_llm_tokens(
+                    settings.llm.model,
+                    input_tokens=agent_session.metrics.total_input_tokens,
+                    output_tokens=agent_session.metrics.total_output_tokens,
                 )
-                result.agent_steps = [
-                    {
-                        "step": s.step_number,
-                        "action": s.action.action_type.value,
-                        "element": s.action.element_index,
-                        "value": s.action.value[:50] if s.action.value else "",
-                        "reasoning": s.action.reasoning,
-                        "tokens": s.input_tokens + s.output_tokens,
-                        "duration_ms": s.duration_ms,
-                        "error": s.error,
-                    }
-                    for s in agent_session.steps
-                ]
 
-                # Record LLM cost from agent tokens
-                if cost_tracker:
-                    cost_tracker.record_llm_tokens(
-                        settings.llm.model,
-                        input_tokens=agent_session.metrics.total_input_tokens,
-                        output_tokens=agent_session.metrics.total_output_tokens,
-                    )
-
-                # Collect agent-session downloads
-                if agent_session.captured_downloads:
-                    result.downloads.extend(
-                        _to_download_artifacts(agent_session.captured_downloads)
-                    )
+            # Collect agent-session downloads
+            if agent_session.captured_downloads:
+                result.downloads.extend(
+                    _to_download_artifacts(agent_session.captured_downloads)
+                )
 
         # --- Phase 2.5: HAR Analysis ----------------------------------------
         _run_har_analysis(result)

@@ -228,7 +228,7 @@ def render_pdf_report(
         extension_configs={
             "toc": {
                 "title": "Table of Contents",
-                "toc_depth": "2",
+                "toc_depth": "2-2",
             },
         },
     )

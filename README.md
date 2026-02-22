@@ -32,11 +32,21 @@ ssi investigate url "https://suspicious-site.example.com"
 
 ## Documentation
 
-| Document                                       | Description                                                       |
-| ---------------------------------------------- | ----------------------------------------------------------------- |
-| **[User Guide](docs/user_guide.md)**           | Step-by-step guide from basic scans to advanced investigations    |
-| **[Developer Guide](docs/developer_guide.md)** | Environment setup, codebase walkthrough, testing, contributing    |
-| **[Architecture](docs/architecture.md)**       | System design, decisions, component stack, investigation pipeline |
+### End-User Docs (docs site)
+
+| Document                                        | Description                                                     |
+| ----------------------------------------------- | --------------------------------------------------------------- |
+| **[SSI Docs Site](../docs/book/ssi/README.md)** | Getting started, CLI usage, playbooks, wallets, troubleshooting |
+
+### Developer Docs (this repo)
+
+| Document                                             | Description                                                       |
+| ---------------------------------------------------- | ----------------------------------------------------------------- |
+| **[Developer Guide](docs/developer_guide.md)**       | Environment setup, codebase walkthrough, testing, contributing    |
+| **[Architecture](docs/architecture.md)**             | System design, decisions, component stack, investigation pipeline |
+| **[API Reference](docs/api_reference.md)**           | REST API endpoint contracts with request/response schemas         |
+| **[Playbook Authoring](docs/playbook_authoring.md)** | Detailed JSON schema reference for playbook authors               |
+| **[Batch Scheduling](docs/batch_scheduling.md)**     | Cloud Run Jobs, Cloud Scheduler, campaign runner                  |
 
 ### Planning & Roadmap (in planning repo)
 

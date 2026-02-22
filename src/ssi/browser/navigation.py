@@ -11,9 +11,23 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from playwright.sync_api import Page, Response, TimeoutError as PlaywrightTimeout
+from playwright.sync_api import Error as PlaywrightError, Page, Response, TimeoutError as PlaywrightTimeout
+
+from ssi.exceptions import NavigationError
 
 logger = logging.getLogger(__name__)
+
+# Playwright error substrings that indicate non-retryable navigation failures.
+_NON_RETRYABLE_ERRORS: tuple[str, ...] = (
+    "ERR_NAME_NOT_RESOLVED",
+    "ERR_CONNECTION_REFUSED",
+    "ERR_CONNECTION_RESET",
+    "ERR_CONNECTION_CLOSED",
+    "ERR_SSL_PROTOCOL_ERROR",
+    "ERR_CERT_AUTHORITY_INVALID",
+    "ERR_CERT_COMMON_NAME_INVALID",
+    "ERR_ADDRESS_UNREACHABLE",
+)
 
 WaitUntil = Literal["commit", "domcontentloaded", "load", "networkidle"]
 
@@ -53,13 +67,26 @@ def resilient_goto(
         try:
             logger.debug("goto %s (wait_until=%s, timeout=%dms)", url, strategy, timeout_ms)
             return page.goto(url, wait_until=strategy, timeout=timeout_ms)
-        except PlaywrightTimeout as exc:
-            logger.warning(
-                "Navigation to %s timed out with wait_until=%s — retrying with weaker strategy",
-                url,
-                strategy,
-            )
-            last_error = exc
+        except PlaywrightError as exc:
+            error_msg = str(exc)
+            # Non-retryable errors (DNS failure, connection refused, SSL, etc.)
+            # should surface immediately — no point retrying with weaker strategies.
+            for pattern in _NON_RETRYABLE_ERRORS:
+                if pattern in error_msg:
+                    reason = pattern.replace("ERR_", "").replace("_", " ").lower()
+                    logger.warning("Navigation to %s failed (non-retryable): %s", url, pattern)
+                    raise NavigationError(url, reason) from exc
+            # If it's a timeout, try the next strategy
+            if isinstance(exc, PlaywrightTimeout):
+                logger.warning(
+                    "Navigation to %s timed out with wait_until=%s — retrying with weaker strategy",
+                    url,
+                    strategy,
+                )
+                last_error = exc
+            else:
+                # Unknown Playwright error — re-raise as-is
+                raise
 
     # All strategies exhausted — raise the last timeout
     raise last_error  # type: ignore[misc]
@@ -93,12 +120,21 @@ def resilient_reload(
         try:
             logger.debug("reload (wait_until=%s, timeout=%dms)", strategy, timeout_ms)
             return page.reload(wait_until=strategy, timeout=timeout_ms)
-        except PlaywrightTimeout as exc:
-            logger.warning(
-                "Reload timed out with wait_until=%s — retrying with weaker strategy",
-                strategy,
-            )
-            last_error = exc
+        except PlaywrightError as exc:
+            error_msg = str(exc)
+            for pattern in _NON_RETRYABLE_ERRORS:
+                if pattern in error_msg:
+                    reason = pattern.replace("ERR_", "").replace("_", " ").lower()
+                    logger.warning("Reload failed (non-retryable): %s", pattern)
+                    raise NavigationError(page.url, reason) from exc
+            if isinstance(exc, PlaywrightTimeout):
+                logger.warning(
+                    "Reload timed out with wait_until=%s — retrying with weaker strategy",
+                    strategy,
+                )
+                last_error = exc
+            else:
+                raise
 
     raise last_error  # type: ignore[misc]
 

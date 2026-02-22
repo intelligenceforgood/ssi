@@ -31,3 +31,16 @@ class ConcurrentLimitError(SSIError):
         super().__init__(
             f"Concurrent investigation limit ({limit}) reached. Try again later."
         )
+
+
+class NavigationError(SSIError):
+    """Raised when browser navigation fails due to a non-retryable error.
+
+    Covers DNS resolution failures (``ERR_NAME_NOT_RESOLVED``),
+    connection refused (``ERR_CONNECTION_REFUSED``), SSL errors, etc.
+    """
+
+    def __init__(self, url: str, reason: str) -> None:
+        self.url = url
+        self.reason = reason
+        super().__init__(f"Navigation to {url} failed: {reason}")

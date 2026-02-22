@@ -1,6 +1,8 @@
 # Batch Scheduling Guide
 
-This guide covers running SSI investigations in batch — from local campaign scripts to Cloud Run Jobs triggered on a schedule.
+> **Audience:** Operators and DevOps engineers. For end-user batch usage via CLI, see the [Batch Investigations page](../../docs/book/ssi/batch-investigations.md) on the docs site.
+
+This guide covers infrastructure-level batch patterns — campaign scripts, Cloud Run Jobs, and Cloud Scheduler.
 
 ---
 

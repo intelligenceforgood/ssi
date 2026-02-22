@@ -1,5 +1,7 @@
 # SSI Developer Guide
 
+> **Audience:** Contributors and operators. For end-user documentation (CLI usage, playbooks, results), see the [docs site](../../docs/book/ssi/README.md).
+
 This guide covers setting up a development environment, understanding the codebase, running tests, and contributing to the Scam Site Investigator.
 
 ---
