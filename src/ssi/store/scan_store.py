@@ -498,10 +498,12 @@ class ScanStore:
         if result.cost_summary:
             total_cost_usd = result.cost_summary.get("total_cost_usd") if isinstance(result.cost_summary, dict) else None
 
-        # Wallet count
+        # Wallet count — prefer site_result wallets, fall back to InvestigationResult.wallets
         wallet_entries = []
         if site_result and hasattr(site_result, "wallets"):
             wallet_entries = site_result.wallets or []
+        if not wallet_entries and hasattr(result, "wallets"):
+            wallet_entries = result.wallets or []
 
         # Complete the scan row
         if not result.status:
@@ -535,11 +537,22 @@ class ScanStore:
             wallet_dicts = []
             for w in wallet_entries:
                 if hasattr(w, "model_dump"):
-                    wd = w.model_dump(mode="json")
+                    # Use mode="python" (default) to keep datetime as native objects
+                    # for SQLAlchemy compatibility with SQLite DateTime columns.
+                    wd = w.model_dump()
                 elif hasattr(w, "to_dict"):
                     wd = w.to_dict()
                 else:
                     wd = {}
+                harvested_at = wd.get("harvested_at")
+                # Ensure harvested_at is a datetime, not an ISO string
+                if isinstance(harvested_at, str):
+                    from datetime import datetime as _dt
+
+                    try:
+                        harvested_at = _dt.fromisoformat(harvested_at.replace("Z", "+00:00"))
+                    except (ValueError, AttributeError):
+                        harvested_at = None
                 wallet_dicts.append(
                     {
                         "token_label": wd.get("token_label", ""),
@@ -550,7 +563,7 @@ class ScanStore:
                         "source": wd.get("source", "js"),
                         "confidence": wd.get("confidence", 0.0),
                         "site_url": wd.get("site_url", ""),
-                        "harvested_at": wd.get("harvested_at"),
+                        "harvested_at": harvested_at,
                     }
                 )
             self.add_wallets_bulk(scan_id, wallet_dicts)

@@ -1,0 +1,102 @@
+{
+  "playbook_id": "okdc_cluster_v1",
+  "url_pattern": "okdc|ok-dc|okx.*clone|okexchange",
+  "description": "OKDC scam cluster — sites cloning OKX exchange UI. Two-field registration, immediate deposit page with wallet tabs.",
+  "steps": [
+    {
+      "action": "click",
+      "selector": "Sign Up",
+      "description": "Click Sign Up on the OKDC clone landing page.",
+      "retry_on_failure": 2,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "type",
+      "selector": "[placeholder*='email'], [placeholder*='Email'], [name='email']",
+      "value": "{identity.email}",
+      "description": "Enter email in the registration form.",
+      "retry_on_failure": 1,
+      "fallback_to_llm": false
+    },
+    {
+      "action": "type",
+      "selector": "[placeholder*='password'], [placeholder*='Password'], [name='password']",
+      "value": "{password_variants.alphanumeric_8}",
+      "description": "Enter password (OKDC requires alphanumeric, 8+ chars).",
+      "retry_on_failure": 1,
+      "fallback_to_llm": false
+    },
+    {
+      "action": "type",
+      "selector": "[placeholder*='confirm'], [placeholder*='Confirm'], [name='confirm_password']",
+      "value": "{password_variants.alphanumeric_8}",
+      "description": "Confirm password.",
+      "retry_on_failure": 1,
+      "fallback_to_llm": false
+    },
+    {
+      "action": "click",
+      "selector": "Register",
+      "description": "Submit registration form.",
+      "retry_on_failure": 2,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "wait",
+      "value": "3",
+      "description": "Wait for dashboard to load after registration."
+    },
+    {
+      "action": "click",
+      "selector": "Deposit",
+      "description": "Click Deposit in the dashboard navigation.",
+      "retry_on_failure": 3,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "wait",
+      "value": "2",
+      "description": "Wait for deposit page with wallet addresses."
+    },
+    {
+      "action": "click",
+      "selector": "USDT",
+      "description": "Select USDT tab to reveal TRC20/ERC20 addresses.",
+      "retry_on_failure": 2,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "extract",
+      "description": "Extract USDT wallet addresses."
+    },
+    {
+      "action": "click",
+      "selector": "BTC",
+      "description": "Switch to BTC tab.",
+      "retry_on_failure": 2,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "extract",
+      "description": "Extract BTC wallet addresses."
+    },
+    {
+      "action": "click",
+      "selector": "ETH",
+      "description": "Switch to ETH tab.",
+      "retry_on_failure": 2,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "extract",
+      "description": "Extract ETH wallet addresses."
+    }
+  ],
+  "fallback_to_llm": true,
+  "max_duration_sec": 180,
+  "author": "ssi-team",
+  "version": "1.0",
+  "tags": ["crypto", "okdc", "clone", "cluster"],
+  "tested_urls": [],
+  "enabled": true
+}

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
+
+from ssi.wallet.models import WalletEntry
 
 
 class InvestigationStatus(str, Enum):
@@ -141,6 +142,7 @@ class PageSnapshot(BaseModel):
     form_fields: list[FormField] = Field(default_factory=list)
     technologies: list[str] = Field(default_factory=list)
     external_resources: list[str] = Field(default_factory=list)
+    inline_images: list[dict[str, Any]] = Field(default_factory=list)
     captured_downloads: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -229,6 +231,7 @@ class InvestigationResult(BaseModel):
     taxonomy_result: FraudTaxonomyResult | None = None
     threat_indicators: list[ThreatIndicator] = Field(default_factory=list)
     brand_impersonation: str = ""
+    wallets: list[WalletEntry] = Field(default_factory=list)
     downloads: list[DownloadArtifact] = Field(default_factory=list)
 
     # Evidence packaging

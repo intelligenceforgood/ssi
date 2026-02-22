@@ -231,6 +231,9 @@ class AgentController:
         self._guidance = guidance_handler or AutoSkipGuidance()
         self._event_cb = event_callback
 
+        # Playbook engine (lazy-loaded to avoid circular imports)
+        self._playbook_matcher = self._init_playbook_matcher()
+
         # Per-site state (reset in process_site)
         self._state = AgentState.INIT
         self._actions_in_state = 0
@@ -250,6 +253,139 @@ class AgentController:
         self._metrics = MetricsCollector()
         self._state_entered_at: float = 0.0
         self._pre_llm_wallets: list[WalletEntry] = []
+
+    # ------------------------------------------------------------------
+    # Playbook initialisation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _init_playbook_matcher() -> object | None:
+        """Initialise the playbook matcher if the engine is enabled.
+
+        Returns:
+            A ``PlaybookMatcher`` with loaded playbooks, or ``None``.
+        """
+        from ssi.settings import get_settings as _get_settings
+
+        settings = _get_settings()
+        if not settings.playbook.enabled:
+            return None
+        try:
+            from ssi.playbook.loader import load_playbooks_from_dir
+            from ssi.playbook.matcher import PlaybookMatcher
+
+            matcher = PlaybookMatcher()
+            playbooks = load_playbooks_from_dir(settings.playbook.playbook_dir)
+            if playbooks:
+                matcher.register_many(playbooks)
+                logger.info("Loaded %d playbooks", matcher.count)
+            return matcher
+        except Exception:
+            logger.exception("Failed to initialise playbook engine")
+            return None
+
+    async def _try_playbook(
+        self,
+        url: str,
+        result: SiteResult,
+        screenshots: ScreenshotStore,
+    ) -> bool:
+        """Attempt to match and execute a playbook for the URL.
+
+        If a matching playbook is found, navigates to the site, executes
+        the playbook steps, and updates the result. If the playbook falls
+        back to LLM, the caller should continue with the normal vision loop.
+
+        Args:
+            url: The target URL.
+            result: The in-progress ``SiteResult`` to update.
+            screenshots: Screenshot store for capturing milestones.
+
+        Returns:
+            ``True`` if a playbook was matched and attempted (regardless of
+            success), ``False`` if no playbook matched.
+        """
+        if self._playbook_matcher is None:
+            return False
+
+        from ssi.playbook.matcher import PlaybookMatcher
+
+        matcher: PlaybookMatcher = self._playbook_matcher  # type: ignore[assignment]
+        playbook = matcher.match(url)
+        if playbook is None:
+            return False
+
+        logger.info("Executing playbook %s for %s", playbook.playbook_id, url)
+        await self._emit(
+            "playbook_matched",
+            {"url": url, "playbook_id": playbook.playbook_id},
+        )
+
+        # Navigate to the site first
+        success = await self._browser.navigate(url)
+        if not success:
+            result.status = SiteStatus.ERROR
+            result.error_message = "Failed to load site (playbook)"
+            self._state = AgentState.ERROR
+            return True
+
+        agent_cfg = self._settings.agent
+        if agent_cfg.overlay_dismiss_enabled:
+            removed = await self._browser.dismiss_overlays()
+            if removed:
+                self._metrics.record_overlay_dismissal(removed)
+
+        ss = await self._browser.screenshot_base64_full_res()
+        await screenshots.capture_milestone(ss, "initial_load_playbook")
+
+        # Generate identity for template resolution
+        identity = self._identity_vault.generate()
+        self._identity = identity.to_dict()
+
+        # Execute the playbook
+        from ssi.playbook.executor import PlaybookExecutor
+
+        executor = PlaybookExecutor(browser=self._browser, identity=identity)
+        pb_result = await executor.execute(playbook, url)
+
+        # Record playbook metrics
+        result.notes = (
+            f"Playbook {playbook.playbook_id}: "
+            f"{pb_result.completed_steps}/{pb_result.total_steps} steps "
+            f"in {pb_result.duration_sec:.1f}s"
+        )
+
+        await self._emit(
+            "playbook_completed",
+            {
+                "url": url,
+                "playbook_id": playbook.playbook_id,
+                "success": pb_result.success,
+                "completed_steps": pb_result.completed_steps,
+                "total_steps": pb_result.total_steps,
+                "fell_back_to_llm": pb_result.fell_back_to_llm,
+            },
+        )
+
+        if pb_result.success:
+            # Playbook completed all steps — transition to EXTRACT_WALLETS or COMPLETE
+            self._state = AgentState.EXTRACT_WALLETS
+            result.status = SiteStatus.IN_PROGRESS
+            ss = await self._browser.screenshot_base64_full_res()
+            await screenshots.capture_milestone(ss, "playbook_complete")
+            return True
+
+        if pb_result.fell_back_to_llm:
+            # Playbook partially ran, leave state as IN_PROGRESS for LLM loop
+            self._state = AgentState.FIND_REGISTER
+            result.status = SiteStatus.IN_PROGRESS
+            return True
+
+        # Playbook failed without fallback
+        result.status = SiteStatus.ERROR
+        result.error_message = f"Playbook {playbook.playbook_id} failed: {pb_result.error}"
+        self._state = AgentState.ERROR
+        return True
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -301,19 +437,31 @@ class AgentController:
 
             await self._emit("site_started", {"url": url, "site_id": site_id, "run_id": self._run_id})
 
-            while self._state not in TERMINAL_STATES:
-                if self._total_actions >= agent_cfg.max_actions_per_site:
-                    logger.warning("Max actions reached (%d) for %s", agent_cfg.max_actions_per_site, url)
-                    result.status = SiteStatus.NEEDS_MANUAL_REVIEW
-                    result.error_message = f"Exceeded max actions ({agent_cfg.max_actions_per_site})"
-                    break
+            # --- Playbook check: execute scripted steps for known site patterns ---
+            playbook_handled = await self._try_playbook(url, result, screenshots)
+            if playbook_handled:
+                # Playbook completed the full flow (or fell back to LLM in progress).
+                # If it fell back, continue into the normal while loop from current state.
+                if result.status != SiteStatus.IN_PROGRESS:
+                    # Playbook fully completed — skip the LLM loop
+                    pass
+                else:
+                    logger.info("Playbook fell back to LLM — continuing with vision agent")
 
-                action = await self._step(url, result, screenshots)
-                self._total_actions += 1
-                result.actions_taken = self._total_actions
+            if result.status == SiteStatus.IN_PROGRESS:
+                while self._state not in TERMINAL_STATES:
+                    if self._total_actions >= agent_cfg.max_actions_per_site:
+                        logger.warning("Max actions reached (%d) for %s", agent_cfg.max_actions_per_site, url)
+                        result.status = SiteStatus.NEEDS_MANUAL_REVIEW
+                        result.error_message = f"Exceeded max actions ({agent_cfg.max_actions_per_site})"
+                        break
 
-                if action is None:
-                    continue
+                    action = await self._step(url, result, screenshots)
+                    self._total_actions += 1
+                    result.actions_taken = self._total_actions
+
+                    if action is None:
+                        continue
 
         except Exception as e:
             logger.exception("Unhandled error processing %s", url)

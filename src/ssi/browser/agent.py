@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
 import time
 from pathlib import Path
 
@@ -31,7 +32,7 @@ _TERMINAL_ACTIONS = {ActionType.DONE, ActionType.FAIL}
 
 # Default budget / limits
 _DEFAULT_MAX_STEPS = 20
-_DEFAULT_TOKEN_BUDGET = 50_000
+_DEFAULT_TOKEN_BUDGET = 100_000
 
 
 class BrowserAgent:
@@ -124,7 +125,7 @@ class BrowserAgent:
                 apply_stealth_scripts(page)
 
             # Attach download interceptor for malware capture
-            downloads_dir = self.output_dir / "downloads" if self.output_dir else Path("/tmp/ssi-downloads")
+            downloads_dir = self.output_dir / "downloads" if self.output_dir else Path(tempfile.mkdtemp(prefix="ssi-downloads-"))
             self._download_interceptor = DownloadInterceptor(
                 output_dir=downloads_dir,
                 check_virustotal=bool(settings.osint.virustotal_api_key),

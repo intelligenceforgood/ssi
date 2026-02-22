@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 
@@ -12,7 +11,7 @@ from ssi.models.investigation import FormField, PageSnapshot
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from playwright.sync_api import Response as PWResponse
+    from playwright.sync_api import Page, Response as PWResponse
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +125,15 @@ def capture_page(url: str, output_dir: Path) -> PageSnapshot:
             # External resources
             snapshot.external_resources = _extract_external_resources(page, url)
 
+            # Inline images (data: URIs above 1KB, with QR scan)
+            from ssi.browser.inline_images import extract_inline_images
+
+            try:
+                inline_imgs = extract_inline_images(page, output_dir)
+                snapshot.inline_images = [img.to_dict() for img in inline_imgs]
+            except Exception as e:
+                logger.warning("Inline image extraction failed: %s", e)
+
             # HAR path
             if har_path:
                 snapshot.har_path = str(har_path)
@@ -154,7 +162,7 @@ def capture_page(url: str, output_dir: Path) -> PageSnapshot:
     return snapshot
 
 
-def _extract_form_fields(page) -> list[FormField]:
+def _extract_form_fields(page: Page) -> list[FormField]:
     """Extract all form input fields from the current page."""
     fields = page.evaluate(
         """() => {
@@ -187,7 +195,7 @@ def _extract_form_fields(page) -> list[FormField]:
     return [FormField(**f) for f in fields]
 
 
-def _extract_external_resources(page, base_url: str) -> list[str]:
+def _extract_external_resources(page: Page, base_url: str) -> list[str]:
     """Extract URLs of external resources loaded by the page."""
     from urllib.parse import urlparse
 
@@ -208,4 +216,8 @@ def _extract_external_resources(page, base_url: str) -> list[str]:
     }"""
     )
 
-    return [r for r in resources if r and urlparse(r).hostname != base_domain]
+    return [
+        r
+        for r in resources
+        if r and not r.startswith("data:") and urlparse(r).hostname != base_domain
+    ]

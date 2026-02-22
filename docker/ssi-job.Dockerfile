@@ -12,12 +12,12 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# WeasyPrint runtime deps (Chromium deps are handled by `playwright install --with-deps`)
+# WeasyPrint runtime deps + libzbar0 for QR code detection (pyzbar)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     libpango-1.0-0 libpangoft2-1.0-0 libcairo2 \
     libgdk-pixbuf-2.0-0 libffi-dev shared-mime-info \
-    fonts-liberation \
+    fonts-liberation libzbar0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md VERSION.txt LICENSE ./

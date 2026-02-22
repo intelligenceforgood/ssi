@@ -5,15 +5,26 @@ Coordinates passive and active recon phases and produces an ``InvestigationResul
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from ssi.models.investigation import DownloadArtifact, InvestigationResult, InvestigationStatus
 from ssi.monitoring import CostTracker
+
+if TYPE_CHECKING:
+    from ssi.browser.capture import PageSnapshot
+    from ssi.models.agent import AgentSession
+    from ssi.models.investigation import FraudTaxonomyResult
+    from ssi.osint.dns_lookup import DNSRecords
+    from ssi.osint.geoip_lookup import GeoIPInfo
+    from ssi.osint.ssl_inspect import SSLInfo
+    from ssi.osint.whois_lookup import WHOISRecord
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +188,9 @@ def run_investigation(
         # --- Phase 2.5: HAR Analysis ----------------------------------------
         _run_har_analysis(result)
 
+        # --- Phase 2.6: Wallet Extraction -----------------------------------
+        _extract_wallets(result, url)
+
         # --- Phase 3: Classification & Evidence Packaging -------------------
         logger.info("Phase 3: Classification & evidence packaging")
         _run_classification(result)
@@ -248,7 +262,7 @@ def _check_domain_resolution(url: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _run_whois(url: str):
+def _run_whois(url: str) -> WHOISRecord | None:
     """Perform WHOIS/RDAP lookup."""
     from ssi.osint.whois_lookup import lookup_whois
 
@@ -259,7 +273,7 @@ def _run_whois(url: str):
         return None
 
 
-def _run_dns(url: str):
+def _run_dns(url: str) -> DNSRecords | None:
     """Resolve DNS records."""
     from ssi.osint.dns_lookup import lookup_dns
 
@@ -270,7 +284,7 @@ def _run_dns(url: str):
         return None
 
 
-def _run_ssl(url: str):
+def _run_ssl(url: str) -> SSLInfo | None:
     """Inspect TLS certificate."""
     from ssi.osint.ssl_inspect import inspect_ssl
 
@@ -281,7 +295,7 @@ def _run_ssl(url: str):
         return None
 
 
-def _run_geoip(dns_records):
+def _run_geoip(dns_records: DNSRecords | None) -> GeoIPInfo | None:
     """Resolve GeoIP from DNS A records."""
     if not dns_records or not dns_records.a:
         return None
@@ -294,7 +308,7 @@ def _run_geoip(dns_records):
         return None
 
 
-def _run_browser_capture(url: str, output_dir: Path):
+def _run_browser_capture(url: str, output_dir: Path) -> PageSnapshot | None:
     """Capture screenshot, DOM, and form inventory via Playwright."""
     from ssi.browser.capture import capture_page
 
@@ -305,7 +319,7 @@ def _run_browser_capture(url: str, output_dir: Path):
         return None
 
 
-def _run_virustotal(url: str, result: InvestigationResult):
+def _run_virustotal(url: str, result: InvestigationResult) -> None:
     """Check URL against VirusTotal."""
     from ssi.osint.virustotal import check_url
 
@@ -316,7 +330,7 @@ def _run_virustotal(url: str, result: InvestigationResult):
         logger.warning("VirusTotal check failed: %s", e)
 
 
-def _run_urlscan(url: str, result: InvestigationResult):
+def _run_urlscan(url: str, result: InvestigationResult) -> None:
     """Submit URL to urlscan.io and extract threat indicators."""
     from ssi.osint.urlscan import extract_threat_indicators, scan_url
 
@@ -328,7 +342,7 @@ def _run_urlscan(url: str, result: InvestigationResult):
     except Exception as e:
         logger.warning("urlscan.io check failed: %s", e)
 
-def _run_har_analysis(result: InvestigationResult):
+def _run_har_analysis(result: InvestigationResult) -> None:
     """Analyze HAR files for IOCs and suspicious patterns."""
     from ssi.browser.har_analyzer import analyze_har, har_to_threat_indicators
 
@@ -357,6 +371,94 @@ def _run_har_analysis(result: InvestigationResult):
             logger.warning("HAR analysis failed for %s: %s", har_path_str, e)
 
 
+def _extract_wallets(result: InvestigationResult, url: str) -> None:
+    """Scan all available text sources for cryptocurrency wallet addresses.
+
+    Checks page snapshot visible text, agent step observations, and the
+    raw URL itself.  Deduplicates addresses and creates ``WalletEntry``
+    objects on the result.
+    """
+    from ssi.wallet.models import WalletEntry
+    from ssi.wallet.patterns import WalletValidator
+
+    validator = WalletValidator()
+    text_parts: list[str] = []
+
+    # Page snapshot (passive capture)
+    if result.page_snapshot:
+        if result.page_snapshot.dom_snapshot_path:
+            try:
+                dom_text = Path(result.page_snapshot.dom_snapshot_path).read_text(errors="replace")
+                text_parts.append(dom_text)
+            except Exception:
+                pass
+
+    # Agent step observations (active phase)
+    for step in result.agent_steps:
+        if isinstance(step, dict):
+            reasoning = step.get("reasoning", "")
+            value = step.get("value", "")
+            if reasoning:
+                text_parts.append(reasoning)
+            if value:
+                text_parts.append(value)
+
+    # QR / barcode data decoded from inline images
+    qr_texts: list[str] = []
+    if result.page_snapshot and result.page_snapshot.inline_images:
+        for img_info in result.page_snapshot.inline_images:
+            for qr_item in img_info.get("qr_data", []):
+                decoded = qr_item if isinstance(qr_item, str) else str(qr_item)
+                if decoded:
+                    qr_texts.append(decoded)
+
+    combined = "\n".join(text_parts)
+    if not combined.strip() and not qr_texts:
+        return
+
+    seen: set[str] = set()
+
+    # Scan DOM + agent text with regex
+    if combined.strip():
+        matches = validator.scan_text(combined)
+        for m in matches:
+            if m.address in seen:
+                continue
+            seen.add(m.address)
+            result.wallets.append(
+                WalletEntry(
+                    site_url=url,
+                    token_symbol=m.symbol,
+                    network_short=m.symbol.lower(),
+                    wallet_address=m.address,
+                    source="regex_scan",
+                    confidence=0.7,
+                )
+            )
+
+    # Scan QR-decoded strings for wallet addresses (higher confidence)
+    if qr_texts:
+        qr_combined = "\n".join(qr_texts)
+        qr_matches = validator.scan_text(qr_combined)
+        for m in qr_matches:
+            if m.address in seen:
+                continue
+            seen.add(m.address)
+            result.wallets.append(
+                WalletEntry(
+                    site_url=url,
+                    token_symbol=m.symbol,
+                    network_short=m.symbol.lower(),
+                    wallet_address=m.address,
+                    source="qr_code",
+                    confidence=0.9,
+                )
+            )
+
+    if result.wallets:
+        logger.info("Wallet extraction: found %d unique addresses", len(result.wallets))
+
+
 def _run_classification(result: InvestigationResult) -> None:
     """Classify the investigation using the five-axis fraud taxonomy."""
     from ssi.classification.classifier import FraudTaxonomyResult, classify_investigation
@@ -374,7 +476,7 @@ def _run_classification(result: InvestigationResult) -> None:
         logger.warning("Fraud taxonomy classification failed: %s", e)
 
 
-def _taxonomy_to_model(taxonomy: "FraudTaxonomyResult"):
+def _taxonomy_to_model(taxonomy: "FraudTaxonomyResult") -> FraudTaxonomyResult:
     """Convert classifier output to the Pydantic model stored on the result."""
     from ssi.models.investigation import FraudTaxonomyResult as TaxonomyModel
     from ssi.models.investigation import TaxonomyScoredLabel
@@ -396,9 +498,8 @@ def _taxonomy_to_model(taxonomy: "FraudTaxonomyResult"):
         taxonomy_version=taxonomy.taxonomy_version,
     )
 
-def _package_evidence(result: InvestigationResult, inv_dir: Path, *, report_format: str = "json"):
+def _package_evidence(result: InvestigationResult, inv_dir: Path, *, report_format: str = "json") -> None:
     """Write result JSON, optional markdown report, and create evidence ZIP with chain-of-custody."""
-    import json
 
     md_content: str | None = None
 
@@ -456,8 +557,6 @@ def _write_stix_bundle(result: InvestigationResult, inv_dir: Path) -> None:
 
     try:
         bundle = investigation_to_stix_bundle(result)
-        import json
-
         stix_path = inv_dir / "stix_bundle.json"
         stix_path.write_text(json.dumps(bundle, indent=2))
         logger.info("STIX bundle written to %s", stix_path)
@@ -473,10 +572,8 @@ def _create_evidence_zip(result: InvestigationResult, inv_dir: Path) -> None:
     The chain-of-custody metadata is suitable for LEA submission.
     """
     import hashlib
-    import json
     import mimetypes
     import zipfile
-    from datetime import datetime, timezone
 
     from ssi.models.investigation import ChainOfCustody, EvidenceArtifact
 
@@ -560,7 +657,7 @@ def _create_evidence_zip(result: InvestigationResult, inv_dir: Path) -> None:
         logger.warning("Failed to create evidence ZIP: %s", e)
 
 
-def _run_agent_interaction(url: str, output_dir: Path):
+def _run_agent_interaction(url: str, output_dir: Path) -> AgentSession | None:
     """Launch the AI browser agent for active site interaction.
 
     Returns:

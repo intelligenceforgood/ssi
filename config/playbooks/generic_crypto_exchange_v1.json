@@ -1,0 +1,65 @@
+{
+  "playbook_id": "generic_crypto_exchange_v1",
+  "url_pattern": "(crypto|exchange|trade|coin).*\\.(com|net|org|io|xyz)",
+  "description": "Generic crypto exchange registration flow — register, skip email, navigate to deposit page, extract wallets.",
+  "steps": [
+    {
+      "action": "click",
+      "selector": "Sign Up",
+      "description": "Click the Sign Up / Register button on the landing page.",
+      "retry_on_failure": 2,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "type",
+      "selector": "[name='email'], [type='email'], #email",
+      "value": "{identity.email}",
+      "description": "Enter the synthetic email address.",
+      "retry_on_failure": 1,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "type",
+      "selector": "[name='password'], [type='password'], #password",
+      "value": "{identity.password}",
+      "description": "Enter the synthetic password.",
+      "retry_on_failure": 1,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "click",
+      "selector": "Register",
+      "description": "Submit the registration form.",
+      "retry_on_failure": 2,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "wait",
+      "value": "3",
+      "description": "Wait for registration to complete and page to load."
+    },
+    {
+      "action": "click",
+      "selector": "Deposit",
+      "description": "Navigate to the deposit / fund page.",
+      "retry_on_failure": 3,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "wait",
+      "value": "2",
+      "description": "Wait for deposit page to load."
+    },
+    {
+      "action": "extract",
+      "description": "Extract wallet addresses from the deposit page."
+    }
+  ],
+  "fallback_to_llm": true,
+  "max_duration_sec": 120,
+  "author": "ssi-team",
+  "version": "1.0",
+  "tags": ["crypto", "exchange", "generic"],
+  "tested_urls": [],
+  "enabled": true
+}

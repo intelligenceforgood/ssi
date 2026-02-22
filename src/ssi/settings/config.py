@@ -31,10 +31,12 @@ DEFAULT_ENV = "local"
 
 
 def _resolve_env() -> str:
+    """Return the active environment name from ``SSI_ENV`` or fall back to *local*."""
     return (os.getenv(ENV_VAR_NAME) or DEFAULT_ENV).strip()
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
+    """Load a TOML file and return its contents, or an empty dict if missing."""
     if path.is_file():
         with open(path, "rb") as f:
             return tomllib.load(f)
@@ -61,7 +63,7 @@ class LLMSettings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     temperature: float = 0.1
     max_tokens: int = 4096
-    token_budget_per_session: int = 50_000
+    token_budget_per_session: int = 100_000
 
     # Gemini / Vertex AI settings
     gcp_project: str = ""
@@ -203,6 +205,29 @@ class AgentSettings(BaseSettings):
         "CHECK_EMAIL_VERIFICATION",
     ]
 
+    @property
+    def stuck_thresholds(self) -> dict[str, int]:
+        """Return stuck detection thresholds as a state-keyed dict."""
+        return {
+            "DEFAULT": self.stuck_threshold_default,
+            "LOAD_SITE": self.stuck_threshold_load_site,
+            "FIND_REGISTER": self.stuck_threshold_find_register,
+            "FILL_REGISTER": self.stuck_threshold_fill_register,
+            "SUBMIT_REGISTER": self.stuck_threshold_submit_register,
+            "CHECK_EMAIL_VERIFICATION": self.stuck_threshold_check_email,
+            "NAVIGATE_DEPOSIT": self.stuck_threshold_navigate_deposit,
+            "EXTRACT_WALLETS": self.stuck_threshold_extract_wallets,
+        }
+
+    @property
+    def blank_page_max_retries(self) -> dict[str, int]:
+        """Return blank page retry limits as a state-keyed dict."""
+        return {
+            "DEFAULT": self.blank_page_retries_default,
+            "FIND_REGISTER": self.blank_page_retries_find_register,
+            "NAVIGATE_DEPOSIT": self.blank_page_retries_navigate_deposit,
+        }
+
 
 class CostSettings(BaseSettings):
     """Cost monitoring and budget enforcement."""
@@ -243,6 +268,30 @@ class APISettings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
     rate_limit_per_minute: int = 30
     require_auth: bool = False
+
+
+class PlaybookSettings(BaseSettings):
+    """Playbook engine configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="SSI_PLAYBOOK__")
+
+    enabled: bool = True
+    playbook_dir: str = "config/playbooks"
+    fallback_to_llm: bool = True
+    max_duration_sec: int = 120
+
+
+class MonitoringSettings(BaseSettings):
+    """Event bus and WebSocket monitoring configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="SSI_MONITORING__")
+
+    enabled: bool = True
+    websocket_enabled: bool = True
+    jsonl_output: bool = False
+    snapshot_screenshots: bool = True
+    max_event_history: int = 500
+    guidance_timeout_sec: int = 300
 
 
 class IntegrationSettings(BaseSettings):
@@ -289,6 +338,8 @@ class Settings(BaseSettings):
     cost: CostSettings = Field(default_factory=CostSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     feedback: FeedbackSettings = Field(default_factory=FeedbackSettings)
+    playbook: PlaybookSettings = Field(default_factory=PlaybookSettings)
+    monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
 
     @model_validator(mode="before")
     @classmethod
@@ -324,6 +375,8 @@ class Settings(BaseSettings):
             self.feedback.db_path = str(root / self.feedback.db_path)
         if not Path(self.storage.sqlite_path).is_absolute():
             self.storage.sqlite_path = str(root / self.storage.sqlite_path)
+        if not Path(self.playbook.playbook_dir).is_absolute():
+            self.playbook.playbook_dir = str(root / self.playbook.playbook_dir)
         return self
 
 

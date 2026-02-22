@@ -1,28 +1,25 @@
-"""Per-investigation cost monitoring and budget enforcement.
+"""Per-investigation monitoring: cost tracking, event bus, and budget enforcement.
 
-Tracks the estimated dollar cost of each investigation phase:
+**Cost tracking** — tracks the estimated dollar cost of each investigation
+phase (LLM tokens, OSINT API calls, browser session compute).
 
-- **LLM tokens** — priced by model (Ollama is free/local, Vertex AI
-  charges per 1K tokens).
-- **OSINT API calls** — VirusTotal, urlscan.io, ipinfo quota tracking.
-- **Browser session** — estimated compute cost on Cloud Run.
+**Event bus** — decoupled event dispatch for CLI (JSONL), WebSocket (live UI),
+and logging sinks. See ``ssi.monitoring.event_bus`` for details.
 
-When costs exceed the configured per-session budget cap,
-the investigation logs a warning and can optionally terminate
-non-critical phases early.
+Usage (cost)::
 
-Usage::
-
-    from ssi.monitoring.costs import CostTracker
+    from ssi.monitoring import CostTracker
 
     tracker = CostTracker(budget_usd=0.25)
     tracker.record_llm_tokens(model="llama3.1", input_tokens=5000, output_tokens=1000)
-    tracker.record_api_call("virustotal")
-    tracker.record_browser_seconds(30.0)
 
-    if tracker.budget_exceeded:
-        # Skip optional phases
-        ...
+Usage (event bus)::
+
+    from ssi.monitoring.event_bus import EventBus, EventType, LoggingSink
+
+    bus = EventBus(investigation_id="abc123")
+    bus.add_sink(LoggingSink())
+    await bus.emit(EventType.SITE_STARTED, {"url": "https://example.com"})
 """
 
 from __future__ import annotations
@@ -91,6 +88,7 @@ class CostLineItem:
     timestamp: float = field(default_factory=time.time)
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the line item to a plain dictionary."""
         return {
             "category": self.category,
             "label": self.label,
@@ -150,6 +148,7 @@ class CostTracker:
 
     @property
     def total_cost_usd(self) -> float:
+        """Total accumulated cost in USD."""
         return self._total_usd
 
     @property

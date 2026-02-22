@@ -1,0 +1,51 @@
+{
+  "playbook_id": "phishing_login_v1",
+  "url_pattern": "(login|signin|verify|secure|account).*\\.(com|net|org|io|xyz|top|click)",
+  "description": "Generic phishing login page — enter credentials, observe redirect, extract any wallet addresses or data exfil endpoints.",
+  "steps": [
+    {
+      "action": "type",
+      "selector": "[name='email'], [name='username'], [type='email'], #email, #username",
+      "value": "{identity.email}",
+      "description": "Enter synthetic email / username.",
+      "retry_on_failure": 2,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "type",
+      "selector": "[name='password'], [type='password'], #password",
+      "value": "{identity.password}",
+      "description": "Enter synthetic password.",
+      "retry_on_failure": 1,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "click",
+      "selector": "Log In",
+      "description": "Submit the login form.",
+      "retry_on_failure": 2,
+      "fallback_to_llm": true
+    },
+    {
+      "action": "wait",
+      "value": "4",
+      "description": "Wait for redirect or follow-up page."
+    },
+    {
+      "action": "scroll",
+      "value": "1000",
+      "description": "Scroll down to reveal any additional content."
+    },
+    {
+      "action": "extract",
+      "description": "Extract any wallet addresses on the post-login page."
+    }
+  ],
+  "fallback_to_llm": true,
+  "max_duration_sec": 60,
+  "author": "ssi-team",
+  "version": "1.0",
+  "tags": ["phishing", "login", "credential-harvest"],
+  "tested_urls": [],
+  "enabled": true
+}

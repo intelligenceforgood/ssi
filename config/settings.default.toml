@@ -9,7 +9,7 @@ model = "llama3.1"
 ollama_base_url = "http://localhost:11434"
 provider = "ollama"
 temperature = 0.1
-token_budget_per_session = 50000
+token_budget_per_session = 100000
 
 [browser]
 headless = true

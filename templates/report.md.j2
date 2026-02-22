@@ -186,7 +186,7 @@
 | **Technologies** | {{ result.page_snapshot.technologies | join(', ') }} |
 {% endif %}
 {% if result.page_snapshot.screenshot_path %}
-| **Screenshot** | [screenshot.png](screenshot.png) |
+| **Screenshot** | `screenshot.png` |
 {% endif %}
 {% if result.page_snapshot.redirect_chain %}
 
@@ -214,11 +214,24 @@ This is the PII the site attempts to collect:
 ### External Resources ({{ result.page_snapshot.external_resources | length }})
 
 {% for resource in result.page_snapshot.external_resources[:20] %}
-- `{{ resource }}`
+- `{{ resource[:120] }}{{ "…" if resource | length > 120 else "" }}`
 {% endfor %}
 {% if result.page_snapshot.external_resources | length > 20 %}
 ... and {{ result.page_snapshot.external_resources | length - 20 }} more.
 {% endif %}
+{% endif %}
+{% if result.page_snapshot.inline_images %}
+
+### Inline Images ({{ result.page_snapshot.inline_images | length }})
+
+| # | File | Size | Dimensions | QR / Barcode Data |
+|---|------|------|------------|-------------------|
+{% for img in result.page_snapshot.inline_images %}
+| {{ loop.index }} | `inline_images/{{ img.filename }}` | {{ img.size_bytes }} bytes | {{ img.width }}×{{ img.height }} | {{ img.qr_data | join(", ") if img.qr_data else "—" }} |
+{% endfor %}
+
+> Inline images were extracted from `data:` URIs embedded in the page HTML.
+> Images below 1 KB (icons, spacers) are excluded.
 {% endif %}
 {% endif %}
 
@@ -232,6 +245,21 @@ This is the PII the site attempts to collect:
 {% for ind in result.threat_indicators %}
 | {{ ind.indicator_type }} | `{{ ind.value[:60] }}` | {{ ind.context }} | {{ ind.source }} |
 {% endfor %}
+{% endif %}
+{% if result.wallets %}
+
+---
+
+## Cryptocurrency Wallets ({{ result.wallets | length }})
+
+| # | Token | Network | Wallet Address | Source | Confidence |
+|---|-------|---------|----------------|--------|------------|
+{% for w in result.wallets %}
+| {{ loop.index }} | {{ w.token_symbol }} | {{ w.network_short }} | `{{ w.wallet_address }}` | {{ w.source }} | {{ "%.0f" | format(w.confidence * 100) }}% |
+{% endfor %}
+
+> **Note:** These wallet addresses were extracted from the scam site during investigation.
+> They may be used for receiving fraudulent payments from victims.
 {% endif %}
 {% if result.brand_impersonation %}
 
@@ -275,19 +303,19 @@ This is the PII the site attempts to collect:
 | Artifact | Path |
 |----------|------|
 {% if result.report_path %}
-| Investigation JSON | [investigation.json](investigation.json) |
+| Investigation JSON | `investigation.json` |
 {% endif %}
 {% if result.page_snapshot and result.page_snapshot.screenshot_path %}
-| Screenshot | [screenshot.png](screenshot.png) |
+| Screenshot | `screenshot.png` |
 {% endif %}
 {% if result.page_snapshot and result.page_snapshot.dom_snapshot_path %}
-| DOM Snapshot | [dom.html](dom.html) |
+| DOM Snapshot | `dom.html` |
 {% endif %}
 {% if result.page_snapshot and result.page_snapshot.har_path %}
-| Network HAR | [network.har](network.har) |
+| Network HAR | `network.har` |
 {% endif %}
 {% if not result.passive_only %}
-| Agent Video | [video/](video/) |
+| Agent Video | `video/` |
 {% endif %}
 
 ---

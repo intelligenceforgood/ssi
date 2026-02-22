@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SSI Batch Input",
+  "description": "Structured input for `ssi investigate batch --format json`. Each entry describes one URL to investigate with optional per-URL overrides.",
+  "type": "array",
+  "items": {
+    "oneOf": [
+      {
+        "type": "string",
+        "description": "Simple URL string (uses batch-level defaults)."
+      },
+      {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The suspicious URL to investigate."
+          },
+          "passive_only": {
+            "type": "boolean",
+            "default": true,
+            "description": "Limit to passive reconnaissance."
+          },
+          "skip_whois": {
+            "type": "boolean",
+            "default": false
+          },
+          "skip_screenshot": {
+            "type": "boolean",
+            "default": false
+          },
+          "skip_virustotal": {
+            "type": "boolean",
+            "default": false
+          },
+          "skip_urlscan": {
+            "type": "boolean",
+            "default": false
+          },
+          "playbook_override": {
+            "type": "string",
+            "description": "Force a specific playbook ID for active interaction (overrides URL matching)."
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Tags to attach to this investigation."
+          },
+          "format": {
+            "type": "string",
+            "enum": ["json", "markdown", "both"],
+            "default": "json",
+            "description": "Output format for this investigation."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Free-text notes for analyst reference."
+          }
+        },
+        "additionalProperties": false
+      }
+    ]
+  },
+  "minItems": 1,
+  "examples": [
+    [
+      "https://example.com",
+      {"url": "https://scam.site", "passive_only": false, "tags": ["crypto"]},
+      {"url": "https://phish.example", "playbook_override": "phishing_login_v1"}
+    ]
+  ]
+}
