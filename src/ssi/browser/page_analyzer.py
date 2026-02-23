@@ -185,8 +185,16 @@ class PageAnalyzer:
     Uses SSI's pluggable ``LLMProvider`` so the same code works with
     Gemini (primary) and Ollama (local dev).
 
+    Supports **dual-model routing**: a primary (expensive) model for
+    complex navigation decisions, and an optional cheap model for
+    routine states (form filling, submission).  The cheap model is
+    selected automatically when the current agent state is in
+    ``AgentSettings.cheap_model_states``.
+
     Args:
         llm: An ``LLMProvider`` that supports ``chat_with_images()``.
+        cheap_llm: Optional lighter ``LLMProvider`` for routine states.
+            When ``None``, the primary provider is used everywhere.
         max_context_messages: Rolling window size for conversation history.
         max_tokens: Max output tokens per LLM call.
     """
@@ -194,6 +202,7 @@ class PageAnalyzer:
     def __init__(
         self,
         llm: LLMProvider | None = None,
+        cheap_llm: LLMProvider | None = None,
         max_context_messages: int = 10,
         max_tokens: int = 4096,
     ) -> None:
@@ -202,11 +211,37 @@ class PageAnalyzer:
 
             llm = create_llm_provider()
         self._llm = llm
+        self._cheap_llm = cheap_llm
+        self._cheap_model_states: set[str] = set()
+        self._load_cheap_model_states()
+
         self._max_context_messages = max_context_messages
         self._max_tokens = max_tokens
         self._conversation: list[dict] = []
         self.usage = TokenUsage()
         self.last_call_result: LLMResult | None = None
+
+    def _load_cheap_model_states(self) -> None:
+        """Read ``cheap_model_states`` from settings (best effort)."""
+        try:
+            from ssi.settings import get_settings
+
+            self._cheap_model_states = set(get_settings().agent.cheap_model_states)
+        except Exception:
+            self._cheap_model_states = set()
+
+    def _select_llm(self, state: str) -> LLMProvider:
+        """Return the cheap LLM for routine states, otherwise the primary.
+
+        Args:
+            state: Current agent state name.
+
+        Returns:
+            The appropriate ``LLMProvider`` for the given state.
+        """
+        if self._cheap_llm and state in self._cheap_model_states:
+            return self._cheap_llm
+        return self._llm
 
     def reset_conversation(self) -> None:
         """Clear conversation history and token usage (call between sites)."""
@@ -264,7 +299,8 @@ class PageAnalyzer:
 
         raw_text = None
         try:
-            result = self._llm.chat_with_images(
+            llm = self._select_llm(state)
+            result = llm.chat_with_images(
                 messages,
                 max_tokens=self._max_tokens,
                 json_mode=True,

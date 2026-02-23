@@ -288,14 +288,60 @@ class ScanStore:
         address: str | None = None,
         token_symbol: str | None = None,
         limit: int = 100,
+        deduplicate: bool = True,
     ) -> list[dict[str, Any]]:
-        """Search wallets across all scans by address or token."""
-        stmt = sa.select(sql_schema.harvested_wallets)
-        if address is not None:
-            stmt = stmt.where(sql_schema.harvested_wallets.c.wallet_address == address)
-        if token_symbol is not None:
-            stmt = stmt.where(sql_schema.harvested_wallets.c.token_symbol == token_symbol.upper())
-        stmt = stmt.order_by(sql_schema.harvested_wallets.c.created_at.desc()).limit(limit)
+        """Search wallets across all scans by address or token.
+
+        Args:
+            address: Filter by exact wallet address.
+            token_symbol: Filter by token symbol (e.g. ``ETH``, ``BTC``).
+            limit: Maximum number of results.
+            deduplicate: When ``True`` (default), groups by
+                ``(wallet_address, token_symbol, network_short)`` and returns
+                one row per unique address with ``first_seen_at``,
+                ``last_seen_at``, and ``seen_count`` aggregates.
+
+        Returns:
+            List of wallet dicts, deduplicated by default.
+        """
+        hw = sql_schema.harvested_wallets
+
+        if deduplicate:
+            stmt = (
+                sa.select(
+                    hw.c.wallet_address,
+                    hw.c.token_symbol,
+                    hw.c.token_label,
+                    hw.c.network_short,
+                    hw.c.network_label,
+                    sa.func.max(hw.c.confidence).label("confidence"),
+                    sa.func.max(hw.c.source).label("source"),
+                    sa.func.max(hw.c.site_url).label("site_url"),
+                    sa.func.min(hw.c.harvested_at).label("first_seen_at"),
+                    sa.func.max(hw.c.harvested_at).label("last_seen_at"),
+                    sa.func.count().label("seen_count"),
+                )
+                .group_by(
+                    hw.c.wallet_address,
+                    hw.c.token_symbol,
+                    hw.c.token_label,
+                    hw.c.network_short,
+                    hw.c.network_label,
+                )
+            )
+            if address is not None:
+                stmt = stmt.where(hw.c.wallet_address == address)
+            if token_symbol is not None:
+                stmt = stmt.where(hw.c.token_symbol == token_symbol.upper())
+            stmt = stmt.order_by(sa.desc("last_seen_at")).limit(limit)
+        else:
+            stmt = sa.select(hw)
+            if address is not None:
+                stmt = stmt.where(hw.c.wallet_address == address)
+            if token_symbol is not None:
+                stmt = stmt.where(hw.c.token_symbol == token_symbol.upper())
+            stmt = stmt.order_by(hw.c.created_at.desc()).limit(limit)
+
         with self._session_factory() as session:
             rows = session.execute(stmt).all()
         return [dict(r._mapping) for r in rows]

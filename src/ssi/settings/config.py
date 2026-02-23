@@ -54,12 +54,28 @@ class LLMSettings(BaseSettings):
     Supported providers:
         - ``ollama``: Local Ollama server (default for local env).
         - ``gemini``: Google Gemini via Vertex AI (default for cloud envs).
+
+    Dual-model routing:
+        ``model`` is the default ("expensive") model used for complex
+        tasks like vision analysis and navigation decisions.
+        ``cheap_model`` is an optional lighter model used for routine
+        states listed in ``AgentSettings.cheap_model_states`` (e.g.
+        form filling, submission confirmation).  When empty, the primary
+        ``model`` is used everywhere.
+
+        ``vision_model`` overrides the model used specifically for
+        multimodal ``chat_with_images()`` calls (Ollama only — Gemini
+        uses the primary model for both text and vision).  Useful when
+        running a text model (llama3.1) alongside a vision model
+        (gemma3) locally.
     """
 
     model_config = SettingsConfigDict(env_prefix="SSI_LLM__")
 
     provider: str = "ollama"
     model: str = "llama3.1"
+    cheap_model: str = ""  # Lighter model for routine states (empty = use primary)
+    vision_model: str = ""  # Vision-capable model override for Ollama (empty = use primary)
     ollama_base_url: str = "http://localhost:11434"
     temperature: float = 0.1
     max_tokens: int = 4096

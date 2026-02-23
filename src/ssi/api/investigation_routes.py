@@ -99,11 +99,18 @@ def get_investigation(scan_id: str) -> dict[str, Any]:
 def search_wallets(
     address: str | None = Query(None, description="Filter by wallet address."),
     token_symbol: str | None = Query(None, description="Filter by token symbol (e.g. ETH, BTC)."),
+    deduplicate: bool = Query(True, description="Deduplicate across scans (default: true)."),
     limit: int = Query(100, ge=1, le=500, description="Max results."),
 ) -> dict[str, Any]:
-    """Search wallet addresses across all investigations."""
+    """Search wallet addresses across all investigations.
+
+    With ``deduplicate=true`` (default), returns one row per unique
+    address with ``first_seen_at``, ``last_seen_at``, and ``seen_count``.
+    """
     store = build_scan_store()
-    wallets = store.search_wallets(address=address, token_symbol=token_symbol, limit=limit)
+    wallets = store.search_wallets(
+        address=address, token_symbol=token_symbol, limit=limit, deduplicate=deduplicate,
+    )
     for wallet in wallets:
         for key, val in wallet.items():
             if hasattr(val, "isoformat"):

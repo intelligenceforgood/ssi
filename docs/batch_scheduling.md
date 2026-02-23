@@ -115,6 +115,89 @@ conda run -n i4g-ssi ssi job investigate \
   --push-to-core
 ```
 
+### Batch Cloud Run Job (manifest-based)
+
+For processing multiple URLs in a single Cloud Run Job execution, use the batch job variant. It reads a JSON manifest — either a local file or a GCS object.
+
+#### Manifest format
+
+```json
+[
+  { "url": "https://scam1.example.com", "scan_type": "full" },
+  { "url": "https://scam2.example.com", "scan_type": "passive" },
+  { "url": "https://scam3.example.com" }
+]
+```
+
+Each entry requires `url`; `scan_type` defaults to the job-level setting (default: `full`).
+
+#### Trigger a batch job
+
+```bash
+gcloud run jobs execute ssi-batch \
+  --region us-central1 \
+  --update-env-vars SSI_JOB__MANIFEST="gs://i4g-dev-ssi-evidence/manifests/batch1.json",SSI_JOB__SCAN_TYPE=full
+```
+
+#### Batch environment variables
+
+| Variable                   | Default    | Description                                     |
+| -------------------------- | ---------- | ----------------------------------------------- |
+| `SSI_JOB__MANIFEST`        | (required) | Local path or `gs://bucket/path.json` URI       |
+| `SSI_JOB__SCAN_TYPE`       | `full`     | Default scan type for entries without one       |
+| `SSI_JOB__PUSH_TO_CORE`    | `false`    | Push each result to i4g core API                |
+| `SSI_JOB__TRIGGER_DOSSIER` | `false`    | Queue dossier generation for each pushed result |
+| `SSI_JOB__DATASET`         | `ssi`      | Dataset label for core cases                    |
+
+#### CLI equivalent
+
+```bash
+conda run -n i4g-ssi ssi job batch \
+  --manifest manifests/batch1.json \
+  --scan-type full \
+  --push-to-core
+```
+
+The batch job processes URLs sequentially and produces a JSON summary on stdout:
+
+```json
+{
+  "total": 3,
+  "succeeded": 2,
+  "failed": 1,
+  "results": [
+    {
+      "url": "https://scam1.example.com",
+      "investigation_id": "inv-001",
+      "status": "completed",
+      "success": true,
+      "duration_s": 45.2,
+      "risk_score": 85.0
+    },
+    {
+      "url": "https://scam2.example.com",
+      "investigation_id": "inv-002",
+      "status": "completed",
+      "success": true,
+      "duration_s": 12.1,
+      "risk_score": 30.0
+    },
+    {
+      "url": "https://scam3.example.com",
+      "investigation_id": null,
+      "status": "error",
+      "success": false,
+      "duration_s": 5.0,
+      "error": "Connection refused"
+    }
+  ]
+}
+```
+
+The exit code is `0` only if all URLs succeed; partial failure returns `1`.
+
+See [batch_jobs.py](../src/ssi/worker/batch_jobs.py) for the full implementation.
+
 ---
 
 ## Cloud Scheduler (Cron)
@@ -145,13 +228,20 @@ gcloud scheduler jobs create http ssi-daily-sweep \
 
 ### Batch sweep (multiple URLs)
 
-For scheduled sweeps over a URL list, create a wrapper Cloud Run Job that:
+For scheduled sweeps over a URL list, use the batch Cloud Run Job (`ssi-batch`) with a GCS manifest:
 
-1. Reads URLs from a GCS bucket (`gs://i4g-dev-ssi-evidence/sweeps/urls.json`)
-2. Submits each URL to the SSI API (`POST /investigate`)
-3. Collects task IDs and polls for completion
+```bash
+gcloud scheduler jobs create http ssi-weekly-sweep \
+  --location us-central1 \
+  --schedule "0 6 * * 1" \
+  --uri "https://us-central1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/i4g-dev/jobs/ssi-batch:run" \
+  --http-method POST \
+  --headers "Content-Type=application/json" \
+  --message-body '{"overrides":{"containerOverrides":[{"env":[{"name":"SSI_JOB__MANIFEST","value":"gs://i4g-dev-ssi-evidence/sweeps/weekly.json"},{"name":"SSI_JOB__SCAN_TYPE","value":"passive"},{"name":"SSI_JOB__PUSH_TO_CORE","value":"true"}]}]}}' \
+  --oauth-service-account-email sa-ssi@i4g-dev.iam.gserviceaccount.com
+```
 
-This pattern is used by the campaign runner internally. A Cloud Run Job version is planned for Phase 9.
+Maintain the manifest as a JSON file in GCS (`gs://i4g-dev-ssi-evidence/sweeps/weekly.json`). Update the manifest to add or remove URLs without redeploying the job.
 
 ---
 

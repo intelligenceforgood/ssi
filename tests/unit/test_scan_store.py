@@ -176,6 +176,98 @@ class TestHarvestedWalletsCRUD:
         assert len(btc_results) == 1
         assert btc_results[0]["token_symbol"] == "BTC"
 
+    # --- deduplication tests ---
+
+    def test_search_wallets_dedup_collapses_same_address(self, store: ScanStore):
+        """Same wallet harvested across two scans should yield one row when deduplicate=True."""
+        scan1 = store.create_scan(url="https://scam-a.example.com")
+        scan2 = store.create_scan(url="https://scam-a.example.com")
+        for sid in (scan1, scan2):
+            store.add_wallet(
+                scan_id=sid,
+                token_symbol="ETH",
+                network_short="eth",
+                wallet_address="0xDEAD",
+                confidence=0.8 if sid == scan1 else 0.95,
+                site_url="https://scam-a.example.com",
+            )
+        results = store.search_wallets(deduplicate=True)
+        assert len(results) == 1
+        row = results[0]
+        assert row["wallet_address"] == "0xDEAD"
+        assert row["seen_count"] == 2
+
+    def test_search_wallets_dedup_aggregates(self, store: ScanStore):
+        """Dedup should return max confidence, first/last seen timestamps."""
+        from datetime import timedelta
+
+        scan1 = store.create_scan(url="https://scam.example.com")
+        scan2 = store.create_scan(url="https://scam.example.com")
+
+        early = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        late = datetime(2025, 6, 1, tzinfo=timezone.utc)
+
+        store.add_wallet(
+            scan_id=scan1, token_symbol="BTC", network_short="btc",
+            wallet_address="bc1qXYZ", confidence=0.5, harvested_at=early,
+        )
+        store.add_wallet(
+            scan_id=scan2, token_symbol="BTC", network_short="btc",
+            wallet_address="bc1qXYZ", confidence=0.9, harvested_at=late,
+        )
+
+        results = store.search_wallets(deduplicate=True)
+        assert len(results) == 1
+        row = results[0]
+        assert float(row["confidence"]) == pytest.approx(0.9)  # max
+        # SQLite may strip tzinfo on aggregated datetimes; compare naively
+        assert row["first_seen_at"].replace(tzinfo=None) == early.replace(tzinfo=None)
+        assert row["last_seen_at"].replace(tzinfo=None) == late.replace(tzinfo=None)
+
+    def test_search_wallets_dedup_false_returns_all_rows(self, store: ScanStore):
+        """With deduplicate=False, duplicate wallet rows should remain."""
+        scan1 = store.create_scan(url="https://scam-a.example.com")
+        scan2 = store.create_scan(url="https://scam-a.example.com")
+        for sid in (scan1, scan2):
+            store.add_wallet(
+                scan_id=sid, token_symbol="ETH", network_short="eth",
+                wallet_address="0xDEAD",
+            )
+        results = store.search_wallets(deduplicate=False)
+        assert len(results) == 2
+
+    def test_search_wallets_dedup_distinct_addresses_count(self, store: ScanStore):
+        """Different addresses should remain separate rows even when dedup is on."""
+        scan = store.create_scan(url="https://scam.example.com")
+        store.add_wallet(scan_id=scan, token_symbol="ETH", network_short="eth", wallet_address="0xAAA")
+        store.add_wallet(scan_id=scan, token_symbol="ETH", network_short="eth", wallet_address="0xBBB")
+        results = store.search_wallets(deduplicate=True)
+        assert len(results) == 2
+        addresses = {r["wallet_address"] for r in results}
+        assert addresses == {"0xAAA", "0xBBB"}
+
+    def test_search_wallets_dedup_filter_by_address(self, store: ScanStore):
+        """Dedup + address filter should still return the correct aggregated row."""
+        scan1 = store.create_scan(url="https://scam.example.com")
+        scan2 = store.create_scan(url="https://scam.example.com")
+        for sid in (scan1, scan2):
+            store.add_wallet(scan_id=sid, token_symbol="ETH", network_short="eth", wallet_address="0xF00")
+            store.add_wallet(scan_id=sid, token_symbol="BTC", network_short="btc", wallet_address="bc1other")
+        results = store.search_wallets(address="0xF00", deduplicate=True)
+        assert len(results) == 1
+        assert results[0]["wallet_address"] == "0xF00"
+        assert results[0]["seen_count"] == 2
+
+    def test_search_wallets_dedup_default_is_true(self, store: ScanStore):
+        """search_wallets should deduplicate by default."""
+        scan1 = store.create_scan(url="https://a.example.com")
+        scan2 = store.create_scan(url="https://a.example.com")
+        for sid in (scan1, scan2):
+            store.add_wallet(scan_id=sid, token_symbol="ETH", network_short="eth", wallet_address="0xDE")
+        # No explicit deduplicate= argument → should default to True
+        results = store.search_wallets()
+        assert len(results) == 1
+
 
 # ------------------------------------------------------------------
 # agent_sessions
