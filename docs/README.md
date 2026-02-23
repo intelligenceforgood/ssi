@@ -6,10 +6,10 @@ For **end-user documentation** (how to use the CLI, write playbooks, interpret r
 
 ## Contents
 
-| Document                                       | Audience  | Description                                                               |
-| ---------------------------------------------- | --------- | ------------------------------------------------------------------------- |
-| [architecture.md](architecture.md)             | Developer | ADRs, component stack, investigation pipeline, security model             |
-| [developer_guide.md](developer_guide.md)       | Developer | Environment setup, project structure, testing, Docker, GCP deployment     |
-| [api_reference.md](api_reference.md)           | Developer | REST API endpoint contracts with request/response schemas                 |
-| [playbook_authoring.md](playbook_authoring.md) | Developer | Detailed JSON schema reference, template variables, testing workflow      |
-| [batch_scheduling.md](batch_scheduling.md)     | Operator  | Campaign runner, Cloud Run Jobs, Cloud Scheduler, cost/concurrency sizing |
+| Document                                       | Audience  | Description                                                                    |
+| ---------------------------------------------- | --------- | ------------------------------------------------------------------------------ |
+| [tdd.md](tdd.md)                               | Developer | Technical design: ADRs, component stack, data architecture, pipeline, security |
+| [developer_guide.md](developer_guide.md)       | Developer | Environment setup, project structure, testing, Docker, GCP deployment          |
+| [api_reference.md](api_reference.md)           | Developer | REST API endpoint contracts with request/response schemas                      |
+| [playbook_authoring.md](playbook_authoring.md) | Developer | Detailed JSON schema reference, template variables, testing workflow           |
+| [batch_scheduling.md](batch_scheduling.md)     | Operator  | Campaign runner, Cloud Run Jobs, Cloud Scheduler, cost/concurrency sizing      |
