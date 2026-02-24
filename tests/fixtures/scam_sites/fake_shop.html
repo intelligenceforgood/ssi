@@ -1,0 +1,86 @@
+<!--
+    Fake e-commerce shop page — heavily discounted luxury goods.
+    Used by SSI tests to exercise shopping scam classification.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LuxBrands Outlet - Up to 90% Off Designer Goods</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f9f9f9; color: #333; }
+        .header { background: #222; color: #fff; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { margin: 0; font-size: 20px; }
+        .banner { background: #d32f2f; color: #fff; text-align: center; padding: 10px; font-weight: bold; }
+        .products { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 900px; margin: 24px auto; padding: 0 16px; }
+        .product { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+        .product img { width: 100%; height: 160px; background: #eee; display: block; }
+        .product-info { padding: 12px; }
+        .product-info h3 { margin: 0 0 8px; font-size: 14px; }
+        .price-original { text-decoration: line-through; color: #999; font-size: 13px; }
+        .price-sale { color: #d32f2f; font-weight: bold; font-size: 18px; }
+        .timer { color: #d32f2f; font-size: 12px; margin-top: 4px; }
+        button { width: 100%; padding: 8px; background: #d32f2f; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-top: 8px; }
+        .checkout { max-width: 400px; margin: 32px auto; padding: 24px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>LuxBrands Outlet</h1>
+        <span>🛒 Cart (0)</span>
+    </div>
+    <div class="banner">🔥 FLASH SALE — 90% OFF ALL ITEMS — ENDS IN 02:34:19 🔥</div>
+
+    <div class="products">
+        <div class="product">
+            <div style="height:160px;background:#ddd;display:flex;align-items:center;justify-content:center;">📷 Gucci Bag</div>
+            <div class="product-info">
+                <h3>Gucci Marmont Shoulder Bag</h3>
+                <span class="price-original">$2,490.00</span>
+                <span class="price-sale">$249.00</span>
+                <div class="timer">⏰ Only 3 left! Sale ends soon</div>
+                <button>Add to Cart</button>
+            </div>
+        </div>
+        <div class="product">
+            <div style="height:160px;background:#ddd;display:flex;align-items:center;justify-content:center;">📷 Louis Vuitton</div>
+            <div class="product-info">
+                <h3>Louis Vuitton Neverfull MM</h3>
+                <span class="price-original">$1,960.00</span>
+                <span class="price-sale">$196.00</span>
+                <div class="timer">⏰ Only 1 left!</div>
+                <button>Add to Cart</button>
+            </div>
+        </div>
+        <div class="product">
+            <div style="height:160px;background:#ddd;display:flex;align-items:center;justify-content:center;">📷 Rolex Watch</div>
+            <div class="product-info">
+                <h3>Rolex Submariner</h3>
+                <span class="price-original">$9,150.00</span>
+                <span class="price-sale">$915.00</span>
+                <div class="timer">⏰ Only 2 left!</div>
+                <button>Add to Cart</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="checkout">
+        <h2>Quick Checkout</h2>
+        <form>
+            <label>Full Name</label>
+            <input type="text" name="full_name" placeholder="John Doe" style="width:100%;padding:8px;margin:4px 0 12px;box-sizing:border-box;">
+            <label>Email</label>
+            <input type="email" name="email" placeholder="you@email.com" style="width:100%;padding:8px;margin:4px 0 12px;box-sizing:border-box;">
+            <label>Credit Card Number</label>
+            <input type="text" name="card_number" placeholder="4242 4242 4242 4242" style="width:100%;padding:8px;margin:4px 0 12px;box-sizing:border-box;">
+            <label>Expiry</label>
+            <input type="text" name="expiry" placeholder="MM/YY" style="width:100%;padding:8px;margin:4px 0 12px;box-sizing:border-box;">
+            <label>CVV</label>
+            <input type="text" name="cvv" placeholder="123" style="width:100%;padding:8px;margin:4px 0 12px;box-sizing:border-box;">
+            <label>Shipping Address</label>
+            <input type="text" name="address" placeholder="123 Main St" style="width:100%;padding:8px;margin:4px 0 12px;box-sizing:border-box;">
+            <button type="submit">Complete Purchase — $249.00</button>
+        </form>
+    </div>
+</body>
+</html>

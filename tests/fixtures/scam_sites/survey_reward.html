@@ -1,0 +1,81 @@
+<!--
+    Fake survey reward scam — complete survey to win gift card.
+    Used by SSI tests to exercise prize/PII-harvest classification.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Congratulations! Complete Survey for $500 Gift Card</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #e3f2fd; color: #333; }
+        .header { background: #1565c0; color: #fff; padding: 12px 24px; text-align: center; }
+        .container { max-width: 500px; margin: 24px auto; padding: 0 16px; }
+        .survey-card { background: #fff; border-radius: 8px; padding: 28px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .survey-card h2 { color: #1565c0; margin-top: 0; text-align: center; }
+        .gift-card { text-align: center; font-size: 28px; font-weight: bold; color: #2e7d32; margin: 16px 0; }
+        .question { background: #f5f5f5; border-radius: 6px; padding: 16px; margin: 16px 0; }
+        .question h4 { margin: 0 0 8px; color: #1565c0; }
+        .options label { display: block; margin: 6px 0; cursor: pointer; }
+        .pii-section { border-top: 2px solid #1565c0; margin-top: 20px; padding-top: 20px; }
+        form label { display: block; margin: 10px 0 4px; font-size: 14px; color: #555; }
+        form input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 14px; margin-top: 16px; background: #2e7d32; color: #fff; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+        .timer { text-align: center; color: #d32f2f; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header"><h2>🎁 Customer Satisfaction Survey</h2></div>
+    <div class="container">
+        <div class="survey-card">
+            <h2>You've Been Selected!</h2>
+            <p style="text-align:center;">Complete this 3-question survey and receive a</p>
+            <div class="gift-card">$500 Amazon Gift Card</div>
+            <p class="timer">⏰ Offer expires in 4:59</p>
+
+            <div class="question">
+                <h4>Q1: How often do you shop online?</h4>
+                <div class="options">
+                    <label><input type="radio" name="q1" value="daily"> Daily</label>
+                    <label><input type="radio" name="q1" value="weekly"> Weekly</label>
+                    <label><input type="radio" name="q1" value="monthly"> Monthly</label>
+                </div>
+            </div>
+            <div class="question">
+                <h4>Q2: What is your preferred payment method?</h4>
+                <div class="options">
+                    <label><input type="radio" name="q2" value="card"> Credit Card</label>
+                    <label><input type="radio" name="q2" value="paypal"> PayPal</label>
+                    <label><input type="radio" name="q2" value="crypto"> Cryptocurrency</label>
+                </div>
+            </div>
+            <div class="question">
+                <h4>Q3: Rate your overall shopping experience:</h4>
+                <div class="options">
+                    <label><input type="radio" name="q3" value="5"> ★★★★★ Excellent</label>
+                    <label><input type="radio" name="q3" value="4"> ★★★★☆ Good</label>
+                    <label><input type="radio" name="q3" value="3"> ★★★☆☆ Average</label>
+                </div>
+            </div>
+
+            <div class="pii-section">
+                <h3>Claim Your Gift Card</h3>
+                <p>Enter your details to receive your $500 Amazon Gift Card:</p>
+                <form>
+                    <label>Full Name</label>
+                    <input type="text" name="full_name" placeholder="John Doe">
+                    <label>Email</label>
+                    <input type="email" name="email" placeholder="you@email.com">
+                    <label>Phone Number</label>
+                    <input type="tel" name="phone" placeholder="+1 555-0100">
+                    <label>Mailing Address</label>
+                    <input type="text" name="address" placeholder="For gift card delivery">
+                    <label>Credit Card (for $1.99 shipping)</label>
+                    <input type="text" name="card_number" placeholder="4242 4242 4242 4242">
+                    <button type="submit">Claim $500 Gift Card</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

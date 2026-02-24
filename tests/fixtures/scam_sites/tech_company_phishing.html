@@ -1,0 +1,61 @@
+<!--
+    Fake tech company impersonation — Microsoft 365 password reset.
+    Used by SSI tests to exercise tech company credential phishing.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Microsoft — Account Security Alert</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f2f2f2; color: #333; }
+        .ms-header { padding: 16px 24px; background: #fff; border-bottom: 1px solid #e6e6e6; }
+        .ms-header img { height: 24px; }
+        .ms-header span { font-size: 16px; font-weight: 600; color: #5e5e5e; }
+        .container { max-width: 440px; margin: 40px auto; padding: 0 16px; }
+        .card { background: #fff; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); padding: 44px; }
+        .card h2 { margin-top: 0; font-size: 24px; font-weight: 600; }
+        .alert-msg { background: #fff4e5; border-left: 4px solid #ff8c00; padding: 12px; margin: 16px 0; font-size: 14px; }
+        form label { display: block; margin: 16px 0 4px; font-size: 14px; }
+        form input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 2px; box-sizing: border-box; font-size: 15px; }
+        .next-btn { width: 100%; padding: 10px; margin-top: 20px; background: #0067b8; color: #fff; border: none; font-size: 15px; cursor: pointer; }
+        .footer-links { margin-top: 16px; font-size: 12px; color: #666; }
+        .footer-links a { color: #0067b8; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="ms-header">
+        <span>Microsoft</span>
+    </div>
+    <div class="container">
+        <div class="card">
+            <h2>Verify your identity</h2>
+            <div class="alert-msg">
+                We've detected unusual sign-in activity on your account from an unrecognized device.
+                To protect your account, please verify your identity.
+            </div>
+
+            <form>
+                <label>Email or phone</label>
+                <input type="text" name="email" placeholder="email@example.com" required>
+
+                <label>Password</label>
+                <input type="password" name="password" placeholder="Password" required>
+
+                <label>Recovery email</label>
+                <input type="email" name="recovery_email" placeholder="Recovery email address">
+
+                <label>Phone number (for verification code)</label>
+                <input type="tel" name="phone" placeholder="+1 555-0100">
+
+                <button type="submit" class="next-btn">Verify & Sign In</button>
+            </form>
+
+            <div class="footer-links">
+                <a href="#">No account? Create one!</a> |
+                <a href="#">Can't access your account?</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

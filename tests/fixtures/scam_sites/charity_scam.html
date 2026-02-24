@@ -1,0 +1,83 @@
+<!--
+    Fake charity scam page — disaster relief donation harvesting.
+    Used by SSI tests to exercise charity scam classification.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Global Disaster Relief Fund — Urgent Appeal</title>
+    <style>
+        body { font-family: Georgia, serif; margin: 0; background: #f5f5f5; color: #333; }
+        .header { background: #b71c1c; color: #fff; padding: 16px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; }
+        .hero { background: #333; color: #fff; text-align: center; padding: 40px 20px; }
+        .hero h2 { margin: 0 0 12px; font-size: 28px; }
+        .progress { max-width: 500px; margin: 20px auto; background: #ddd; border-radius: 8px; overflow: hidden; }
+        .progress-bar { background: #b71c1c; height: 24px; width: 67%; text-align: center; color: #fff; font-size: 13px; line-height: 24px; }
+        .container { max-width: 500px; margin: 24px auto; padding: 0 16px; }
+        .appeal { background: #fff; border-radius: 8px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .donate-form { background: #fff; border-radius: 8px; padding: 24px; margin-top: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        form label { display: block; margin: 10px 0 4px; font-size: 14px; color: #555; }
+        form input, form select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .amounts { display: flex; gap: 8px; margin: 12px 0; }
+        .amount-btn { flex: 1; padding: 12px; background: #fff; border: 2px solid #b71c1c; border-radius: 6px; text-align: center; cursor: pointer; font-weight: bold; color: #b71c1c; }
+        .amount-btn.selected { background: #b71c1c; color: #fff; }
+        button { width: 100%; padding: 14px; margin-top: 16px; background: #b71c1c; color: #fff; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+        .crypto-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee; }
+        .wallet-addr { font-family: monospace; background: #f9f9f9; padding: 10px; border-radius: 4px; color: #b71c1c; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <div class="header"><h1>🌍 Global Disaster Relief Fund</h1></div>
+    <div class="hero">
+        <h2>Emergency: Earthquake Relief</h2>
+        <p>Thousands of families need your help RIGHT NOW</p>
+        <div class="progress"><div class="progress-bar">$670,000 / $1,000,000</div></div>
+    </div>
+
+    <div class="container">
+        <div class="appeal">
+            <h3>Your Donation Saves Lives</h3>
+            <p>A devastating 7.8 magnitude earthquake has left over 50,000 people homeless. Children are without food, water, and shelter. <strong>Every dollar counts.</strong></p>
+            <p>100% of your donation goes directly to relief efforts. Tax deductible. Receipts provided.</p>
+        </div>
+
+        <div class="donate-form">
+            <h3>Make a Donation</h3>
+            <div class="amounts">
+                <div class="amount-btn">$25</div>
+                <div class="amount-btn selected">$50</div>
+                <div class="amount-btn">$100</div>
+                <div class="amount-btn">$500</div>
+            </div>
+            <form>
+                <label>Full Name</label>
+                <input type="text" name="donor_name" placeholder="John Doe" required>
+
+                <label>Email</label>
+                <input type="email" name="donor_email" placeholder="For your tax receipt">
+
+                <label>Credit Card Number</label>
+                <input type="text" name="card_number" placeholder="4242 4242 4242 4242">
+
+                <label>Expiry</label>
+                <input type="text" name="expiry" placeholder="MM/YY">
+
+                <label>CVV</label>
+                <input type="text" name="cvv" placeholder="123">
+
+                <div class="crypto-section">
+                    <p><strong>Or donate with cryptocurrency:</strong></p>
+                    <p>BTC:</p>
+                    <div class="wallet-addr" data-testid="btc-address">bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq</div>
+                    <p>ETH:</p>
+                    <div class="wallet-addr" data-testid="eth-address">0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe</div>
+                </div>
+
+                <button type="submit">Donate $50</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

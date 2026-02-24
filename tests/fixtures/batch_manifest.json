@@ -1,0 +1,146 @@
+{
+  "name": "ssi_phase1_batch_test",
+  "description": "Phase 1 local validation batch — 23 scam-type fixture URLs for automated testing.",
+  "created": "2025-01-01T00:00:00Z",
+  "scan_type": "passive",
+  "urls": [
+    {
+      "url": "https://phishing.scam.test",
+      "label": "phishing",
+      "fixture": "phishing.html",
+      "expected_category": "INTENT.IMPOSTER"
+    },
+    {
+      "url": "https://register.crypto-exchange.scam.test",
+      "label": "crypto_exchange_register",
+      "fixture": "register.html",
+      "expected_category": "INTENT.INVESTMENT"
+    },
+    {
+      "url": "https://deposit.crypto-exchange.scam.test",
+      "label": "crypto_exchange_deposit",
+      "fixture": "deposit.html",
+      "expected_category": "INTENT.INVESTMENT"
+    },
+    {
+      "url": "https://tech-support.scam.test",
+      "label": "tech_support",
+      "fixture": "tech_support.html",
+      "expected_category": "INTENT.IMPOSTER"
+    },
+    {
+      "url": "https://fake-shop.scam.test",
+      "label": "fake_shop",
+      "fixture": "fake_shop.html",
+      "expected_category": "INTENT.SHOPPING"
+    },
+    {
+      "url": "https://romance.scam.test",
+      "label": "romance",
+      "fixture": "romance_scam.html",
+      "expected_category": "INTENT.ROMANCE"
+    },
+    {
+      "url": "https://crypto-mining.scam.test",
+      "label": "crypto_mining",
+      "fixture": "crypto_mining.html",
+      "expected_category": "INTENT.INVESTMENT"
+    },
+    {
+      "url": "https://employment.scam.test",
+      "label": "employment",
+      "fixture": "employment_scam.html",
+      "expected_category": "INTENT.EMPLOYMENT"
+    },
+    {
+      "url": "https://prize-lottery.scam.test",
+      "label": "prize_lottery",
+      "fixture": "prize_lottery.html",
+      "expected_category": "INTENT.PRIZE"
+    },
+    {
+      "url": "https://gov-impersonation.scam.test",
+      "label": "gov_impersonation",
+      "fixture": "gov_impersonation.html",
+      "expected_category": "INTENT.IMPOSTER"
+    },
+    {
+      "url": "https://bank-phishing.scam.test",
+      "label": "bank_phishing",
+      "fixture": "bank_phishing.html",
+      "expected_category": "INTENT.IMPOSTER"
+    },
+    {
+      "url": "https://charity.scam.test",
+      "label": "charity",
+      "fixture": "charity_scam.html",
+      "expected_category": "INTENT.CHARITY"
+    },
+    {
+      "url": "https://extortion.scam.test",
+      "label": "extortion",
+      "fixture": "extortion.html",
+      "expected_category": "INTENT.EXTORTION"
+    },
+    {
+      "url": "https://investment-platform.scam.test",
+      "label": "investment",
+      "fixture": "investment_platform.html",
+      "expected_category": "INTENT.INVESTMENT"
+    },
+    {
+      "url": "https://malware-download.scam.test",
+      "label": "malware_download",
+      "fixture": "malware_download.html",
+      "expected_category": "INTENT.IMPOSTER"
+    },
+    {
+      "url": "https://social-phishing.scam.test",
+      "label": "social_phishing",
+      "fixture": "social_phishing.html",
+      "expected_category": "INTENT.IMPOSTER"
+    },
+    {
+      "url": "https://crypto-airdrop.scam.test",
+      "label": "crypto_airdrop",
+      "fixture": "crypto_airdrop.html",
+      "expected_category": "INTENT.INVESTMENT"
+    },
+    {
+      "url": "https://subscription-trap.scam.test",
+      "label": "subscription_trap",
+      "fixture": "subscription_trap.html",
+      "expected_category": "INTENT.SHOPPING"
+    },
+    {
+      "url": "https://tech-company-phishing.scam.test",
+      "label": "tech_company_phishing",
+      "fixture": "tech_company_phishing.html",
+      "expected_category": "INTENT.IMPOSTER"
+    },
+    {
+      "url": "https://sms-delivery-phish.scam.test",
+      "label": "sms_phishing",
+      "fixture": "sms_delivery_phish.html",
+      "expected_category": "INTENT.IMPOSTER"
+    },
+    {
+      "url": "https://survey-reward.scam.test",
+      "label": "survey_reward",
+      "fixture": "survey_reward.html",
+      "expected_category": "INTENT.PRIZE"
+    },
+    {
+      "url": "https://marketplace-escrow.scam.test",
+      "label": "marketplace_escrow",
+      "fixture": "marketplace_escrow.html",
+      "expected_category": "INTENT.SHOPPING"
+    },
+    {
+      "url": "https://pig-butchering.scam.test",
+      "label": "pig_butchering",
+      "fixture": "pig_butchering.html",
+      "expected_category": "INTENT.INVESTMENT"
+    }
+  ]
+}

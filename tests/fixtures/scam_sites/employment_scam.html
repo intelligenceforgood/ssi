@@ -1,0 +1,87 @@
+<!--
+    Fake employment/job offer scam page — remote work with upfront fee.
+    Used by SSI tests to exercise employment scam classification.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GlobalHire Solutions — Work From Home Opportunity</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #f5f7fa; color: #333; }
+        .header { background: #1e4d8c; color: #fff; padding: 16px 24px; }
+        .header h1 { margin: 0; font-size: 20px; }
+        .container { max-width: 600px; margin: 32px auto; padding: 0 16px; }
+        .job-card { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 28px; margin-bottom: 24px; }
+        .job-card h2 { color: #1e4d8c; margin-top: 0; }
+        .salary { font-size: 24px; font-weight: bold; color: #2e8b57; }
+        .badge { display: inline-block; background: #e8f5e9; color: #2e8b57; padding: 4px 12px; border-radius: 12px; font-size: 13px; margin: 8px 4px 0 0; }
+        .requirements { background: #f9f9f9; border-radius: 8px; padding: 20px; margin: 20px 0; }
+        .fee-notice { background: #fff3e0; border: 1px solid #ff9800; border-radius: 8px; padding: 20px; margin: 20px 0; }
+        .fee-notice strong { color: #e65100; }
+        form label { display: block; margin: 12px 0 4px; font-size: 14px; color: #555; }
+        form input, form select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 14px; margin-top: 20px; background: #1e4d8c; color: #fff; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="header"><h1>🏢 GlobalHire Solutions</h1></div>
+    <div class="container">
+        <div class="job-card">
+            <h2>Data Entry Specialist — Remote</h2>
+            <div class="salary">$85,000 — $120,000 / year</div>
+            <div>
+                <span class="badge">🏠 100% Remote</span>
+                <span class="badge">⏰ Flexible Hours</span>
+                <span class="badge">🌍 Work From Anywhere</span>
+                <span class="badge">📈 No Experience Needed</span>
+            </div>
+            <p style="margin-top: 16px;">We're looking for motivated individuals to join our growing team. No prior experience required — full training provided!</p>
+            <ul>
+                <li>Work 3–5 hours per day from home</li>
+                <li>Guaranteed minimum $4,000/month</li>
+                <li>Weekly direct deposit payments</li>
+                <li>Health insurance and 401(k) after 30 days</li>
+            </ul>
+        </div>
+
+        <div class="fee-notice">
+            <strong>⚠️ Registration Fee Required</strong>
+            <p>To confirm your position and receive your training materials, a one-time registration and background check fee of <strong>$299</strong> is required. This will be refunded in your first paycheck.</p>
+        </div>
+
+        <div class="job-card">
+            <h3>Apply Now — Positions Filling Fast!</h3>
+            <form>
+                <label>Full Name</label>
+                <input type="text" name="full_name" placeholder="John Doe" required>
+
+                <label>Email</label>
+                <input type="email" name="email" placeholder="you@email.com" required>
+
+                <label>Phone Number</label>
+                <input type="tel" name="phone" placeholder="+1 555-0100">
+
+                <label>Social Security Number (for background check)</label>
+                <input type="text" name="ssn" placeholder="XXX-XX-XXXX">
+
+                <label>Date of Birth</label>
+                <input type="text" name="dob" placeholder="MM/DD/YYYY">
+
+                <label>Home Address</label>
+                <input type="text" name="address" placeholder="123 Main St, City, State ZIP">
+
+                <label>Payment Method for Registration Fee</label>
+                <select name="payment_method">
+                    <option value="card">Credit/Debit Card</option>
+                    <option value="gift_card">Gift Card (Amazon/iTunes)</option>
+                    <option value="crypto">Cryptocurrency</option>
+                    <option value="zelle">Zelle / Venmo</option>
+                </select>
+
+                <button type="submit">Submit Application — $299 Fee</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

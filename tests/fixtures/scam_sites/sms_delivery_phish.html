@@ -1,0 +1,64 @@
+<!--
+    SMS-triggered phishing page — package delivery notification.
+    Used by SSI tests to exercise SMS channel + credentials classification.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USPS — Package Redelivery</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f5f5f5; color: #333; }
+        .header { background: #333366; color: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 8px; }
+        .header h1 { margin: 0; font-size: 16px; }
+        .container { max-width: 400px; margin: 20px auto; padding: 0 12px; }
+        .tracking { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+        .tracking h2 { font-size: 18px; color: #333366; margin-top: 0; }
+        .status { background: #fff3e0; border-left: 4px solid #ff9800; padding: 12px; margin: 12px 0; font-size: 14px; }
+        .tracking-number { font-family: monospace; background: #f5f5f5; padding: 8px; border-radius: 4px; display: inline-block; }
+        .fee-notice { color: #d32f2f; font-weight: bold; margin: 12px 0; }
+        form label { display: block; margin: 10px 0 4px; font-size: 13px; color: #555; }
+        form input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+        button { width: 100%; padding: 12px; margin-top: 14px; background: #333366; color: #fff; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <span>📦</span>
+        <h1>USPS Package Tracking</h1>
+    </div>
+    <div class="container">
+        <div class="tracking">
+            <h2>Delivery Attempt Failed</h2>
+            <div class="status">
+                Your package could not be delivered. A redelivery fee of <strong>$1.99</strong> is required.
+            </div>
+            <p>Tracking Number: <span class="tracking-number">9400 1112 0108 8842 1337</span></p>
+            <p class="fee-notice">Pay the redelivery fee to schedule delivery:</p>
+
+            <form>
+                <label>Full Name</label>
+                <input type="text" name="full_name" placeholder="John Doe">
+
+                <label>Delivery Address</label>
+                <input type="text" name="address" placeholder="123 Main St">
+
+                <label>Email</label>
+                <input type="email" name="email" placeholder="you@email.com">
+
+                <label>Credit Card Number</label>
+                <input type="text" name="card_number" placeholder="4242 4242 4242 4242">
+
+                <label>Expiry</label>
+                <input type="text" name="expiry" placeholder="MM/YY">
+
+                <label>CVV</label>
+                <input type="text" name="cvv" placeholder="123">
+
+                <button type="submit">Pay $1.99 — Schedule Redelivery</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

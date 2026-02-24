@@ -1,0 +1,88 @@
+<!--
+    Fake investment platform — stock trading / forex Ponzi scheme.
+    Used by SSI tests to exercise investment scam classification.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TradePrime Capital — Professional Trading Platform</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+        .header { background: #1e293b; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; }
+        .header h1 { margin: 0; color: #38bdf8; font-size: 20px; }
+        .hero { text-align: center; padding: 48px 20px; }
+        .hero h2 { font-size: 30px; color: #f59e0b; margin: 0 0 12px; }
+        .hero .tagline { font-size: 16px; color: #94a3b8; }
+        .metrics { display: flex; justify-content: center; gap: 32px; margin: 32px 0; }
+        .metric { text-align: center; }
+        .metric-val { font-size: 24px; font-weight: bold; color: #22c55e; }
+        .metric-lbl { font-size: 12px; color: #64748b; }
+        .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 780px; margin: 0 auto 40px; padding: 0 16px; }
+        .plan { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 24px; text-align: center; }
+        .plan h3 { color: #38bdf8; margin-top: 0; }
+        .plan .return { font-size: 24px; color: #22c55e; font-weight: bold; }
+        .registration { max-width: 440px; margin: 0 auto 40px; background: #1e293b; border-radius: 10px; padding: 28px; }
+        form label { display: block; margin: 10px 0 4px; font-size: 14px; color: #94a3b8; }
+        form input, form select { width: 100%; padding: 10px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; box-sizing: border-box; }
+        button { width: 100%; padding: 14px; margin-top: 18px; background: #f59e0b; color: #0f172a; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; }
+        .regulated { text-align: center; font-size: 11px; color: #475569; margin: 16px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📈 TradePrime Capital</h1>
+        <span style="color:#94a3b8; font-size:13px;">FCA Reg #: FRN-829401</span>
+    </div>
+
+    <div class="hero">
+        <h2>AI-Powered Trading with Guaranteed Returns</h2>
+        <div class="tagline">Trusted by 100,000+ investors worldwide | Licensed & Regulated</div>
+        <div class="metrics">
+            <div class="metric"><div class="metric-val">97.3%</div><div class="metric-lbl">Win Rate</div></div>
+            <div class="metric"><div class="metric-val">$218M</div><div class="metric-lbl">Total Profits</div></div>
+            <div class="metric"><div class="metric-val">156%</div><div class="metric-lbl">Avg. Monthly ROI</div></div>
+        </div>
+    </div>
+
+    <div class="plans">
+        <div class="plan">
+            <h3>Silver</h3>
+            <div class="return">35% / month</div>
+            <p style="color:#94a3b8; font-size:13px;">Min: $500<br>Lock-in: 30 days</p>
+        </div>
+        <div class="plan" style="border-color:#f59e0b;">
+            <h3>⭐ Gold</h3>
+            <div class="return">85% / month</div>
+            <p style="color:#94a3b8; font-size:13px;">Min: $5,000<br>Lock-in: 60 days</p>
+        </div>
+        <div class="plan">
+            <h3>Platinum</h3>
+            <div class="return">156% / month</div>
+            <p style="color:#94a3b8; font-size:13px;">Min: $25,000<br>Lock-in: 90 days</p>
+        </div>
+    </div>
+
+    <div class="registration">
+        <h3 style="color:#38bdf8; margin-top:0;">Open Your Trading Account</h3>
+        <form>
+            <label>Full Legal Name</label>
+            <input type="text" name="full_name" placeholder="John Doe" required>
+            <label>Email Address</label>
+            <input type="email" name="email" placeholder="you@example.com" required>
+            <label>Phone Number</label>
+            <input type="tel" name="phone" placeholder="+1 555-0100">
+            <label>Country of Residence</label>
+            <input type="text" name="country" placeholder="United States">
+            <label>Initial Investment Amount</label>
+            <select name="investment_amount">
+                <option value="500">$500 (Silver)</option>
+                <option value="5000" selected>$5,000 (Gold)</option>
+                <option value="25000">$25,000 (Platinum)</option>
+            </select>
+            <button type="submit">Start Trading Now</button>
+        </form>
+    </div>
+    <div class="regulated">Disclaimer: TradePrime Capital Ltd | Registered in St. Vincent & the Grenadines | Ref: SVG-IBC-2024-1847</div>
+</body>
+</html>

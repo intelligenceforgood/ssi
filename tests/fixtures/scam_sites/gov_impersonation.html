@@ -1,0 +1,69 @@
+<!--
+    Fake government impersonation scam — IRS refund phishing.
+    Used by SSI tests to exercise government impersonation classification.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IRS Tax Refund Portal — Verify Your Identity</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #f5f5f5; color: #333; }
+        .gov-header { background: #003366; color: #fff; padding: 12px 24px; display: flex; align-items: center; gap: 12px; }
+        .gov-header .seal { font-size: 28px; }
+        .gov-header h1 { margin: 0; font-size: 18px; }
+        .alert-bar { background: #b71c1c; color: #fff; text-align: center; padding: 10px; font-weight: bold; }
+        .container { max-width: 500px; margin: 24px auto; padding: 0 16px; }
+        .official-notice { background: #fff; border: 2px solid #003366; border-radius: 4px; padding: 24px; }
+        .official-notice h2 { color: #003366; margin-top: 0; }
+        .refund-amount { font-size: 32px; font-weight: bold; color: #2e7d32; text-align: center; margin: 16px 0; }
+        form label { display: block; margin: 10px 0 4px; font-size: 14px; color: #555; }
+        form input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 14px; margin-top: 16px; background: #003366; color: #fff; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+        .footer { text-align: center; margin-top: 24px; font-size: 11px; color: #999; }
+    </style>
+</head>
+<body>
+    <div class="gov-header">
+        <span class="seal">🦅</span>
+        <h1>Internal Revenue Service — Taxpayer Portal</h1>
+    </div>
+    <div class="alert-bar">ACTION REQUIRED: Your tax refund is pending. Verify your identity within 48 hours.</div>
+
+    <div class="container">
+        <div class="official-notice">
+            <h2>Tax Refund Notification</h2>
+            <p>Dear Taxpayer,</p>
+            <p>After reviewing your tax filing for FY 2025, the IRS has determined you are eligible for an additional refund:</p>
+            <div class="refund-amount">$3,847.00</div>
+            <p>To process this refund, you must verify your identity and banking information. <strong>Failure to verify within 48 hours will result in forfeiture of your refund.</strong></p>
+
+            <form>
+                <label>Full Legal Name</label>
+                <input type="text" name="legal_name" placeholder="As shown on tax return" required>
+
+                <label>Social Security Number</label>
+                <input type="text" name="ssn" placeholder="XXX-XX-XXXX" required>
+
+                <label>Date of Birth</label>
+                <input type="text" name="dob" placeholder="MM/DD/YYYY" required>
+
+                <label>Mailing Address</label>
+                <input type="text" name="address" placeholder="123 Main St, City, State ZIP">
+
+                <label>Bank Account Number (for direct deposit)</label>
+                <input type="text" name="bank_account" placeholder="Checking account number" required>
+
+                <label>Bank Routing Number</label>
+                <input type="text" name="routing_number" placeholder="9-digit routing number" required>
+
+                <label>Tax Filing PIN (from IRS notice)</label>
+                <input type="text" name="tax_pin" placeholder="6-digit PIN">
+
+                <button type="submit">Verify Identity & Claim Refund</button>
+            </form>
+        </div>
+        <div class="footer">IRS.gov | Privacy Policy | Ref: IRS-REF-2026-48291</div>
+    </div>
+</body>
+</html>

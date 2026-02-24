@@ -1,0 +1,82 @@
+<!--
+    Romance scam page — dating site with eventual money request.
+    Used by SSI tests to exercise romance scam classification.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>EliteSingles Premium — Exclusive Match</title>
+    <style>
+        body { font-family: Georgia, serif; margin: 0; background: linear-gradient(135deg, #1a0a2e 0%, #2d1b4e 100%); color: #fff; min-height: 100vh; }
+        .header { padding: 16px 24px; background: rgba(0,0,0,0.3); }
+        .header h1 { margin: 0; font-size: 20px; color: #e8a0bf; }
+        .container { max-width: 480px; margin: 40px auto; padding: 32px; }
+        .profile-card { background: rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 24px; }
+        .avatar { width: 120px; height: 120px; border-radius: 50%; background: #e8a0bf; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 48px; }
+        .profile-name { font-size: 22px; font-weight: bold; }
+        .profile-detail { color: #c0a0d4; font-size: 14px; margin: 4px 0; }
+        .message-box { background: rgba(255,255,255,0.06); border-radius: 12px; padding: 20px; margin: 20px 0; border-left: 3px solid #e8a0bf; }
+        .message-box p { margin: 8px 0; line-height: 1.6; }
+        .urgency { background: rgba(255,50,50,0.2); border: 1px solid #ff6666; border-radius: 8px; padding: 16px; margin: 16px 0; }
+        .payment-form { background: rgba(255,255,255,0.1); border-radius: 12px; padding: 24px; }
+        .payment-form h3 { color: #e8a0bf; margin-top: 0; }
+        label { display: block; margin: 10px 0 4px; font-size: 14px; color: #c0a0d4; }
+        input, select { width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid #4a3a5e; border-radius: 6px; color: #fff; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; margin-top: 16px; background: #e8a0bf; color: #1a0a2e; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header"><h1>💕 EliteSingles Premium</h1></div>
+    <div class="container">
+        <div class="profile-card">
+            <div class="avatar">👤</div>
+            <div class="profile-name">Sophia Laurent</div>
+            <div class="profile-detail">📍 Paris, France → Moving to your city!</div>
+            <div class="profile-detail">🎂 Age: 32 | ✈️ International Model</div>
+            <div class="profile-detail">❤️ Mutual Match — 98% Compatibility</div>
+        </div>
+
+        <div class="message-box">
+            <p><strong>Sophia:</strong> "My darling, I've been thinking about you every moment. I know we haven't met in person yet, but I feel a deep connection with you."</p>
+            <p>"I'm planning to fly to see you next week, but I've run into a terrible situation. My passport was stolen and they're holding my luggage at the airport."</p>
+            <p>"I need $2,500 urgently to resolve this and book a new flight. I promise I'll pay you back when I arrive. Please help me — you're the only one I trust."</p>
+        </div>
+
+        <div class="urgency">
+            <strong>⚠️ URGENT:</strong> Sophia's flight departs in 18 hours. She needs your help now!
+        </div>
+
+        <div class="payment-form">
+            <h3>Send Emergency Help</h3>
+            <form>
+                <label>Your Full Name</label>
+                <input type="text" name="sender_name" placeholder="Your name">
+
+                <label>Your Email</label>
+                <input type="email" name="sender_email" placeholder="you@email.com">
+
+                <label>Payment Method</label>
+                <select name="payment_method">
+                    <option value="wire">Wire Transfer</option>
+                    <option value="crypto">Bitcoin / Cryptocurrency</option>
+                    <option value="gift_card">Gift Card (iTunes / Google Play)</option>
+                    <option value="western_union">Western Union</option>
+                </select>
+
+                <label>Amount (USD)</label>
+                <input type="text" name="amount" value="2500" placeholder="2500">
+
+                <div id="crypto-address" style="margin-top: 12px; display: none;">
+                    <label>Send BTC to:</label>
+                    <div style="font-family: monospace; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; word-break: break-all; color: #ffcc44;">
+                        bc1q9h0yjdupyfpjcfnmmakzfr4pz4gk3mhgr5mnft
+                    </div>
+                </div>
+
+                <button type="submit">Send $2,500 to Sophia 💕</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

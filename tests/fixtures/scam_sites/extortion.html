@@ -1,0 +1,64 @@
+<!--
+    Extortion / sextortion scam page — pay-or-else threat.
+    Used by SSI tests to exercise extortion scam classification.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Important Security Notice</title>
+    <style>
+        body { font-family: 'Courier New', monospace; margin: 0; background: #0a0a0a; color: #33ff33; }
+        .terminal { max-width: 700px; margin: 40px auto; padding: 32px; background: #111; border: 1px solid #33ff33; border-radius: 4px; }
+        .header-line { color: #ff3333; font-weight: bold; font-size: 18px; text-align: center; margin-bottom: 24px; }
+        .content p { line-height: 1.8; margin: 12px 0; }
+        .highlight { color: #ffff33; font-weight: bold; }
+        .deadline { color: #ff3333; font-weight: bold; font-size: 16px; }
+        .wallet-section { background: #1a1a1a; border: 1px solid #333; padding: 16px; margin: 20px 0; border-radius: 4px; }
+        .wallet-section .addr { color: #ff9900; word-break: break-all; }
+        .timer { text-align: center; font-size: 24px; color: #ff3333; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="terminal">
+        <div class="header-line">⚠ SECURITY BREACH DETECTED — YOUR DATA IS COMPROMISED ⚠</div>
+
+        <div class="content">
+            <p>I am a professional hacker and I have gained access to your device and personal accounts.</p>
+
+            <p>Over the past 6 months, I have been monitoring your online activities. I have:</p>
+            <ul>
+                <li>Full access to your email and social media accounts</li>
+                <li>Copies of all your private photos and messages</li>
+                <li>Recordings from your webcam and microphone</li>
+                <li>Your complete browsing history</li>
+                <li>Access to your financial accounts</li>
+            </ul>
+
+            <p>I have compiled a <span class="highlight">compromising dossier</span> that includes your private photos and browsing history. This will be sent to <span class="highlight">all of your contacts</span>, posted on social media, and forwarded to your employer unless you comply.</p>
+
+            <p class="deadline">⏰ YOU HAVE 48 HOURS TO PAY</p>
+
+            <div class="wallet-section">
+                <p>Send exactly <span class="highlight">$5,000 in Bitcoin</span> to the following address:</p>
+                <p class="addr" data-testid="btc-address">bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh</p>
+            </div>
+
+            <div class="wallet-section">
+                <p>Or send <span class="highlight">$5,000 in Ethereum</span>:</p>
+                <p class="addr" data-testid="eth-address">0x71C7656EC7ab88b098defB751B7401B5f6d8976F</p>
+            </div>
+
+            <p>After payment, I will delete all data and you will never hear from me again. If you do not pay:</p>
+            <ul>
+                <li>Your dossier will be published online</li>
+                <li>Sent to all contacts in your address book</li>
+                <li>Forwarded to your employer's HR department</li>
+            </ul>
+
+            <div class="timer">47:59:42</div>
+            <p style="text-align: center; color: #666; font-size: 12px;">Do not contact the police. Do not try to remove the malware. I will know.</p>
+        </div>
+    </div>
+</body>
+</html>

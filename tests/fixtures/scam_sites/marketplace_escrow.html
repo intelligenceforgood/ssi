@@ -1,0 +1,73 @@
+<!--
+    Fake marketplace payment scam — escrow phishing.
+    Used by SSI tests to exercise marketplace impersonation classification.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SecurePay Escrow — Payment Protection</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f5f5f5; color: #333; }
+        .header { background: #2e7d32; color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 8px; }
+        .header h1 { margin: 0; font-size: 18px; }
+        .container { max-width: 480px; margin: 32px auto; padding: 0 16px; }
+        .transaction { background: #fff; border-radius: 8px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .transaction h2 { color: #2e7d32; margin-top: 0; }
+        .item-details { background: #f9f9f9; border-radius: 6px; padding: 16px; margin: 16px 0; }
+        .amount { font-size: 28px; font-weight: bold; color: #2e7d32; text-align: center; margin: 16px 0; }
+        .seller-info { display: flex; align-items: center; gap: 12px; padding: 12px; background: #e8f5e9; border-radius: 6px; margin: 12px 0; }
+        .trust-badges { display: flex; gap: 8px; margin: 12px 0; }
+        .badge { background: #e8f5e9; color: #2e7d32; padding: 4px 10px; border-radius: 12px; font-size: 12px; }
+        form label { display: block; margin: 10px 0 4px; font-size: 14px; color: #555; }
+        form input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 14px; margin-top: 16px; background: #2e7d32; color: #fff; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <span>🔒</span>
+        <h1>SecurePay Escrow</h1>
+    </div>
+    <div class="container">
+        <div class="transaction">
+            <h2>Complete Your Purchase</h2>
+            <div class="item-details">
+                <strong>Item:</strong> iPhone 15 Pro Max 256GB — Like New<br>
+                <strong>Listing:</strong> Facebook Marketplace #MP-2026-88291<br>
+                <strong>Condition:</strong> Used — Like New
+            </div>
+            <div class="seller-info">
+                <span style="font-size:32px;">👤</span>
+                <div>
+                    <strong>Seller: Mike_Deals_2024</strong><br>
+                    <span style="font-size:13px;color:#666;">⭐ 4.8 rating | 127 transactions | Verified</span>
+                </div>
+            </div>
+            <div class="trust-badges">
+                <span class="badge">🔒 Buyer Protection</span>
+                <span class="badge">✅ Verified Seller</span>
+                <span class="badge">💰 Money-Back Guarantee</span>
+            </div>
+            <div class="amount">$450.00</div>
+            <p style="text-align:center;color:#666;font-size:13px;">Funds held in escrow until you confirm receipt</p>
+
+            <form>
+                <label>Full Name</label>
+                <input type="text" name="full_name" placeholder="John Doe" required>
+                <label>Email</label>
+                <input type="email" name="email" placeholder="you@email.com" required>
+                <label>Credit Card Number</label>
+                <input type="text" name="card_number" placeholder="4242 4242 4242 4242">
+                <label>Expiry</label>
+                <input type="text" name="expiry" placeholder="MM/YY">
+                <label>CVV</label>
+                <input type="text" name="cvv" placeholder="123">
+                <label>Shipping Address</label>
+                <input type="text" name="address" placeholder="123 Main St, City, State ZIP">
+                <button type="submit">Pay $450.00 — Secure Escrow</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!--
+    Fake bank login phishing page — credential harvesting.
+    Used by SSI tests to exercise bank impersonation classification.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chase Bank — Secure Login</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; }
+        .header { background: #117aca; padding: 16px 24px; display: flex; align-items: center; }
+        .header h1 { margin: 0; color: #fff; font-size: 20px; }
+        .security-bar { background: #fff3cd; border-bottom: 1px solid #ffc107; text-align: center; padding: 8px; font-size: 13px; color: #856404; }
+        .container { max-width: 400px; margin: 48px auto; padding: 0 16px; }
+        .login-box { background: #fff; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); padding: 32px; }
+        .login-box h2 { margin-top: 0; text-align: center; color: #117aca; }
+        form label { display: block; margin: 12px 0 4px; font-size: 14px; color: #555; }
+        form input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; margin-top: 20px; background: #117aca; color: #fff; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+        .links { text-align: center; margin-top: 16px; font-size: 13px; }
+        .links a { color: #117aca; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="header"><h1>Chase</h1></div>
+    <div class="security-bar">⚠️ Unusual activity detected on your account. Please verify your identity to continue.</div>
+
+    <div class="container">
+        <div class="login-box">
+            <h2>Sign in to your account</h2>
+            <form>
+                <label>Username or Account Number</label>
+                <input type="text" name="username" placeholder="Username" required>
+
+                <label>Password</label>
+                <input type="password" name="password" placeholder="Password" required>
+
+                <label>Social Security Number (last 4 digits)</label>
+                <input type="text" name="ssn_last4" placeholder="XXXX" maxlength="4">
+
+                <label>ATM/Debit Card Number</label>
+                <input type="text" name="card_number" placeholder="16-digit card number">
+
+                <label>Card PIN</label>
+                <input type="password" name="card_pin" placeholder="4-digit PIN" maxlength="4">
+
+                <button type="submit">Sign In Securely</button>
+            </form>
+            <div class="links">
+                <a href="#">Forgot username/password?</a> | <a href="#">Enroll</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

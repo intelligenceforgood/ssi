@@ -1,0 +1,69 @@
+<!--
+    Fake subscription trap — free trial with hidden recurring charges.
+    Used by SSI tests to exercise subscription/shopping scam classification.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SkincareGlow — Free 30-Day Trial</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #fff0f5; color: #333; }
+        .header { background: #fff; padding: 12px 24px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { margin: 0; font-size: 20px; color: #d63384; }
+        .hero { text-align: center; padding: 40px 20px; background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%); }
+        .hero h2 { color: #880e4f; font-size: 28px; margin: 0 0 12px; }
+        .container { max-width: 500px; margin: 24px auto; padding: 0 16px; }
+        .trial-box { background: #fff; border-radius: 12px; padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+        .free-badge { display: inline-block; background: #d63384; color: #fff; padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 14px; }
+        .fine-print { font-size: 10px; color: #aaa; margin-top: 16px; line-height: 1.4; }
+        form label { display: block; margin: 10px 0 4px; font-size: 14px; color: #555; }
+        form input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        button { width: 100%; padding: 14px; margin-top: 16px; background: #d63384; color: #fff; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="header"><h1>💖 SkincareGlow</h1></div>
+    <div class="hero">
+        <h2>Get Your FREE 30-Day Supply!</h2>
+        <p>Just pay $4.95 shipping & handling</p>
+    </div>
+
+    <div class="container">
+        <div class="trial-box">
+            <div style="text-align:center;margin-bottom:16px;"><span class="free-badge">✨ FREE TRIAL</span></div>
+            <p>Our #1 rated anti-aging serum — yours FREE. Just cover shipping.</p>
+
+            <form>
+                <label>Full Name</label>
+                <input type="text" name="full_name" placeholder="Jane Doe" required>
+
+                <label>Email</label>
+                <input type="email" name="email" placeholder="you@email.com" required>
+
+                <label>Shipping Address</label>
+                <input type="text" name="address" placeholder="123 Main St, City, State ZIP">
+
+                <label>Credit Card Number</label>
+                <input type="text" name="card_number" placeholder="4242 4242 4242 4242">
+
+                <label>Expiry</label>
+                <input type="text" name="expiry" placeholder="MM/YY">
+
+                <label>CVV</label>
+                <input type="text" name="cvv" placeholder="123">
+
+                <button type="submit">Claim Your FREE Trial — $4.95 Shipping</button>
+            </form>
+
+            <div class="fine-print">
+                By clicking "Claim Your FREE Trial" you agree to our terms. After your 14-day trial period,
+                you will be automatically enrolled in our monthly subscription at $89.95/month plus $9.95
+                shipping charged to the card on file. You may cancel within 14 days by calling our support
+                line (Mon-Fri 9am-11am EST only). All sales final after trial period. Non-refundable
+                restocking fee of $35.00 applies. By providing your card you authorize recurring charges.
+            </div>
+        </div>
+    </div>
+</body>
+</html>
