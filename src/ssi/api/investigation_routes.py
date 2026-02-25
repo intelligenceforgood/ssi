@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from ssi.store import build_scan_store
 
@@ -213,3 +213,146 @@ def _export_wallets(scan_id: str, *, fmt: str) -> FileResponse:
         filename=filename,
         media_type=media_type,
     )
+
+
+# ---------------------------------------------------------------------------
+# Evidence bundle download (Phase 2A)
+# ---------------------------------------------------------------------------
+
+
+@investigation_router.get(
+    "/investigations/{scan_id}/evidence-bundle",
+    tags=["evidence"],
+    responses={
+        200: {"content": {"application/zip": {}}, "description": "Evidence ZIP (PDF + all artifacts)."},
+        404: {"description": "Investigation not found or evidence not available."},
+    },
+)
+def download_evidence_bundle(scan_id: str) -> Response:
+    """Download the evidence ZIP bundle for an investigation.
+
+    Returns a ZIP archive containing the PDF report, screenshots, DOM
+    snapshots, HAR logs, STIX bundle, wallet manifest, and a
+    ``manifest.json`` with SHA-256 hashes for integrity verification.
+
+    For GCS-backed storage the response redirects to a signed URL.
+    """
+    from fastapi.responses import RedirectResponse
+
+    from ssi.evidence.storage import build_evidence_storage_client
+    from ssi.settings import get_settings
+
+    store = build_scan_store()
+    scan = store.get_scan(scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail="Investigation not found.")
+
+    evidence_path = scan.get("evidence_path")
+    if not evidence_path:
+        raise HTTPException(status_code=404, detail="No evidence path recorded for this investigation.")
+
+    inv_dir = Path(evidence_path)
+    zip_path = inv_dir / "evidence.zip"
+
+    settings = get_settings()
+    if settings.evidence.storage_backend == "gcs":
+        client = build_evidence_storage_client()
+        signed_url = client.get_evidence_zip_url(scan_id, inv_dir)
+        if signed_url:
+            return RedirectResponse(url=signed_url, status_code=307)
+
+    # Fall back to serving the local file
+    if not zip_path.exists():
+        raise HTTPException(status_code=404, detail="Evidence ZIP not found on disk.")
+
+    return FileResponse(
+        path=str(zip_path),
+        filename=f"evidence_{scan_id[:8]}.zip",
+        media_type="application/zip",
+    )
+
+
+@investigation_router.get(
+    "/investigations/{scan_id}/lea-package",
+    tags=["evidence"],
+    responses={
+        200: {"content": {"application/zip": {}}, "description": "LEA-ready signed evidence package."},
+        404: {"description": "Investigation not found or evidence not available."},
+    },
+)
+def download_lea_package(scan_id: str) -> Response:
+    """Download a law-enforcement-ready evidence package.
+
+    Returns a ZIP archive containing:
+    - PDF investigation report
+    - LEO evidence summary report
+    - Evidence artifacts (screenshots, DOM, HAR)
+    - Chain-of-custody manifest with SHA-256 hashes
+    - STIX 2.1 threat indicator bundle
+
+    The package includes the ``evidence_zip_sha256`` for tamper detection.
+    """
+    import io
+    import json
+    import zipfile
+
+    from fastapi.responses import StreamingResponse
+
+    store = build_scan_store()
+    scan = store.get_scan(scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail="Investigation not found.")
+
+    evidence_path = scan.get("evidence_path")
+    if not evidence_path:
+        raise HTTPException(status_code=404, detail="No evidence path recorded for this investigation.")
+
+    inv_dir = Path(evidence_path)
+    if not inv_dir.exists():
+        raise HTTPException(status_code=404, detail="Evidence directory not found on disk.")
+
+    # LEA package includes: PDF, LEO report, STIX, evidence ZIP, chain-of-custody
+    lea_files = [
+        "report.pdf",
+        "leo_evidence_report.md",
+        "stix_bundle.json",
+        "evidence.zip",
+        "wallet_manifest.json",
+    ]
+
+    buf = io.BytesIO()
+    included_count = 0
+
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for fname in lea_files:
+            fpath = inv_dir / fname
+            if fpath.exists():
+                zf.write(fpath, fname)
+                included_count += 1
+
+        # Generate chain-of-custody summary for the LEA package
+        custody_info = {
+            "scan_id": scan_id,
+            "investigation_url": scan.get("url", ""),
+            "evidence_zip_sha256": scan.get("evidence_zip_sha256", ""),
+            "files_included": included_count,
+            "package_note": (
+                "This package is generated for law enforcement use. "
+                "Verify evidence.zip integrity against evidence_zip_sha256."
+            ),
+        }
+        zf.writestr("chain_of_custody.json", json.dumps(custody_info, indent=2))
+
+    if included_count == 0:
+        raise HTTPException(status_code=404, detail="No LEA-relevant evidence files found.")
+
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="lea_package_{scan_id[:8]}.zip"',
+        },
+    )
+

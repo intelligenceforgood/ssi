@@ -151,13 +151,31 @@ sa.Index("idx_pii_exposures_field_type", pii_exposures.c.field_type)
 def build_engine(*, db_path: str | Path | None = None, echo: bool = False) -> sa.Engine:
     """Create a SQLAlchemy engine for SSI's scan database.
 
-    When *db_path* is ``None``, the path is resolved from
-    ``get_settings().storage.sqlite_path``.
-    """
-    if db_path is None:
-        from ssi.settings import get_settings
+    Behaviour depends on ``get_settings().storage.backend``:
 
-        db_path = get_settings().storage.sqlite_path
+    - **sqlite** (default) — local file at *db_path* or
+      ``settings.storage.sqlite_path``.
+    - **cloudsql** — Google Cloud SQL via
+      ``google-cloud-sql-connector`` with optional IAM authentication.
+      Connection parameters come from ``StorageSettings.cloudsql_*``
+      fields (typically set via ``SSI_STORAGE__CLOUDSQL_*`` env vars).
+
+    Args:
+        db_path: Override path for the SQLite file.  Ignored when the
+            backend is ``cloudsql``.
+        echo: When True, log all SQL statements.
+    """
+    from ssi.settings import get_settings
+
+    settings = get_settings()
+    backend = settings.storage.backend
+
+    if backend == "cloudsql":
+        return _build_cloudsql_engine(settings, echo=echo)
+
+    # Default: SQLite
+    if db_path is None:
+        db_path = settings.storage.sqlite_path
 
     resolved = Path(db_path)
     resolved.parent.mkdir(parents=True, exist_ok=True)
@@ -167,6 +185,85 @@ def build_engine(*, db_path: str | Path | None = None, echo: bool = False) -> sa
         echo=echo,
         pool_pre_ping=True,
         connect_args={"check_same_thread": False, "timeout": 30},
+    )
+
+
+def _build_cloudsql_engine(settings: Any, *, echo: bool = False) -> sa.Engine:
+    """Build a PostgreSQL engine via ``cloud-sql-python-connector``.
+
+    Uses the same approach as the core platform: the Cloud SQL Python
+    Connector manages IAM token generation and connects directly to the
+    Cloud SQL instance's public IP.  This does **not** require the
+    Cloud Run built-in proxy volume mount.
+
+    The service account must have ``roles/cloudsql.client`` and
+    ``roles/cloudsql.instanceUser``, and must be registered as a Cloud SQL
+    IAM database user (``google_sql_user`` with type
+    ``CLOUD_IAM_SERVICE_ACCOUNT``).
+
+    Args:
+        settings: The resolved SSI settings object.
+        echo: When True, log all SQL statements.
+
+    Raises:
+        ValueError: When required connection fields are missing.
+    """
+    import logging
+
+    from google.cloud.sql.connector import Connector, IPTypes
+
+    log = logging.getLogger(__name__)
+
+    storage = settings.storage
+    instance = storage.cloudsql_instance
+    db_user = storage.cloudsql_user
+    db_name = storage.cloudsql_database
+    enable_iam_auth = storage.cloudsql_enable_iam_auth
+
+    if not all([instance, db_user, db_name]):
+        raise ValueError(
+            "Missing Cloud SQL configuration: set SSI_STORAGE__CLOUDSQL_INSTANCE, "
+            "SSI_STORAGE__CLOUDSQL_DATABASE, and SSI_STORAGE__CLOUDSQL_USER."
+        )
+
+    # Auto-detect IAM auth: if the username looks like a service-account IAM
+    # user (contains ".iam"), force enable_iam_auth regardless of the setting.
+    # This prevents silent failures where the setting defaults to False.
+    if ".iam" in db_user and not enable_iam_auth:
+        log.warning(
+            "CloudSQL user %r looks like an IAM user but enable_iam_auth=%s — "
+            "forcing enable_iam_auth=True",
+            db_user,
+            enable_iam_auth,
+        )
+        enable_iam_auth = True
+
+    log.info(
+        "Connecting to Cloud SQL: instance=%s, user=%s, db=%s, iam_auth=%s",
+        instance,
+        db_user,
+        db_name,
+        enable_iam_auth,
+    )
+
+    connector = Connector()
+
+    def getconn():
+        """Create a new pg8000 connection via the Cloud SQL Connector."""
+        return connector.connect(
+            instance,
+            "pg8000",
+            user=db_user,
+            db=db_name,
+            ip_type=IPTypes.PUBLIC,
+            enable_iam_auth=enable_iam_auth,
+        )
+
+    return sa.create_engine(
+        "postgresql+pg8000://",
+        creator=getconn,
+        echo=echo,
+        pool_pre_ping=True,
     )
 
 

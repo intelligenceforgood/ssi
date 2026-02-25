@@ -210,10 +210,8 @@ class TestConcurrentLimit:
 
         # Save originals
         orig_active = routes._ACTIVE_INVESTIGATIONS
-        orig_tasks = dict(routes._TASKS)
 
         try:
-            routes._TASKS.clear()
             # Set active to the limit
             with patch.object(routes, "_ACTIVE_INVESTIGATIONS", 5):
                 app = create_app()
@@ -223,4 +221,3 @@ class TestConcurrentLimit:
                     assert "capacity" in resp.json()["detail"].lower()
         finally:
             routes._ACTIVE_INVESTIGATIONS = orig_active
-            routes._TASKS.update(orig_tasks)

@@ -10,6 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
 from ssi.settings import get_settings
+from ssi.store.task_store import build_task_store
 
 router = APIRouter()
 
@@ -35,7 +36,7 @@ class InvestigateRequest(BaseModel):
     skip_whois: bool = False
     skip_screenshot: bool = False
     skip_virustotal: bool = False
-    push_to_core: bool = Field(False, description="Push results to i4g core platform.")
+    push_to_core: bool = Field(True, description="Push results to i4g core platform.")
     trigger_dossier: bool = Field(False, description="Queue dossier generation after push.")
     dataset: str = Field("ssi", description="Dataset label for the core case.")
 
@@ -51,22 +52,24 @@ class InvestigateRequest(BaseModel):
 
 
 class InvestigateResponse(BaseModel):
+    """Acknowledgement returned when an investigation is submitted."""
+
     investigation_id: str
     status: str
     message: str
 
 
 class InvestigationStatusResponse(BaseModel):
+    """Polling response for a running or completed investigation."""
+
     investigation_id: str
     status: str
     result: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------
-# In-memory task tracking (replace with Redis / DB in production)
+# In-memory concurrency limiter (survives task store backend changes)
 # ---------------------------------------------------------------------------
-
-_TASKS: dict[str, dict[str, Any]] = {}
 
 # Concurrent investigation limiter
 _ACTIVE_INVESTIGATIONS = 0
@@ -101,7 +104,8 @@ def submit_investigation(req: InvestigateRequest, background_tasks: BackgroundTa
         _ACTIVE_INVESTIGATIONS += 1
 
     task_id = str(uuid4())
-    _TASKS[task_id] = {"status": "pending"}
+    store = build_task_store()
+    store.set(task_id, {"status": "pending"})
 
     background_tasks.add_task(_run_investigation_task, task_id, req)
 
@@ -115,7 +119,8 @@ def submit_investigation(req: InvestigateRequest, background_tasks: BackgroundTa
 @router.get("/investigate/{investigation_id}", response_model=InvestigationStatusResponse)
 def get_investigation_status(investigation_id: str) -> InvestigationStatusResponse:
     """Check the status of a previously submitted investigation."""
-    task = _TASKS.get(investigation_id)
+    store = build_task_store()
+    task = store.get(investigation_id)
     if not task:
         raise HTTPException(status_code=404, detail="Investigation not found.")
     return InvestigationStatusResponse(
@@ -131,7 +136,8 @@ def _run_investigation_task(task_id: str, req: InvestigateRequest) -> None:
 
     global _ACTIVE_INVESTIGATIONS  # noqa: PLW0603
 
-    _TASKS[task_id]["status"] = "running"
+    store = build_task_store()
+    store.update(task_id, status="running")
     settings = get_settings()
     output_dir = Path(settings.evidence.output_dir)
 
@@ -145,8 +151,11 @@ def _run_investigation_task(task_id: str, req: InvestigateRequest) -> None:
             skip_virustotal=req.skip_virustotal,
             report_format="both",
         )
-        _TASKS[task_id]["status"] = "completed" if result.success else "failed"
-        _TASKS[task_id]["result"] = result.model_dump(mode="json")
+        store.update(
+            task_id,
+            status="completed" if result.success else "failed",
+            result=result.model_dump(mode="json"),
+        )
 
         # Push to core platform if requested
         if req.push_to_core and result.success:
@@ -156,26 +165,51 @@ def _run_investigation_task(task_id: str, req: InvestigateRequest) -> None:
         import logging
 
         logging.getLogger(__name__).exception("Investigation task %s failed", task_id)
-        _TASKS[task_id]["status"] = "failed"
-        _TASKS[task_id]["result"] = {"error": "Internal investigation error. Check server logs for details."}
+        store.update(
+            task_id,
+            status="failed",
+            result={"error": "Internal investigation error. Check server logs for details."},
+        )
     finally:
         with _ACTIVE_LOCK:
             _ACTIVE_INVESTIGATIONS = max(0, _ACTIVE_INVESTIGATIONS - 1)
 
 
 def _push_to_core(task_id: str, result: Any, *, dataset: str, trigger_dossier: bool) -> None:
-    """Push investigation results to the i4g core platform."""
+    """Push investigation results to the i4g core platform.
+
+    On success the returned ``case_id`` is persisted both in the task
+    store and back into the SSI scan store so the relationship is
+    durable across restarts.
+    """
     import logging
 
     logger = logging.getLogger(__name__)
+    store = build_task_store()
     try:
         from ssi.integration.core_bridge import CoreBridge
 
         bridge = CoreBridge()
         case_id = bridge.push_investigation(result, dataset=dataset, trigger_dossier=trigger_dossier)
         bridge.close()
-        _TASKS[task_id]["core_case_id"] = case_id
+        store.update(task_id, core_case_id=case_id)
         logger.info("Pushed investigation %s to core case %s", task_id, case_id)
+
+        # Persist back-reference in the scan store
+        try:
+            from ssi.store import build_scan_store
+
+            scan_store = build_scan_store()
+            scan_id = getattr(result, "investigation_id", None) or str(getattr(result, "scan_id", ""))
+            if scan_id:
+                scan_store.update_scan(str(scan_id), case_id=case_id)
+                logger.debug("Stored core case_id %s on scan %s", case_id, scan_id)
+        except Exception as e:
+            logger.warning("Failed to persist core case_id back-reference: %s", e)
+
     except Exception as e:
-        logger.warning("Failed to push to core: %s", type(e).__name__)
-        _TASKS[task_id]["core_push_error"] = "core_push_failed"
+        detail = str(e)
+        if hasattr(e, "response"):
+            detail = f"{e.response.status_code} {e.response.text[:500]}"
+        logger.warning("Failed to push to core: %s — %s", type(e).__name__, detail)
+        store.update(task_id, core_push_error="core_push_failed")

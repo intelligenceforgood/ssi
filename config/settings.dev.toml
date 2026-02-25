@@ -46,8 +46,10 @@ port = 8100
 require_auth = false
 
 [integration]
+# IMPORTANT: In Cloud Run, this is overridden by SSI_INTEGRATION__CORE_API_URL
+# to point at the core Cloud Run service URL directly (bypasses IAP).
 core_api_url = "https://api.intelligenceforgood.org"
-push_to_core = false
+push_to_core = true
 trigger_dossier = false
 
 [cost]
@@ -56,7 +58,8 @@ enabled = true
 warn_at_pct = 80
 
 [storage]
-backend = "sqlite"
+backend = "cloudsql"
+cloudsql_enable_iam_auth = true
 persist_scans = true
 
 [playbook]

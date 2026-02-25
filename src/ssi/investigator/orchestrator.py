@@ -279,6 +279,9 @@ def run_investigation(
     # Package evidence last so the serialized JSON reflects final status, timing, and cost.
     _package_evidence(result, inv_dir, report_format=report_format)
 
+    # Upload evidence to GCS when configured (Phase 2A)
+    _upload_evidence_to_gcs(result, inv_dir)
+
     # Persist results to the scan store
     if scan_store and scan_id:
         try:
@@ -757,6 +760,33 @@ def _create_evidence_zip(result: InvestigationResult, inv_dir: Path) -> None:
 
     except Exception as e:
         logger.warning("Failed to create evidence ZIP: %s", e)
+
+
+def _upload_evidence_to_gcs(result: InvestigationResult, inv_dir: Path) -> None:
+    """Upload evidence artifacts to GCS when the storage backend is configured.
+
+    Skips silently when the backend is ``local`` or when GCS upload fails
+    (the local evidence directory always remains available as a fallback).
+    """
+    from ssi.settings import get_settings
+
+    settings = get_settings()
+    if settings.evidence.storage_backend != "gcs":
+        return
+
+    if not settings.evidence.gcs_bucket:
+        logger.warning("GCS evidence backend selected but SSI_EVIDENCE__GCS_BUCKET is empty — skipping upload")
+        return
+
+    try:
+        from ssi.evidence.storage import build_evidence_storage_client
+
+        client = build_evidence_storage_client()
+        investigation_id = str(result.investigation_id)
+        uploaded = client.upload_directory(investigation_id, inv_dir)
+        logger.info("Uploaded %d evidence files to GCS for investigation %s", len(uploaded), investigation_id)
+    except Exception as e:
+        logger.warning("GCS evidence upload failed (local copy retained): %s", e)
 
 
 def _run_agent_interaction(url: str, output_dir: Path) -> AgentSession | None:

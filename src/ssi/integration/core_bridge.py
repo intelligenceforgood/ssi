@@ -20,7 +20,6 @@ Usage (Cloud Run)::
 
 from __future__ import annotations
 
-import json
 import logging
 import mimetypes
 from datetime import datetime, timezone
@@ -33,6 +32,31 @@ import httpx
 from ssi.models.investigation import InvestigationResult
 
 logger = logging.getLogger(__name__)
+
+
+def _get_oidc_token(audience: str) -> str | None:
+    """Fetch an OIDC identity token for IAP-protected service auth.
+
+    Uses the default application credentials (service account on GCP,
+    ``gcloud auth`` locally).  Returns ``None`` when not running on GCP
+    or when credentials are unavailable — callers should treat this as a
+    soft failure so local-dev keeps working without Google libs.
+
+    Args:
+        audience: The IAP OAuth client ID used as the token audience.
+
+    Returns:
+        The identity token string, or ``None`` on failure.
+    """
+    try:
+        from google.auth.transport.requests import Request
+        from google.oauth2 import id_token
+
+        auth_req = Request()
+        return id_token.fetch_id_token(auth_req, audience)
+    except Exception as exc:
+        logger.debug("Could not fetch OIDC token for audience %s: %s", audience, exc)
+        return None
 
 
 class CoreBridge:
@@ -65,7 +89,53 @@ class CoreBridge:
 
         self.core_api_url = core_api_url.rstrip("/")
         self.timeout = timeout
-        self._client = httpx.Client(base_url=self.core_api_url, timeout=self.timeout)
+        headers = self._build_auth_headers()
+        self._client = httpx.Client(base_url=self.core_api_url, timeout=self.timeout, headers=headers)
+
+    def _build_auth_headers(self) -> dict[str, str]:
+        """Build authentication headers for the core API.
+
+        Follows the same pattern as the i4g-console's ``getIapHeaders()``:
+
+        1. **OIDC identity token** (``Authorization: Bearer``) with the
+           IAP OAuth client ID as audience — IAP verifies this at the
+           load-balancer before forwarding to Cloud Run.
+        2. **API key** (``X-API-KEY``) — fallback for core's app-level
+           ``require_token`` when IAP injects its own JWT.
+
+        For localhost URLs both layers are skipped so local dev works
+        without configuration.
+
+        Returns:
+            Header dict with auth credentials for the target environment.
+        """
+        from ssi.settings import get_settings
+
+        settings = get_settings()
+        integration = getattr(settings, "integration", None)
+        api_key = getattr(integration, "core_api_key", "")
+        iap_audience = getattr(integration, "iap_audience", "")
+        headers: dict[str, str] = {}
+
+        if self.core_api_url.startswith("http://"):
+            return headers
+
+        # App-level auth (X-API-KEY) — accepted by core's require_token.
+        if api_key:
+            headers["X-API-KEY"] = api_key
+
+        # IAP auth (OIDC Bearer with IAP client ID as audience).
+        if iap_audience:
+            token = _get_oidc_token(iap_audience)
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+                logger.debug("OIDC token injected (audience=%s) for IAP auth", iap_audience)
+            else:
+                logger.warning("Could not obtain OIDC token for IAP audience %s", iap_audience)
+        else:
+            logger.warning("No iap_audience configured — IAP will reject the request")
+
+        return headers
 
     def close(self) -> None:
         """Close the underlying HTTP client."""
@@ -127,13 +197,43 @@ class CoreBridge:
     # Case management
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _build_title(result: InvestigationResult) -> str:
+        """Build a human-readable case title from investigation results."""
+        from urllib.parse import urlparse
+
+        # Extract domain from URL
+        try:
+            domain = urlparse(result.url).netloc or result.url
+        except Exception:
+            domain = result.url
+        # Strip www. prefix for cleaner display
+        if domain.startswith("www."):
+            domain = domain[4:]
+
+        # Extract classification intent if available
+        intent_label = ""
+        if result.taxonomy_result and result.taxonomy_result.intent:
+            top_intent = result.taxonomy_result.intent[0]
+            if top_intent.label:
+                intent_label = top_intent.label.replace("INTENT.", "").replace("_", " ").title()
+        elif result.classification and result.classification.intent:
+            intent_label = result.classification.intent.replace("_", " ").title()
+
+        # Build title: "Investment Scam — example.com" or "Investigation — example.com"
+        prefix = intent_label if intent_label else "Investigation"
+        return f"{prefix} — {domain}"
+
     def _create_case(self, result: InvestigationResult, *, dataset: str) -> str:
         """Create a case record in the core platform."""
+        title = self._build_title(result)
         payload: dict[str, Any] = {
             "dataset": dataset,
             "source_type": "ssi_investigation",
             "source_url": result.url,
+            "title": title,
             "metadata": {
+                "title": title,
                 "ssi_investigation_id": str(result.investigation_id),
                 "scan_type": result.scan_type if isinstance(result.scan_type, str) else result.scan_type.value,
                 "passive_only": result.passive_only,
@@ -151,7 +251,7 @@ class CoreBridge:
         resp = self._client.post("/cases", json=payload)
         resp.raise_for_status()
         data = resp.json()
-        return data.get("case_id", data.get("id", str(uuid4())))
+        return data.get("caseId", data.get("case_id", data.get("id", str(uuid4()))))
 
     # ------------------------------------------------------------------
     # Evidence attachment

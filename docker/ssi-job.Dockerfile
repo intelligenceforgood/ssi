@@ -40,6 +40,8 @@ RUN pip install --upgrade pip \
     && pip install --no-cache-dir \
     "google-cloud-aiplatform>=1.70.0,<3.0" \
     "google-cloud-storage" \
+    "cloud-sql-python-connector[pg8000]>=1.12" \
+    "pg8000" \
     "langchain" \
     "weasyprint"
 

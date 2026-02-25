@@ -42,6 +42,45 @@ class TestCoreBridgeInit:
         b.close()
 
 
+class TestBuildAuthHeaders:
+    """Verify IAP auth: OIDC token (IAP gate) + API key (app fallback)."""
+
+    def test_https_sends_oidc_with_iap_audience_and_api_key(self):
+        with (
+            patch("ssi.settings.get_settings") as mock_settings,
+            patch("ssi.integration.core_bridge._get_oidc_token", return_value="oidc-tok-123") as mock_oidc,
+        ):
+            mock_settings.return_value.integration.core_api_key = "key-abc"
+            mock_settings.return_value.integration.iap_audience = "my-iap-client-id.apps.googleusercontent.com"
+            b = CoreBridge(core_api_url="https://api.example.org")
+            headers = b._client.headers
+            assert headers["X-API-KEY"] == "key-abc"
+            assert headers["Authorization"] == "Bearer oidc-tok-123"
+            # Must use IAP audience, not the URL
+            mock_oidc.assert_called_once_with("my-iap-client-id.apps.googleusercontent.com")
+            b.close()
+
+    def test_http_skips_both(self):
+        b = CoreBridge(core_api_url="http://localhost:8000")
+        headers = b._client.headers
+        assert "X-API-KEY" not in headers
+        assert "Authorization" not in headers
+        b.close()
+
+    def test_https_without_oidc_still_sends_api_key(self):
+        with (
+            patch("ssi.settings.get_settings") as mock_settings,
+            patch("ssi.integration.core_bridge._get_oidc_token", return_value=None),
+        ):
+            mock_settings.return_value.integration.core_api_key = "key-abc"
+            mock_settings.return_value.integration.iap_audience = "my-iap-client-id"
+            b = CoreBridge(core_api_url="https://api.example.org")
+            headers = b._client.headers
+            assert headers["X-API-KEY"] == "key-abc"
+            assert "Authorization" not in headers
+            b.close()
+
+
 class TestHealthCheck:
     def test_healthy(self, bridge):
         mock_resp = MagicMock()

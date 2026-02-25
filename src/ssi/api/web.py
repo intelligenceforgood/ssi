@@ -6,11 +6,12 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from ssi.api.routes import InvestigateRequest, _TASKS, _run_investigation_task
+from ssi.api.routes import InvestigateRequest, _run_investigation_task
+from ssi.store.task_store import build_task_store
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,10 @@ async def submit_investigation(
     from uuid import uuid4
 
     task_id = str(uuid4())
-    _TASKS[task_id] = {"status": "pending"}
+    store = build_task_store()
+    store.set(task_id, {"status": "pending"})
 
-    req = InvestigateRequest(url=url, scan_type=scan_type)
+    req = InvestigateRequest(url=url, scan_type=scan_type, push_to_core=True)
 
     import asyncio
 
@@ -51,7 +53,8 @@ async def submit_investigation(
 @web_router.get("/status/{task_id}", response_class=HTMLResponse)
 async def investigation_status(request: Request, task_id: str) -> HTMLResponse:
     """Show investigation progress / results page."""
-    task = _TASKS.get(task_id)
+    store = build_task_store()
+    task = store.get(task_id)
     if not task:
         return templates.TemplateResponse(
             "status.html",
@@ -79,18 +82,15 @@ async def investigation_status(request: Request, task_id: str) -> HTMLResponse:
 @web_router.get("/report/{task_id}/pdf")
 async def download_pdf(task_id: str) -> FileResponse:
     """Download the PDF report for a completed investigation."""
-    task = _TASKS.get(task_id)
+    store = build_task_store()
+    task = store.get(task_id)
     if not task or task.get("status") != "completed":
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail="Report not ready or not found.")
 
     result_data = task.get("result", {})
     pdf_path = result_data.get("pdf_report_path", "")
 
     if not pdf_path or not Path(pdf_path).exists():
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail="PDF report not available.")
 
     return FileResponse(

@@ -29,9 +29,12 @@ dependencies = [
   "weasyprint",
   "pyyaml",
   "pyzbar>=0.1.9", # --- GCP (production) -------------------------------------------------
+  "google-auth>=2.0,<3",
   "google-cloud-storage",
   "google-cloud-secret-manager",
   "google-genai>=1.0.0,<2.0",
+  "cloud-sql-python-connector[pg8000]>=1.12",
+  "pg8000",
 ]
 description = "Scam Site Investigator — AI-driven scam URL reconnaissance and evidence packaging."
 dynamic = ["version"]
@@ -46,6 +49,9 @@ dev = [
   "isort",
   "mypy",
   "ruff",
+]
+redis = [
+  "redis>=5.0,<6",
 ]
 test = [
   "pytest",

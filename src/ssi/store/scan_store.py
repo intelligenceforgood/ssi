@@ -53,9 +53,12 @@ class ScanStore:
         else:
             self._session_factory = build_session_factory()
 
-        # Ensure schema exists (auto-create for SQLite / local dev)
+        # Auto-create tables only for SQLite (local dev / tests).
+        # On CloudSQL the schema is managed by Alembic in the core repo
+        # (migration 20260221_01_add_ssi_scan_tables).
         with self._session_factory() as session:
-            METADATA.create_all(session.connection())
+            if session.get_bind().dialect.name != "postgresql":
+                METADATA.create_all(session.connection())
 
     # ------------------------------------------------------------------
     # site_scans CRUD

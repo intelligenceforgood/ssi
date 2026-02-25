@@ -256,13 +256,29 @@ class CostSettings(BaseSettings):
 
 
 class StorageSettings(BaseSettings):
-    """Scan persistence and database configuration."""
+    """Scan persistence and database configuration.
+
+    The ``backend`` field selects which database engine to use:
+
+    - ``sqlite`` — local SQLite file (default, for local dev).
+    - ``cloudsql`` — Google Cloud SQL (PostgreSQL) via the
+      ``google-cloud-sql-connector`` library with IAM auth.
+    - ``core_api`` — delegate all persistence to the core platform
+      (not yet implemented).
+    """
 
     model_config = SettingsConfigDict(env_prefix="SSI_STORAGE__")
 
     backend: str = "sqlite"  # sqlite | cloudsql | core_api
     sqlite_path: str = "data/ssi_store.db"
     persist_scans: bool = True
+
+    # Cloud SQL connection settings (used when backend == "cloudsql")
+    # Uses cloud-sql-python-connector with IAM auth — same approach as core.
+    cloudsql_instance: str = ""
+    cloudsql_database: str = ""
+    cloudsql_user: str = ""
+    cloudsql_enable_iam_auth: bool = False
 
 
 class FeedbackSettings(BaseSettings):
@@ -317,9 +333,27 @@ class IntegrationSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SSI_INTEGRATION__")
 
     core_api_url: str = "http://localhost:8000"
+    core_api_key: str = ""
+    iap_audience: str = ""
     push_to_core: bool = False
     trigger_dossier: bool = False
     dataset: str = "ssi"
+
+
+class TaskStoreSettings(BaseSettings):
+    """Task status store configuration.
+
+    Backend options:
+        - ``memory``: In-memory dict (local dev, single process).
+        - ``redis``: Redis-backed store (production, multi-replica).
+    """
+
+    model_config = SettingsConfigDict(env_prefix="SSI_TASK_STORE__")
+
+    backend: str = "memory"
+    redis_url: str = "redis://localhost:6379/0"
+    key_prefix: str = "ssi:task:"
+    default_ttl_seconds: int = 86400
 
 
 # ---------------------------------------------------------------------------
@@ -357,6 +391,7 @@ class Settings(BaseSettings):
     feedback: FeedbackSettings = Field(default_factory=FeedbackSettings)
     playbook: PlaybookSettings = Field(default_factory=PlaybookSettings)
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
+    task_store: TaskStoreSettings = Field(default_factory=TaskStoreSettings)
 
     @model_validator(mode="before")
     @classmethod
