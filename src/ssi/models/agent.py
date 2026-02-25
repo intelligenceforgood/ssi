@@ -115,4 +115,12 @@ class AgentSession:
         """Serialize session to a JSON-friendly dict."""
         from dataclasses import asdict
 
-        return asdict(self)
+        def _convert(obj: Any) -> Any:  # noqa: ANN401
+            """Recursively convert non-serialisable types."""
+            if isinstance(obj, UUID):
+                return str(obj)
+            if isinstance(obj, Enum):
+                return obj.value
+            return obj
+
+        return asdict(self, dict_factory=lambda pairs: {k: _convert(v) for k, v in pairs})

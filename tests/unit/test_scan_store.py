@@ -429,3 +429,56 @@ class TestPersistInvestigation:
         scan_id = store.create_scan(url="https://scam.example.com")
         with pytest.raises(TypeError, match="Expected InvestigationResult"):
             store.persist_investigation(scan_id, {"url": "https://scam.example.com"})
+
+    def test_persist_investigation_with_agent_steps(self, store: ScanStore):
+        """persist_investigation should bulk-insert agent steps into agent_sessions."""
+        from ssi.models.investigation import InvestigationResult, InvestigationStatus
+
+        scan_id = store.create_scan(url="https://scam.example.com")
+        result = InvestigationResult(url="https://scam.example.com", passive_only=False)
+        result.status = InvestigationStatus.COMPLETED
+        result.duration_seconds = 45.0
+        result.agent_steps = [
+            {
+                "step": 1,
+                "action": "click",
+                "element": 5,
+                "value": "Sign In",
+                "reasoning": "Clicking login button to proceed",
+                "tokens": 1200,
+                "duration_ms": 350,
+                "error": None,
+            },
+            {
+                "step": 2,
+                "action": "type",
+                "element": 8,
+                "value": "test@example.com",
+                "reasoning": "Entering email into form",
+                "tokens": 800,
+                "duration_ms": 120,
+                "error": None,
+            },
+            {
+                "step": 3,
+                "action": "click",
+                "element": 12,
+                "value": "",
+                "reasoning": "Submitting form",
+                "tokens": 600,
+                "duration_ms": 500,
+                "error": "timeout",
+            },
+        ]
+
+        store.persist_investigation(scan_id, result)
+
+        actions = store.get_agent_actions(scan_id)
+        assert len(actions) == 3
+        assert actions[0]["action_type"] == "click"
+        assert actions[0]["sequence"] == 1
+        assert actions[0]["state"] == "completed"
+        assert actions[1]["action_type"] == "type"
+        assert actions[1]["sequence"] == 2
+        assert actions[2]["state"] == "error"
+        assert actions[2]["error"] == "timeout"

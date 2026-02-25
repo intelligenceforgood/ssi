@@ -126,7 +126,7 @@ def run_investigation(
             logger.warning("Failed to initialise scan store — results will not be persisted", exc_info=True)
             scan_store = None
 
-    site_result = None  # TODO: Populate from agent_session once SiteResult model is wired
+    site_result = None  # Populated from agent_session after Phase 2 completes
 
     try:
         # --- Pre-flight: Domain resolution check ----------------------------
@@ -146,7 +146,7 @@ def run_investigation(
             if cost_tracker:
                 cost_tracker.record_api_call("whois")
 
-        if run_passive:
+        if run_passive and domain_resolves:
             result.dns = _run_dns(url)
             if cost_tracker:
                 cost_tracker.record_api_call("dns")
@@ -158,6 +158,8 @@ def run_investigation(
             result.geoip = _run_geoip(result.dns)
             if cost_tracker:
                 cost_tracker.record_api_call("geoip")
+        elif run_passive and not domain_resolves:
+            logger.info("Skipping DNS/SSL/GeoIP — domain does not resolve")
 
         # Screenshot is captured for all scan types (passive, active, full)
         # unless explicitly skipped by the caller or the domain is unreachable.
@@ -175,10 +177,12 @@ def run_investigation(
             if cost_tracker:
                 cost_tracker.record_api_call("virustotal")
 
-        if run_passive and not skip_urlscan:
+        if run_passive and not skip_urlscan and domain_resolves:
             _run_urlscan(url, result)
             if cost_tracker:
                 cost_tracker.record_api_call("urlscan")
+        elif run_passive and not skip_urlscan and not domain_resolves:
+            logger.info("Skipping urlscan.io — domain does not resolve")
 
         # Budget gate: abort before expensive active phase if already over budget.
         if cost_tracker:
@@ -224,6 +228,9 @@ def run_investigation(
                 result.downloads.extend(
                     _to_download_artifacts(agent_session.captured_downloads)
                 )
+
+            # Expose agent_session as site_result for persist_investigation
+            site_result = agent_session
 
         # --- Phase 2.5: HAR Analysis ----------------------------------------
         _run_har_analysis(result)

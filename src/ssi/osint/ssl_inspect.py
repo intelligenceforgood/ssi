@@ -21,7 +21,7 @@ def _extract_host_port(url: str) -> tuple[str, int]:
     return host, port
 
 
-@with_retries(max_retries=2, backoff_seconds=1.0, retryable_exceptions=(socket.timeout, ConnectionError, OSError))
+@with_retries(max_retries=2, backoff_seconds=1.0, retryable_exceptions=(socket.timeout, ConnectionError))
 def inspect_ssl(url: str) -> SSLInfo:
     """Connect to *url* and extract TLS certificate details.
 
@@ -62,6 +62,10 @@ def inspect_ssl(url: str) -> SSLInfo:
     except ssl.SSLCertVerificationError as e:
         logger.warning("SSL verification failed for %s: %s", host, e)
         info.is_valid = False
+    except socket.gaierror as e:
+        logger.warning("SSL inspection skipped for %s — DNS resolution failed: %s", host, e)
+    except (socket.timeout, ConnectionRefusedError, ConnectionResetError) as e:
+        logger.warning("SSL connection failed for %s: %s", host, e)
     except Exception as e:
         logger.warning("SSL connection failed for %s: %s", host, e)
 

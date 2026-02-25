@@ -24,7 +24,7 @@ _POLL_TIMEOUT = 60
 _POLL_INTERVAL = 5
 
 
-@with_retries(max_retries=2, backoff_seconds=1.0, retryable_exceptions=(httpx.TransportError, httpx.HTTPStatusError))
+@with_retries(max_retries=2, backoff_seconds=1.0, retryable_exceptions=(httpx.TransportError,))
 def scan_url(url: str) -> dict[str, Any]:
     """Submit *url* to urlscan.io and return the full result.
 
@@ -39,14 +39,28 @@ def scan_url(url: str) -> dict[str, Any]:
         domains/IPs), ``stats`` (resource stats), ``verdicts`` (threat
         verdicts), and ``task`` (scan metadata).  Returns an empty dict
         on failure.
+
+    Note:
+        Only transport-level errors are retried.  HTTP 4xx responses
+        (e.g. 400 Bad Request for unresolvable domains) are **not**
+        retried because they indicate a client-side issue.
     """
     from ssi.settings import get_settings
 
     settings = get_settings()
-    api_key = settings.osint.urlscan_api_key
+    api_key = (settings.osint.urlscan_api_key or "").strip()
 
-    if api_key:
+    # Guard against placeholder values injected by Secret Manager before the
+    # real key is stored.  A valid urlscan.io API key is a UUID (36 chars).
+    _PLACEHOLDER_VALUES = {"changeme", "replace_me", "todo", "none", "placeholder", ""}
+    if api_key and api_key.lower() not in _PLACEHOLDER_VALUES and len(api_key) >= 32:
         return _submit_and_poll(url, api_key)
+    elif api_key and api_key.lower() not in _PLACEHOLDER_VALUES:
+        logger.warning(
+            "urlscan.io API key looks invalid (length=%d, expected ≥32) — falling back to search.",
+            len(api_key),
+        )
+        return _search_existing(url)
     else:
         logger.info("urlscan.io API key not configured — searching existing scans.")
         return _search_existing(url)
@@ -198,7 +212,16 @@ def _submit_and_poll(url: str, api_key: str) -> dict[str, Any]:
         return {}
 
     except httpx.HTTPStatusError as e:
-        logger.warning("urlscan.io API error: HTTP %s", e.response.status_code)
+        status = e.response.status_code
+        body = e.response.text[:500] if e.response else ""
+        if 400 <= status < 500:
+            logger.warning(
+                "urlscan.io API client error: HTTP %s (non-retryable) — %s",
+                status,
+                body,
+            )
+        else:
+            logger.warning("urlscan.io API error: HTTP %s — %s", status, body)
         return {}
     except Exception as e:
         logger.warning("urlscan.io scan failed: %s", e)

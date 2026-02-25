@@ -53,12 +53,34 @@ class ScanStore:
         else:
             self._session_factory = build_session_factory()
 
-        # Auto-create tables only for SQLite (local dev / tests).
-        # On CloudSQL the schema is managed by Alembic in the core repo
-        # (migration 20260221_01_add_ssi_scan_tables).
-        with self._session_factory() as session:
-            if session.get_bind().dialect.name != "postgresql":
-                METADATA.create_all(session.connection())
+        # Auto-create tables.  On PostgreSQL the schema is normally managed
+        # by Alembic in the core repo (migration 20260221_01_add_ssi_scan_tables).
+        # However, we fall back to METADATA.create_all() if the tables don't
+        # exist yet — this prevents silent data loss when the migration
+        # hasn't been applied to the target database.
+        try:
+            with self._session_factory() as session:
+                bind = session.get_bind()
+                dialect_name = bind.dialect.name
+                if dialect_name != "postgresql":
+                    METADATA.create_all(session.connection())
+                else:
+                    from sqlalchemy import inspect as sa_inspect
+
+                    existing = sa_inspect(bind).get_table_names()
+                    required = {"site_scans", "harvested_wallets", "agent_sessions", "pii_exposures"}
+                    missing = required - set(existing)
+                    if missing:
+                        logger.warning(
+                            "SSI tables missing in PostgreSQL (%s) — running auto-create. "
+                            "Apply Alembic migration 20260221_01 for proper FK constraints.",
+                            ", ".join(sorted(missing)),
+                        )
+                        METADATA.create_all(bind, checkfirst=True)
+                    else:
+                        logger.info("SSI scan tables verified in PostgreSQL")
+        except Exception:
+            logger.warning("Table verification/creation failed during ScanStore init", exc_info=True)
 
     # ------------------------------------------------------------------
     # site_scans CRUD
@@ -635,11 +657,45 @@ class ScanStore:
             if pii_dicts:
                 self.add_pii_exposures_bulk(scan_id, pii_dicts)
 
+        # Bulk-insert agent session steps
+        agent_step_count = 0
+        agent_steps = getattr(result, "agent_steps", None) or []
+        if agent_steps:
+            now_ts = datetime.now(timezone.utc)
+            step_rows = []
+            for step in agent_steps:
+                step_rows.append(
+                    {
+                        "session_id": str(uuid4()),
+                        "scan_id": scan_id,
+                        "state": "completed" if not step.get("error") else "error",
+                        "action_type": step.get("action", ""),
+                        "action_detail": {
+                            "element_index": step.get("element"),
+                            "value": step.get("value", ""),
+                            "reasoning": step.get("reasoning", ""),
+                        },
+                        "llm_input_tokens": step.get("tokens"),
+                        "llm_output_tokens": None,
+                        "duration_ms": step.get("duration_ms"),
+                        "error": step.get("error"),
+                        "sequence": step.get("step", 0),
+                        "metadata": {},
+                        "created_at": now_ts,
+                    }
+                )
+            if step_rows:
+                with self._session_factory() as session:
+                    session.execute(sa.insert(sql_schema.agent_sessions), step_rows)
+                    session.commit()
+                agent_step_count = len(step_rows)
+
         logger.info(
-            "Persisted investigation for scan %s: %d wallets, %d PII fields",
+            "Persisted investigation for scan %s: %d wallets, %d PII fields, %d agent steps",
             scan_id,
             len(wallet_entries),
             len(pii_dicts),
+            agent_step_count,
         )
 
 
