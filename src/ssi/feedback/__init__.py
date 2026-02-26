@@ -141,7 +141,7 @@ class FeedbackStore:
                     feedback.case_reference,
                     feedback.submitted_by,
                     feedback.submitted_at,
-                    json.dumps(feedback.metadata),
+                    json.dumps(feedback.metadata, default=str),
                 ),
             )
             conn.commit()

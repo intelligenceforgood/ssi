@@ -206,6 +206,7 @@ class TestOSINTSettings:
         assert s.osint.whois_timeout_sec == 10
         assert s.osint.dns_timeout_sec == 5
         assert s.osint.virustotal_api_key == ""
+        assert s.osint.ipinfo_token == ""
 
     def test_api_key_override(self, monkeypatch):
         monkeypatch.setenv("SSI_OSINT__VIRUSTOTAL_API_KEY", "test-key-123")
@@ -213,6 +214,14 @@ class TestOSINTSettings:
 
         s = Settings()
         assert s.osint.virustotal_api_key == "test-key-123"
+
+    def test_ipinfo_token_override(self, monkeypatch):
+        """SSI_OSINT__IPINFO_TOKEN should set the ipinfo.io API token."""
+        monkeypatch.setenv("SSI_OSINT__IPINFO_TOKEN", "tok_test_abc123")
+        from ssi.settings.config import Settings
+
+        s = Settings()
+        assert s.osint.ipinfo_token == "tok_test_abc123"
 
 
 class TestEvidenceSettings:

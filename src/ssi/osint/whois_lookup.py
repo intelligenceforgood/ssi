@@ -37,15 +37,15 @@ def lookup_whois(url: str) -> WHOISRecord:
         1. Try ``python-whois`` (raw TCP port 43) with retry.
         2. On failure, fall back to RDAP (HTTP-based, works behind
            firewalls and on Cloud Run).
+        3. If both fail, return an empty ``WHOISRecord`` with the
+           domain name populated — never raises.
 
     Args:
         url: Full URL or bare domain.
 
     Returns:
-        Populated ``WHOISRecord``.
-
-    Raises:
-        RuntimeError: If both WHOIS and RDAP lookups fail.
+        Populated ``WHOISRecord``, or a mostly-empty record if all
+        lookups failed.
     """
     domain = _extract_domain(url)
     logger.info("WHOIS lookup for %s", domain)
@@ -72,12 +72,24 @@ def lookup_whois(url: str) -> WHOISRecord:
     try:
         return _rdap_lookup(domain)
     except Exception as rdap_err:
-        logger.warning("RDAP fallback also failed for %s: %s", domain, rdap_err)
+        logger.warning(
+            "RDAP fallback also failed for %s: %s. "
+            "This is common on Cloud Run where shared egress IPs are "
+            "rate-limited by WHOIS/RDAP servers. Consider routing through "
+            "a VPC connector with Cloud NAT (static IP).",
+            domain,
+            rdap_err,
+        )
 
-    raise RuntimeError(
-        f"All WHOIS/RDAP lookups failed for {domain}. "
-        f"Last WHOIS error: {last_error}; RDAP also unavailable."
+    # Return a partial record instead of raising — callers should not
+    # crash when WHOIS/RDAP data is unavailable.
+    logger.warning(
+        "All WHOIS/RDAP lookups failed for %s; returning empty record. "
+        "Last WHOIS error: %s",
+        domain,
+        last_error,
     )
+    return WHOISRecord(domain=domain, raw=f"All lookups failed: {last_error}")
 
 
 def _whois_port43(domain: str) -> WHOISRecord:
