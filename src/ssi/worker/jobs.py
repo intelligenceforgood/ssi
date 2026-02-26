@@ -191,6 +191,8 @@ def _configure_logging() -> None:
     if env != "local":
         # Cloud Logging JSON format — severity is parsed automatically
         class _CloudFormatter(logging.Formatter):
+            """JSON formatter emitting Cloud Logging-compatible entries."""
+
             _LEVEL_MAP = {
                 "DEBUG": "DEBUG",
                 "INFO": "INFO",
@@ -200,6 +202,7 @@ def _configure_logging() -> None:
             }
 
             def format(self, record: logging.LogRecord) -> str:
+                """Format a log record as a JSON object with severity."""
                 entry = {
                     "severity": self._LEVEL_MAP.get(record.levelname, "DEFAULT"),
                     "message": record.getMessage(),
