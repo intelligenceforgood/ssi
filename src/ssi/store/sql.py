@@ -173,7 +173,21 @@ def build_engine(*, db_path: str | Path | None = None, echo: bool = False) -> sa
     if backend == "cloudsql":
         return _build_cloudsql_engine(settings, echo=echo)
 
-    # Default: SQLite
+    # Default: SQLite (or db_url override)
+    db_url = settings.storage.db_url
+    if db_url and db_path is None:
+        # External DB URL takes precedence (e.g. core's SQLite file)
+        if db_url.startswith("sqlite:///"):
+            sqlite_file = Path(db_url.replace("sqlite:///", ""))
+            sqlite_file.parent.mkdir(parents=True, exist_ok=True)
+            return sa.create_engine(
+                db_url,
+                echo=echo,
+                pool_pre_ping=True,
+                connect_args={"check_same_thread": False, "timeout": 30},
+            )
+        return sa.create_engine(db_url, echo=echo, pool_pre_ping=True)
+
     if db_path is None:
         db_path = settings.storage.sqlite_path
 

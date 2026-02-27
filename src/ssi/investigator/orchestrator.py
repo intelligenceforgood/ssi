@@ -119,7 +119,8 @@ def run_investigation(
                 url=url,
                 scan_type=scan_type_label,
                 domain=domain_slug,
-                metadata={"output_dir": str(inv_dir), "investigation_id": str(result.investigation_id)},
+                scan_id=str(result.investigation_id),
+                metadata={"output_dir": str(inv_dir)},
             )
             logger.debug("Created scan record %s", scan_id)
         except Exception:
@@ -133,10 +134,11 @@ def run_investigation(
         domain_resolves = _check_domain_resolution(url)
         if not domain_resolves:
             result.warnings.append(
-                f"Domain does not resolve (NXDOMAIN). The domain may be unregistered, "
-                f"expired, or taken down. WHOIS, DNS, SSL, and GeoIP data will be unavailable."
+                "Domain does not resolve (NXDOMAIN). The domain may be unregistered, "
+                "expired, or suspended (clientHold). DNS, SSL, GeoIP, and browser "
+                "capture will be unavailable. WHOIS lookup will still be attempted."
             )
-            logger.warning("Domain does not resolve — OSINT data will be limited")
+            logger.warning("Domain does not resolve — DNS/SSL/GeoIP/browser skipped, WHOIS still attempted")
 
         # --- Phase 1: Passive Reconnaissance --------------------------------
         logger.info("Phase 1: Passive recon for %s (scan_type=%s)", url, resolved_scan_type.value)

@@ -11,3 +11,9 @@
 
 # [browser]
 # headless = false  # Set to false to watch the browser during development
+
+# [storage]
+# Point SSI at core's database so investigations appear in core's UI.
+# db_url = "sqlite:///../core/data/i4g_store.db"
+# To use SSI's own standalone DB instead, clear db_url:
+# db_url = ""

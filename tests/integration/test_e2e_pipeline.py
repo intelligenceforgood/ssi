@@ -202,6 +202,8 @@ class TestE2EPipeline:
         # Investigation should still complete — not crash
         assert result.success is True
         assert any("does not resolve" in w for w in result.warnings)
+        # Warning should clarify that WHOIS is still attempted (independent of DNS)
+        assert any("WHOIS lookup will still be attempted" in w for w in result.warnings)
 
     @patch("ssi.investigator.orchestrator._check_domain_resolution", return_value=True)
     @patch("ssi.investigator.orchestrator._run_whois", return_value=_FAKE_WHOIS)

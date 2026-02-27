@@ -102,6 +102,9 @@ warn_at_pct = 80
 backend = "sqlite"
 persist_scans = true
 sqlite_path = "data/ssi_store.db"
+# Point at core's database so SSI writes are visible to core's read endpoints.
+# Override via SSI_STORAGE__DB_URL env var.
+db_url = "sqlite:///../core/data/i4g_store.db"
 
 [feedback]
 db_path = "data/evidence/feedback.db"

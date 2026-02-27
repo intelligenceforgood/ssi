@@ -94,9 +94,21 @@ class ScanStore:
         domain: str | None = None,
         case_id: str | None = None,
         metadata: dict[str, Any] | None = None,
+        scan_id: str | None = None,
     ) -> str:
-        """Insert a new ``site_scans`` row and return the ``scan_id``."""
-        scan_id = str(uuid4())
+        """Insert a new ``site_scans`` row and return the ``scan_id``.
+
+        Args:
+            url: Target URL being investigated.
+            scan_type: Scan mode — ``"passive"``, ``"active"``, or ``"full"``.
+            domain: Domain slug extracted from the URL.
+            case_id: Optional core case ID to link this scan to.
+            metadata: Arbitrary JSON metadata stored with the scan.
+            scan_id: Optional pre-generated ID.  When *None* a fresh UUID is
+                created.  Pass the orchestrator's ``investigation_id`` here so
+                the DB record and the result object share the same identifier.
+        """
+        scan_id = scan_id or str(uuid4())
         now = datetime.now(timezone.utc)
         with self._session_factory() as session:
             session.execute(

@@ -265,12 +265,18 @@ class StorageSettings(BaseSettings):
       ``google-cloud-sql-connector`` library with IAM auth.
     - ``core_api`` — delegate all persistence to the core platform
       (not yet implemented).
+
+    The ``db_url`` field lets SSI point at an external SQLAlchemy
+    database URL (e.g. core's SQLite file) instead of SSI's own DB.
+    When set and ``backend`` is ``"sqlite"``, ``db_url`` takes
+    precedence over ``sqlite_path``.
     """
 
     model_config = SettingsConfigDict(env_prefix="SSI_STORAGE__")
 
     backend: str = "sqlite"  # sqlite | cloudsql | core_api
     sqlite_path: str = "data/ssi_store.db"
+    db_url: str = ""  # SQLAlchemy URL override; when set, takes precedence over sqlite_path
     persist_scans: bool = True
 
     # Cloud SQL connection settings (used when backend == "cloudsql")
@@ -427,6 +433,10 @@ class Settings(BaseSettings):
             self.feedback.db_path = str(root / self.feedback.db_path)
         if not Path(self.storage.sqlite_path).is_absolute():
             self.storage.sqlite_path = str(root / self.storage.sqlite_path)
+        if self.storage.db_url and self.storage.db_url.startswith("sqlite:///"):
+            rel = self.storage.db_url.replace("sqlite:///", "")
+            if not Path(rel).is_absolute():
+                self.storage.db_url = f"sqlite:///{root / rel}"
         if not Path(self.playbook.playbook_dir).is_absolute():
             self.playbook.playbook_dir = str(root / self.playbook.playbook_dir)
         return self
