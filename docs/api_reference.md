@@ -165,4 +165,4 @@ These routes serve the built-in Jinja2 web interface and are not part of the JSO
 
 ## Authentication
 
-The SSI API does not require authentication. In production, it runs behind IAP (Identity-Aware Proxy) on Cloud Run. The `/ssi` route on the i4g console (`ui/`) is public and proxies to the SSI API.
+In production, SSI endpoints are served by the core FastAPI gateway, which runs behind IAP (Identity-Aware Proxy) on Cloud Run. No separate SSI API service exists in GCP. For local development, the standalone SSI app (`ssi/src/ssi/api/app.py`) does not require authentication.

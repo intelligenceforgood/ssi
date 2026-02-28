@@ -152,7 +152,7 @@ Simpler imports: `from ssi.models import InvestigationResult`. No namespace pack
 | Layer                 | Local                                    | Dev (GCP)                                 | Prod (GCP)                                 |
 | --------------------- | ---------------------------------------- | ----------------------------------------- | ------------------------------------------ |
 | **Python**            | 3.11+ (conda `i4g-ssi`)                  | Cloud Run container                       | Cloud Run container                        |
-| **API**               | FastAPI + uvicorn (port 8100)            | Cloud Run Service                         | Cloud Run Service                          |
+| **API**               | FastAPI + uvicorn (port 8100)            | Core gateway (Cloud Run)                  | Core gateway (Cloud Run)                   |
 | **Browser (Active)**  | zendriver + Chromium (headless)          | Cloud Run Job (gVisor)                    | Cloud Run Job (gVisor)                     |
 | **Browser (Passive)** | Playwright + Chromium                    | Cloud Run Job                             | Cloud Run Job                              |
 | **LLM (text)**        | Ollama (Llama 3.3)                       | Vertex AI Gemini 2.0 Flash                | Vertex AI Gemini 2.0 Flash                 |
@@ -726,8 +726,8 @@ interface GuidanceCommand {
 │                                                             │
 │  ┌───────────────────┐     ┌──────────────────────────┐     │
 │  │ Cloud Run Service │     │ Cloud Run Job            │     │
-│  │ ssi-api           │     │ ssi-investigation        │     │
-│  │ (FastAPI + WS)    │────▶│ (Browser + LLM + OSINT)  │     │
+│  │ core gateway      │     │ ssi-investigate          │     │
+│  │ (FastAPI, 19 rtr) │────▶│ (Browser + LLM + OSINT)  │     │
 │  └────────┬──────────┘     └────────────┬─────────────┘     │
 │           │                             │                   │
 │  ┌────────▼─────────────────────────────▼────────────────┐  │
@@ -742,7 +742,7 @@ interface GuidanceCommand {
 │  │  └────────────────┘  └─────────────────────────┘      │  │
 │  └───────────────────────────────────────────────────────┘  │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │ IAP (Identity-Aware Proxy) — protects SSI API          │ │
+│  │ IAP (Identity-Aware Proxy) — protects core gateway     │ │
 │  └────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -751,18 +751,20 @@ interface GuidanceCommand {
 
 In `infra/environments/app/dev/`:
 
-- `ssi_cloud_run.tf` — SSI API Cloud Run service
 - `ssi_cloud_run_job.tf` — SSI investigation Cloud Run job
 - `ssi_gcs.tf` — Evidence GCS bucket
 - `ssi_secrets.tf` — OSINT API keys, proxy credentials
 - `ssi_iam.tf` — `sa-ssi` service account + roles
 
+SSI API endpoints are served by the core gateway Cloud Run Service (no separate SSI service).
+
 ### 9.3 Docker Images
 
 ```
-docker/ssi-api.Dockerfile      → FastAPI + uvicorn (no browser deps)
 docker/ssi-job.Dockerfile      → Chromium + zendriver + Playwright + OSINT + WeasyPrint
 ```
+
+The SSI API is served by the core gateway image (`core/docker/fastapi.Dockerfile`).
 
 ---
 

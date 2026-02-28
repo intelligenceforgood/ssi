@@ -42,14 +42,8 @@ investigate:
 	ssi investigate $(URL)
 
 # ---------- Docker ----------
-build-api:
-	docker build -f docker/ssi-api.Dockerfile -t ssi-api:local .
-
 build-job:
 	docker build -f docker/ssi-job.Dockerfile -t ssi-job:local .
-
-push-api:
-	scripts/build_image.sh ssi-api dev
 
 push-job:
 	scripts/build_image.sh ssi-job dev

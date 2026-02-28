@@ -128,14 +128,23 @@ def run_investigation(
 
             scan_store = build_scan_store()
             scan_type_label = resolved_scan_type.value
-            scan_id = scan_store.create_scan(
-                url=url,
-                scan_type=scan_type_label,
-                domain=domain_slug,
-                scan_id=str(result.investigation_id),
-                metadata={"output_dir": str(inv_dir)},
-            )
-            logger.debug("Created scan record %s", scan_id)
+
+            # When investigation_id is provided (e.g. from SSI_JOB__SCAN_ID),
+            # the scan row was pre-created by core at trigger time.  Skip the
+            # INSERT to avoid an IntegrityError on the duplicate primary key
+            # and reuse the existing row for persist_investigation().
+            if investigation_id:
+                scan_id = str(result.investigation_id)
+                logger.debug("Reusing pre-created scan record %s", scan_id)
+            else:
+                scan_id = scan_store.create_scan(
+                    url=url,
+                    scan_type=scan_type_label,
+                    domain=domain_slug,
+                    scan_id=str(result.investigation_id),
+                    metadata={"output_dir": str(inv_dir)},
+                )
+                logger.debug("Created scan record %s", scan_id)
         except Exception:
             logger.warning("Failed to initialise scan store — results will not be persisted", exc_info=True)
             scan_store = None

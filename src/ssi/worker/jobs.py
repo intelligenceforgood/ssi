@@ -71,7 +71,7 @@ def main() -> int:
         scan_id,
     )
 
-    reporter.update(status="running", message=f"Starting investigation for {url}")
+    reporter.update(status="running", message=f"Starting investigation for {url}", scan_id=scan_id)
 
     start = time.monotonic()
 

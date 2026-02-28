@@ -148,7 +148,6 @@ ssi/
 │   ├── settings.default.toml    # Default configuration
 │   └── settings.local.toml.example  # Template for local overrides
 ├── docker/
-│   ├── ssi-api.Dockerfile       # API server image
 │   └── ssi-job.Dockerfile       # Cloud Run Job image
 ├── scripts/
 │   ├── campaign_runner.py       # Batch campaign script
@@ -415,29 +414,21 @@ export SSI_LLM__MODEL=llama3.3
 
 ## 9. Docker Builds
 
-Two Docker images are provided:
+One Docker image is provided for the SSI Cloud Run Job:
 
 ```bash
-# API server image
-make build-api
-# or: docker build -f docker/ssi-api.Dockerfile -t ssi-api .
-
 # Cloud Run Job image
 make build-job
 # or: docker build -f docker/ssi-job.Dockerfile -t ssi-job .
 ```
 
-Both use multi-stage builds with zendriver browser runtime pre-installed.
+The SSI API runs on the core gateway (see `core/docker/fastapi.Dockerfile`), so there is no separate SSI API image.
 
 ### Pushing to Artifact Registry
 
-Build and push images to the `i4g-dev` Artifact Registry using the build script:
+Build and push the job image to the `i4g-dev` Artifact Registry using the build script:
 
 ```bash
-# Push API image
-make push-api
-# or: scripts/build_image.sh ssi-api dev
-
 # Push Job image
 make push-job
 # or: scripts/build_image.sh ssi-job dev
@@ -522,16 +513,16 @@ SSI runs on Google Cloud Run in the `i4g-dev` project alongside the core platfor
 Terraform config lives in `infra/environments/app/dev/`:
 
 - Service account `sa-ssi` with Vertex AI, Storage, Logging, Monitoring roles
-- Cloud Run service `ssi-api` (the API + web UI)
 - Cloud Run job `ssi-investigate` (long-running investigations)
 - GCS bucket `i4g-dev-ssi-evidence` for evidence storage
+
+SSI API endpoints are served by the core gateway Cloud Run Service (no separate SSI service).
 
 ### Deploy workflow
 
 ```bash
-# 1. Build and push images
+# 1. Build and push job image
 cd ssi/
-make push-api
 make push-job
 
 # 2. Apply Terraform
@@ -565,9 +556,7 @@ The Cloud Run service receives `SSI_*` environment variables via Terraform (see 
 | `make format`      | Black + isort auto-format                 |
 | `make serve`       | Start API server (hot reload, port 8100)  |
 | `make investigate` | Quick investigate (set `URL=` variable)   |
-| `make build-api`   | Build API Docker image                    |
 | `make build-job`   | Build Job Docker image                    |
-| `make push-api`    | Build + push API image to Artifact Reg    |
 | `make push-job`    | Build + push Job image to Artifact Reg    |
 | `make clean`       | Remove build artifacts and caches         |
 | `make rehydrate`   | Copilot session bootstrap                 |
