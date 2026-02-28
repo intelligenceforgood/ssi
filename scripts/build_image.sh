@@ -7,9 +7,8 @@ set -euo pipefail
 #   scripts/build_image.sh <name> <tag> [options]
 #
 # Examples:
-#   scripts/build_image.sh ssi-api dev
 #   scripts/build_image.sh ssi-job dev
-#   scripts/build_image.sh ssi-api dev --no-cache
+#   scripts/build_image.sh ssi-job dev --no-cache
 # ---------------------------------------------------------------------------
 
 usage() {
@@ -17,7 +16,7 @@ usage() {
 Usage: scripts/build_image.sh <name> <tag> [options]
 
 Positional arguments:
-  name                  Image/Dockerfile base name (ssi-api or ssi-job)
+  name                  Image/Dockerfile base name (e.g. ssi-job)
   tag                   Image tag suffix (e.g. dev, prod, latest)
 
 Options:
