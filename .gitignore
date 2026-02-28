@@ -24,6 +24,9 @@ dist/
 .env.*
 !.env.example
 
+# Local config overrides (may contain API keys)
+config/settings.local.toml
+
 # Runtime data
 data/
 *.db
