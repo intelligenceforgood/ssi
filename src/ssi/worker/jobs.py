@@ -21,7 +21,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ssi.models.investigation import InvestigationResult
@@ -50,10 +50,10 @@ def main() -> int:
     url = os.environ.get("SSI_JOB__URL", "").strip()
     if not url:
         logger.error("SSI_JOB__URL is required")
-        reporter.update(status="failed", message="SSI_JOB__URL is required")
         return 1
 
     # Prefer SSI_JOB__SCAN_TYPE; fall back to legacy SSI_JOB__PASSIVE_ONLY.
+    scan_id = os.environ.get("SSI_JOB__SCAN_ID")
     scan_type = os.environ.get("SSI_JOB__SCAN_TYPE", "").strip().lower()
     if not scan_type:
         passive_only = os.environ.get("SSI_JOB__PASSIVE_ONLY", "false").lower() in ("true", "1", "yes")
@@ -64,16 +64,14 @@ def main() -> int:
     dataset = os.environ.get("SSI_JOB__DATASET", "ssi")
 
     logger.info(
-        "SSI Job starting: url=%s scan_type=%s push_to_core=%s",
+        "SSI Job starting: url=%s scan_type=%s push_to_core=%s scan_id=%s",
         url,
         scan_type,
         push_to_core,
+        scan_id,
     )
-    reporter.update(
-        status="running",
-        message=f"SSI investigation started for {url}",
-        scan_type=scan_type,
-    )
+
+    reporter.update(status="running", message=f"Starting investigation for {url}")
 
     start = time.monotonic()
 
@@ -84,13 +82,12 @@ def main() -> int:
         settings = get_settings()
         output_dir = Path(settings.evidence.output_dir)
 
-        reporter.update(status="running", message="Running investigation...")
-
         result = run_investigation(
             url=url,
             output_dir=output_dir,
             scan_type=scan_type,
             report_format="both",
+            investigation_id=scan_id,
         )
 
         elapsed = time.monotonic() - start
@@ -106,31 +103,40 @@ def main() -> int:
             logger.error("Investigation failed: %s", result.error)
             reporter.update(
                 status="failed",
-                message=f"Investigation failed: {result.error}",
-                duration_seconds=round(elapsed, 1),
+                message=result.error or "Investigation failed",
+                investigation_id=str(result.investigation_id),
+                scan_id=str(result.investigation_id),
             )
             return 1
 
         # Push to core platform if requested
         case_id = None
         if push_to_core:
-            reporter.update(status="running", message="Pushing results to core platform...")
             case_id = _push_to_core(result, dataset=dataset, trigger_dossier=trigger_dossier)
 
+        # Report completion with all enrichment fields so core's
+        # get_task_status can return them to the UI immediately.
+        risk_score = result.taxonomy_result.risk_score if result.taxonomy_result else None
         reporter.update(
             status="completed",
             message=f"Investigation completed in {elapsed:.1f}s",
             investigation_id=str(result.investigation_id),
-            risk_score=result.taxonomy_result.risk_score if result.taxonomy_result else None,
+            scan_id=str(result.investigation_id),
+            risk_score=risk_score,
             case_id=case_id,
-            duration_seconds=round(elapsed, 1),
+            duration_seconds=elapsed,
         )
+
+        # Update the scan row in the shared DB with the evidence path
+        # (gs:// URI when GCS upload succeeded).
+        _update_core_scan(str(result.investigation_id), result, case_id=case_id)
+
         logger.info("SSI Job completed successfully in %.1fs", elapsed)
         return 0
 
     except Exception:
         logger.exception("SSI Job failed")
-        reporter.update(status="failed", message="SSI Job failed with an unexpected error")
+        reporter.update(status="failed", message="SSI Job failed with an exception")
         return 1
 
 
@@ -169,6 +175,53 @@ def _push_to_core(
     except Exception as e:
         logger.error("Failed to push investigation to core: %s", e)
         return None
+    finally:
+        bridge.close()
+
+
+def _update_core_scan(
+    scan_id: str,
+    result: InvestigationResult,
+    *,
+    case_id: str | None = None,
+) -> None:
+    """Update the pre-created scan row in core's DB via HTTP PATCH.
+
+    Core pre-creates a ``site_scans`` row at trigger time.  After
+    the investigation completes (and evidence is uploaded to GCS),
+    this function patches the row with the final evidence path,
+    risk score, and case ID so that core's report endpoint can
+    serve the PDF via a GCS signed URL.
+
+    Args:
+        scan_id: The scan_id (= investigation_id) shared with core.
+        result: Completed investigation result.
+        case_id: Core case ID returned by ``CoreBridge.push_investigation``.
+    """
+    from ssi.integration.core_bridge import CoreBridge
+
+    bridge = CoreBridge()
+    try:
+        # Build the completion payload matching core's SsiStore.complete_scan fields
+        payload: dict[str, Any] = {
+            "status": "completed" if result.success else "failed",
+            "evidence_path": result.output_path or None,
+            "duration_seconds": result.duration_seconds,
+        }
+        if case_id:
+            payload["case_id"] = case_id
+        if result.taxonomy_result:
+            payload["risk_score"] = result.taxonomy_result.risk_score
+            payload["classification_result"] = result.taxonomy_result.model_dump(mode="json")
+        if result.error:
+            payload["error_message"] = result.error
+
+        # Use the core API endpoint to update the scan
+        resp = bridge._client.patch(f"/investigations/ssi/{scan_id}", json=payload)
+        resp.raise_for_status()
+        logger.info("Updated core scan %s with evidence_path=%s", scan_id, result.output_path)
+    except Exception as e:
+        logger.warning("Failed to update core scan %s: %s", scan_id, e)
     finally:
         bridge.close()
 

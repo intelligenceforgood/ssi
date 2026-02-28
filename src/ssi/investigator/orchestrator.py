@@ -11,7 +11,7 @@ import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from ssi.models.investigation import DownloadArtifact, InvestigationResult, InvestigationStatus, ScanType
@@ -39,6 +39,7 @@ def run_investigation(
     skip_virustotal: bool = False,
     skip_urlscan: bool = False,
     report_format: str = "json",
+    investigation_id: str | None = None,
 ) -> InvestigationResult:
     """Execute an investigation against *url*.
 
@@ -67,6 +68,10 @@ def run_investigation(
         skip_virustotal: Skip VirusTotal API check.
         skip_urlscan: Skip urlscan.io check.
         report_format: Output format — ``json``, ``markdown``, or ``both``.
+        investigation_id: Optional pre-assigned scan ID.  When provided the
+            ``InvestigationResult.investigation_id`` is set to this value so
+            that the DB row created by core at trigger time and the result
+            object share the same identifier.
 
     Returns:
         An ``InvestigationResult`` populated with all collected intelligence.
@@ -82,11 +87,19 @@ def run_investigation(
     run_active = resolved_scan_type in (ScanType.ACTIVE, ScanType.FULL)
 
     start = time.monotonic()
-    result = InvestigationResult(
-        url=url,
-        scan_type=resolved_scan_type,
-        passive_only=resolved_scan_type == ScanType.PASSIVE,
-    )
+
+    # When investigation_id is supplied (from SSI_JOB__SCAN_ID), reuse it
+    # so the result matches the scan row pre-created by core at trigger time.
+    init_kwargs: dict[str, Any] = {
+        "url": url,
+        "scan_type": resolved_scan_type,
+        "passive_only": resolved_scan_type == ScanType.PASSIVE,
+    }
+    if investigation_id:
+        from uuid import UUID
+
+        init_kwargs["investigation_id"] = UUID(investigation_id)
+    result = InvestigationResult(**init_kwargs)
     result.status = InvestigationStatus.RUNNING
 
     # Create per-investigation output directory with a human-readable prefix
@@ -774,6 +787,10 @@ def _create_evidence_zip(result: InvestigationResult, inv_dir: Path) -> None:
 def _upload_evidence_to_gcs(result: InvestigationResult, inv_dir: Path) -> None:
     """Upload evidence artifacts to GCS when the storage backend is configured.
 
+    On success, updates ``result.output_path`` to the ``gs://`` URI prefix
+    so that downstream stores persist a cloud-resolvable path rather than
+    a container-local filesystem path.
+
     Skips silently when the backend is ``local`` or when GCS upload fails
     (the local evidence directory always remains available as a fallback).
     """
@@ -794,6 +811,12 @@ def _upload_evidence_to_gcs(result: InvestigationResult, inv_dir: Path) -> None:
         investigation_id = str(result.investigation_id)
         uploaded = client.upload_directory(investigation_id, inv_dir)
         logger.info("Uploaded %d evidence files to GCS for investigation %s", len(uploaded), investigation_id)
+
+        # Update output_path to the GCS URI so the core gateway can
+        # locate evidence via the gs:// prefix (Phase C fix).
+        gcs_prefix = settings.evidence.gcs_prefix.rstrip("/")
+        result.output_path = f"gs://{settings.evidence.gcs_bucket}/{gcs_prefix}/{investigation_id}"
+        logger.info("Updated evidence_path to %s", result.output_path)
     except Exception as e:
         logger.warning("GCS evidence upload failed (local copy retained): %s", e)
 
