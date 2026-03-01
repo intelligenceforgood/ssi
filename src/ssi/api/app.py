@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from ssi.api.investigation_routes import investigation_router
+from ssi.api.job_routes import router as job_router
 from ssi.api.playbook_routes import playbook_router
 from ssi.api.routes import router
 from ssi.api.web import web_router
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
 
     application.include_router(router)
     application.include_router(investigation_router)
+    application.include_router(job_router)
     application.include_router(playbook_router)
     application.include_router(ws_router)
     application.include_router(web_router)
