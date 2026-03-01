@@ -176,40 +176,54 @@ def _run_investigation_task(task_id: str, req: InvestigateRequest) -> None:
 
 
 def _push_to_core(task_id: str, result: Any, *, dataset: str, trigger_dossier: bool) -> None:
-    """Push investigation results to the i4g core platform.
+    """Create a case record directly in the shared DB and update the task store.
 
-    On success the returned ``case_id`` is persisted both in the task
-    store and back into the SSI scan store so the relationship is
-    durable across restarts.
+    Uses ``ScanStore.create_case_record()`` for a direct DB write so that
+    Cloud Run Services — which cannot authenticate through IAP — bypass the
+    deprecated ``CoreBridge`` HTTP path that used to fail silently with 403s.
+
+    On success the ``case_id`` is stored in the task store so
+    ``GET /investigate/{id}`` can return it immediately.
     """
     import logging
 
     logger = logging.getLogger(__name__)
     store = build_task_store()
+
+    scan_id = str(getattr(result, "investigation_id", "") or "")
+
     try:
-        from ssi.integration.core_bridge import CoreBridge
+        from ssi.store import build_scan_store
 
-        bridge = CoreBridge()
-        case_id = bridge.push_investigation(result, dataset=dataset, trigger_dossier=trigger_dossier)
-        bridge.close()
-        store.update(task_id, core_case_id=case_id)
-        logger.info("Pushed investigation %s to core case %s", task_id, case_id)
+        scan_store = build_scan_store()
+        case_id = scan_store.create_case_record(
+            scan_id=scan_id,
+            result=result,
+            dataset=dataset,
+        )
+        if case_id:
+            store.update(task_id, core_case_id=case_id)
+            logger.info(
+                "Created case %s for investigation %s (direct DB, scan_id=%s)",
+                case_id,
+                task_id,
+                scan_id,
+            )
+        else:
+            logger.error(
+                "create_case_record returned None for investigation %s (scan_id=%s) — "
+                "case was NOT written to the cases table; "
+                "check the preceding scan_store log lines for the root cause",
+                task_id,
+                scan_id,
+            )
+            store.update(task_id, core_push_error="case_record_creation_failed")
 
-        # Persist back-reference in the scan store
-        try:
-            from ssi.store import build_scan_store
-
-            scan_store = build_scan_store()
-            scan_id = getattr(result, "investigation_id", None) or str(getattr(result, "scan_id", ""))
-            if scan_id:
-                scan_store.update_scan(str(scan_id), case_id=case_id)
-                logger.debug("Stored core case_id %s on scan %s", case_id, scan_id)
-        except Exception as e:
-            logger.warning("Failed to persist core case_id back-reference: %s", e)
-
-    except Exception as e:
-        detail = str(e)
-        if hasattr(e, "response"):
-            detail = f"{e.response.status_code} {e.response.text[:500]}"
-        logger.warning("Failed to push to core: %s — %s", type(e).__name__, detail)
-        store.update(task_id, core_push_error="core_push_failed")
+    except Exception:
+        logger.exception(
+            "Failed to create case record for investigation %s (scan_id=%s) — "
+            "case was NOT written to the cases table",
+            task_id,
+            scan_id,
+        )
+        store.update(task_id, core_push_error="case_record_creation_failed")

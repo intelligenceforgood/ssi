@@ -170,10 +170,19 @@ def _create_case_direct(
         if case_id:
             logger.info("Created case %s for scan %s (direct DB)", case_id, resolved_scan_id)
         else:
-            logger.warning("create_case_record returned None for scan %s", resolved_scan_id)
+            logger.error(
+                "create_case_record returned None for scan %s — "
+                "case was NOT written to the cases table; "
+                "check the preceding scan_store log lines for the root cause",
+                resolved_scan_id,
+            )
         return case_id
-    except Exception as e:
-        logger.error("Failed to create case record for scan %s: %s", resolved_scan_id, e)
+    except Exception:
+        logger.exception(
+            "Failed to create case record for scan %s — "
+            "case was NOT written to the cases table",
+            resolved_scan_id,
+        )
         return None
 
 
