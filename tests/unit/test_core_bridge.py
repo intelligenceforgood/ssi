@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -212,6 +213,95 @@ class TestPushInvestigation:
         post_calls = bridge._client.post.call_args_list
         dossier_calls = [c for c in post_calls if c[0][0] == "/dossier/queue"]
         assert len(dossier_calls) == 1
+
+
+class TestCreateTimelineEvents:
+    """Tests for ``CoreBridge._create_timeline_events``."""
+
+    def test_posts_timeline_events_for_complete_result(self, bridge):
+        """A fully-populated result generates multiple timeline events."""
+        result = InvestigationResult(
+            url="https://scam.example.com",
+            started_at=datetime(2026, 2, 28, 10, 0, 0, tzinfo=timezone.utc),
+            completed_at=datetime(2026, 2, 28, 10, 5, 0, tzinfo=timezone.utc),
+            taxonomy_result=FraudTaxonomyResult(
+                intent=[TaxonomyScoredLabel(label="INTENT.INVESTMENT_SCAM", confidence=0.9, explanation="test")],
+                risk_score=85.0,
+            ),
+            threat_indicators=[
+                ThreatIndicator(indicator_type="crypto_wallet", value="0xabc", context="ETH", source="dom"),
+                ThreatIndicator(indicator_type="crypto_wallet", value="bc1q", context="BTC", source="dom"),
+            ],
+        )
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        bridge._client.post.return_value = mock_resp
+
+        bridge._create_timeline_events("case-123", result)
+
+        # Find the timeline POST call
+        timeline_calls = [
+            c for c in bridge._client.post.call_args_list if c[0][0] == "/cases/case-123/timeline"
+        ]
+        assert len(timeline_calls) == 1
+        events = timeline_calls[0][1]["json"]["events"]
+
+        # Should have: submitted, classification, wallets, case_created (at minimum)
+        event_types = [e["type"] for e in events]
+        assert "investigation_submitted" in event_types
+        assert "classification_completed" in event_types
+        assert "wallets_harvested" in event_types
+        assert "case_created" in event_types
+
+        # Verify description content
+        submitted = next(e for e in events if e["type"] == "investigation_submitted")
+        assert "scam.example.com" in submitted["description"]
+        assert submitted["actor"] == "ssi-agent"
+
+        classified = next(e for e in events if e["type"] == "classification_completed")
+        assert "Investment Scam" in classified["description"]
+        assert "85" in classified["description"]
+
+        wallets = next(e for e in events if e["type"] == "wallets_harvested")
+        assert "2 wallet addresses" in wallets["description"]
+
+    def test_minimal_result_still_creates_case_created_event(self, bridge, basic_result):
+        """Even a minimal result generates at least a case_created event."""
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        bridge._client.post.return_value = mock_resp
+
+        bridge._create_timeline_events("case-minimal", basic_result)
+
+        timeline_calls = [
+            c for c in bridge._client.post.call_args_list if c[0][0] == "/cases/case-minimal/timeline"
+        ]
+        assert len(timeline_calls) == 1
+        events = timeline_calls[0][1]["json"]["events"]
+        event_types = [e["type"] for e in events]
+        assert "case_created" in event_types
+
+    def test_handles_http_error_gracefully(self, bridge, basic_result):
+        """HTTP errors are logged but don't raise exceptions."""
+        bridge._client.post.side_effect = httpx.HTTPStatusError(
+            "500", request=MagicMock(), response=MagicMock()
+        )
+        # Should not raise
+        bridge._create_timeline_events("case-fail", basic_result)
+
+    def test_push_investigation_calls_timeline(self, bridge, basic_result):
+        """push_investigation() now includes a call to _create_timeline_events."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"case_id": "case-tl"}
+        mock_resp.raise_for_status = MagicMock()
+        bridge._client.post.return_value = mock_resp
+        bridge._client.patch.return_value = mock_resp
+
+        bridge.push_investigation(basic_result)
+
+        # Verify that /timeline was called
+        post_urls = [c[0][0] for c in bridge._client.post.call_args_list]
+        assert any("/timeline" in url for url in post_urls)
 
 
 class TestIOCTypeMapping:

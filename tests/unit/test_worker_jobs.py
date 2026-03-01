@@ -26,10 +26,9 @@ class TestMain:
         monkeypatch.setenv("SSI_JOB__URL", "   ")
         assert main() == 1
 
-    @patch("ssi.worker.jobs._update_core_scan")
     @patch("ssi.settings.get_settings")
     @patch("ssi.investigator.orchestrator.run_investigation")
-    def test_successful_investigation(self, mock_run, mock_settings, mock_update_scan, monkeypatch):
+    def test_successful_investigation(self, mock_run, mock_settings, monkeypatch):
         """Happy path: successful investigation returns 0."""
         monkeypatch.setenv("SSI_JOB__URL", "https://scam.example.com")
 
@@ -51,10 +50,9 @@ class TestMain:
         assert call_kwargs[1]["url"] == "https://scam.example.com"
         assert call_kwargs[1]["scan_type"] == "full"
 
-    @patch("ssi.worker.jobs._update_core_scan")
     @patch("ssi.settings.get_settings")
     @patch("ssi.investigator.orchestrator.run_investigation")
-    def test_passive_only_flag_legacy(self, mock_run, mock_settings, mock_update_scan, monkeypatch):
+    def test_passive_only_flag_legacy(self, mock_run, mock_settings, monkeypatch):
         """SSI_JOB__PASSIVE_ONLY=true maps to scan_type=passive (legacy compat)."""
         monkeypatch.setenv("SSI_JOB__URL", "https://scam.example.com")
         monkeypatch.setenv("SSI_JOB__PASSIVE_ONLY", "true")
@@ -73,10 +71,9 @@ class TestMain:
         assert main() == 0
         assert mock_run.call_args[1]["scan_type"] == "passive"
 
-    @patch("ssi.worker.jobs._update_core_scan")
     @patch("ssi.settings.get_settings")
     @patch("ssi.investigator.orchestrator.run_investigation")
-    def test_scan_type_env_var(self, mock_run, mock_settings, mock_update_scan, monkeypatch):
+    def test_scan_type_env_var(self, mock_run, mock_settings, monkeypatch):
         """SSI_JOB__SCAN_TYPE=active sets scan_type directly."""
         monkeypatch.setenv("SSI_JOB__URL", "https://scam.example.com")
         monkeypatch.setenv("SSI_JOB__SCAN_TYPE", "active")
@@ -95,10 +92,9 @@ class TestMain:
         assert main() == 0
         assert mock_run.call_args[1]["scan_type"] == "active"
 
-    @patch("ssi.worker.jobs._update_core_scan")
     @patch("ssi.settings.get_settings")
     @patch("ssi.investigator.orchestrator.run_investigation")
-    def test_scan_type_overrides_passive_only(self, mock_run, mock_settings, mock_update_scan, monkeypatch):
+    def test_scan_type_overrides_passive_only(self, mock_run, mock_settings, monkeypatch):
         """SSI_JOB__SCAN_TYPE takes priority over SSI_JOB__PASSIVE_ONLY."""
         monkeypatch.setenv("SSI_JOB__URL", "https://scam.example.com")
         monkeypatch.setenv("SSI_JOB__SCAN_TYPE", "active")
@@ -151,12 +147,11 @@ class TestMain:
         mock_run.side_effect = RuntimeError("boom")
         assert main() == 1
 
-    @patch("ssi.worker.jobs._update_core_scan")
-    @patch("ssi.worker.jobs._push_to_core")
+    @patch("ssi.worker.jobs._create_case_direct")
     @patch("ssi.settings.get_settings")
     @patch("ssi.investigator.orchestrator.run_investigation")
-    def test_push_to_core_when_enabled(self, mock_run, mock_settings, mock_push, mock_update_scan, monkeypatch):
-        """SSI_JOB__PUSH_TO_CORE=true triggers core push."""
+    def test_push_to_core_when_enabled(self, mock_run, mock_settings, mock_create_case, monkeypatch):
+        """SSI_JOB__PUSH_TO_CORE=true triggers direct DB case creation."""
         monkeypatch.setenv("SSI_JOB__URL", "https://scam.example.com")
         monkeypatch.setenv("SSI_JOB__PUSH_TO_CORE", "true")
         monkeypatch.setenv("SSI_JOB__TRIGGER_DOSSIER", "true")
@@ -174,15 +169,15 @@ class TestMain:
         mock_run.return_value = mock_result
 
         assert main() == 0
-        mock_push.assert_called_once_with(mock_result, dataset="custom-ds", trigger_dossier=True)
+        mock_create_case.assert_called_once_with(mock_result, dataset="custom-ds", scan_id=None)
 
-    @patch("ssi.worker.jobs._update_core_scan")
-    @patch("ssi.worker.jobs._push_to_core")
+    @patch("ssi.worker.jobs._create_case_direct")
     @patch("ssi.settings.get_settings")
     @patch("ssi.investigator.orchestrator.run_investigation")
-    def test_no_push_when_disabled(self, mock_run, mock_settings, mock_push, mock_update_scan, monkeypatch):
-        """SSI_JOB__PUSH_TO_CORE=false (default) does not push."""
+    def test_no_push_when_disabled(self, mock_run, mock_settings, mock_create_case, monkeypatch):
+        """Case is created even when SSI_JOB__PUSH_TO_CORE=false (always create)."""
         monkeypatch.setenv("SSI_JOB__URL", "https://scam.example.com")
+        monkeypatch.setenv("SSI_JOB__PUSH_TO_CORE", "false")
 
         mock_settings_instance = MagicMock()
         mock_settings_instance.evidence.output_dir = "/tmp/ssi-test"
@@ -196,4 +191,4 @@ class TestMain:
         mock_run.return_value = mock_result
 
         assert main() == 0
-        mock_push.assert_not_called()
+        mock_create_case.assert_called_once()

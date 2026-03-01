@@ -1,13 +1,15 @@
-"""Unit tests for the SSI task-status reporter (Phase 3: 3.2).
+"""Unit tests for the SSI task-status reporter (DB-backed variant).
 
 Tests verify:
-- Reporter no-ops when env vars are absent.
-- Reporter posts to the correct URL with auth headers.
-- HTTP errors are handled gracefully (no exceptions raised).
+- Reporter no-ops when scan_id is absent.
+- Reporter writes to ``site_scans`` via ``ScanStore.update_scan()``.
+- DB errors are handled gracefully (no exceptions raised).
+- Correct columns are set for running / completed / failed statuses.
 """
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,128 +20,156 @@ from ssi.worker.task_reporter import TaskStatusReporter
 class TestTaskStatusReporterInit:
     """Initialisation and configuration tests."""
 
-    def test_disabled_when_no_env_vars(self) -> None:
-        """Reporter is disabled when neither task_id nor endpoint is set."""
-        reporter = TaskStatusReporter(task_id="", endpoint="")
+    def test_disabled_when_no_scan_id(self) -> None:
+        """Reporter is disabled when scan_id is empty."""
+        reporter = TaskStatusReporter(scan_id="")
         assert not reporter.is_enabled
 
-    def test_disabled_when_task_id_missing(self) -> None:
-        """Reporter is disabled when task_id is empty."""
-        reporter = TaskStatusReporter(task_id="", endpoint="https://api.example.com/tasks")
-        assert not reporter.is_enabled
-
-    def test_disabled_when_endpoint_missing(self) -> None:
-        """Reporter is disabled when endpoint is empty."""
-        reporter = TaskStatusReporter(task_id="ssi-abc123", endpoint="")
-        assert not reporter.is_enabled
-
-    def test_enabled_when_both_set(self) -> None:
-        """Reporter is enabled when both task_id and endpoint are set."""
-        reporter = TaskStatusReporter(
-            task_id="ssi-abc123",
-            endpoint="https://api.example.com/tasks",
-        )
+    def test_enabled_when_scan_id_set(self) -> None:
+        """Reporter is enabled when scan_id is provided."""
+        reporter = TaskStatusReporter(scan_id="scan-abc123")
         assert reporter.is_enabled
 
-    def test_reads_from_env_vars(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Reporter reads configuration from environment variables."""
-        monkeypatch.setenv("I4G_TASK_ID", "ssi-from-env")
-        monkeypatch.setenv("I4G_TASK_STATUS_URL", "https://core.example.com/tasks")
-        monkeypatch.setenv("SSI_INTEGRATION__CORE_API_KEY", "test-key-123")
+    def test_reads_scan_id_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Reporter reads SSI_JOB__SCAN_ID from environment."""
+        monkeypatch.setenv("SSI_JOB__SCAN_ID", "scan-from-env")
 
         reporter = TaskStatusReporter()
-        assert reporter.task_id == "ssi-from-env"
-        assert reporter.endpoint == "https://core.example.com/tasks"
+        assert reporter.scan_id == "scan-from-env"
         assert reporter.is_enabled
+
+    def test_constructor_arg_overrides_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Explicit scan_id takes precedence over env var."""
+        monkeypatch.setenv("SSI_JOB__SCAN_ID", "env-id")
+        reporter = TaskStatusReporter(scan_id="arg-id")
+        assert reporter.scan_id == "arg-id"
 
 
 class TestTaskStatusReporterUpdate:
-    """Update posting tests."""
+    """Update / DB-write tests."""
 
     def test_noop_when_disabled(self) -> None:
-        """No HTTP call when reporter is disabled."""
-        reporter = TaskStatusReporter(task_id="", endpoint="")
+        """No DB call when reporter is disabled."""
+        reporter = TaskStatusReporter(scan_id="")
         # Should not raise
         reporter.update(status="running", message="test")
 
-    @patch("ssi.worker.task_reporter.httpx.post")
-    def test_posts_to_correct_url(self, mock_post: MagicMock) -> None:
-        """Reporter posts to {endpoint}/{task_id}/update."""
-        mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
+    @patch("ssi.worker.task_reporter.TaskStatusReporter._get_store")
+    def test_updates_running_status(self, mock_get_store: MagicMock) -> None:
+        """Running status writes only status column."""
+        mock_store = MagicMock()
+        mock_get_store.return_value = mock_store
 
-        reporter = TaskStatusReporter(
-            task_id="ssi-abc123",
-            endpoint="https://api.example.com/tasks",
-            api_key="test-key",
-        )
+        reporter = TaskStatusReporter(scan_id="scan-abc123")
         reporter.update(status="running", message="In progress")
 
-        mock_post.assert_called_once()
-        call_args = mock_post.call_args
-        assert call_args.args[0] == "https://api.example.com/tasks/ssi-abc123/update"
-        assert call_args.kwargs["json"]["status"] == "running"
-        assert call_args.kwargs["json"]["message"] == "In progress"
+        mock_store.update_scan.assert_called_once()
+        call_kwargs = mock_store.update_scan.call_args
+        assert call_kwargs.args[0] == "scan-abc123"
+        assert call_kwargs.kwargs["status"] == "running"
+        # Running should NOT set error_message or completed_at
+        assert "error_message" not in call_kwargs.kwargs
+        assert "completed_at" not in call_kwargs.kwargs
 
-    @patch("ssi.worker.task_reporter.httpx.post")
-    def test_includes_api_key_header(self, mock_post: MagicMock) -> None:
-        """API key is sent as X-API-KEY header."""
-        mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
+    @patch("ssi.worker.task_reporter.TaskStatusReporter._get_store")
+    def test_updates_failed_status_with_error_message(self, mock_get_store: MagicMock) -> None:
+        """Failed status stores message as error_message."""
+        mock_store = MagicMock()
+        mock_get_store.return_value = mock_store
 
-        reporter = TaskStatusReporter(
-            task_id="ssi-abc123",
-            endpoint="https://api.example.com/tasks",
-            api_key="my-secret-key",
-        )
+        reporter = TaskStatusReporter(scan_id="scan-abc123")
+        reporter.update(status="failed", message="Connection timed out")
+
+        call_kwargs = mock_store.update_scan.call_args
+        assert call_kwargs.kwargs["status"] == "failed"
+        assert call_kwargs.kwargs["error_message"] == "Connection timed out"
+
+    @patch("ssi.worker.task_reporter.TaskStatusReporter._get_store")
+    def test_updates_completed_status_with_timestamp(self, mock_get_store: MagicMock) -> None:
+        """Completed status sets completed_at timestamp."""
+        mock_store = MagicMock()
+        mock_get_store.return_value = mock_store
+
+        reporter = TaskStatusReporter(scan_id="scan-abc123")
         reporter.update(status="completed", message="Done")
 
-        headers = mock_post.call_args.kwargs["headers"]
-        assert headers.get("X-API-KEY") == "my-secret-key"
+        call_kwargs = mock_store.update_scan.call_args
+        assert call_kwargs.kwargs["status"] == "completed"
+        assert isinstance(call_kwargs.kwargs["completed_at"], datetime)
+        assert call_kwargs.kwargs["completed_at"].tzinfo == timezone.utc
 
-    @patch("ssi.worker.task_reporter.httpx.post")
-    def test_includes_extra_fields(self, mock_post: MagicMock) -> None:
-        """Extra keyword args are included in the POST body."""
-        mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
+    @patch("ssi.worker.task_reporter.TaskStatusReporter._get_store")
+    def test_maps_extra_fields_to_columns(self, mock_get_store: MagicMock) -> None:
+        """Extra kwargs risk_score, case_id, duration_seconds are persisted."""
+        mock_store = MagicMock()
+        mock_get_store.return_value = mock_store
 
-        reporter = TaskStatusReporter(
-            task_id="ssi-abc123",
-            endpoint="https://api.example.com/tasks",
+        reporter = TaskStatusReporter(scan_id="scan-abc123")
+        reporter.update(
+            status="completed",
+            message="Done",
+            risk_score=75.5,
+            case_id="case-xyz",
+            duration_seconds=42.3,
         )
+
+        call_kwargs = mock_store.update_scan.call_args
+        assert call_kwargs.kwargs["risk_score"] == 75.5
+        assert call_kwargs.kwargs["case_id"] == "case-xyz"
+        assert call_kwargs.kwargs["duration_seconds"] == 42.3
+
+    @patch("ssi.worker.task_reporter.TaskStatusReporter._get_store")
+    def test_ignores_unmapped_extra_fields(self, mock_get_store: MagicMock) -> None:
+        """Extra kwargs not in _EXTRA_COLUMN_KEYS are silently ignored."""
+        mock_store = MagicMock()
+        mock_get_store.return_value = mock_store
+
+        reporter = TaskStatusReporter(scan_id="scan-abc123")
         reporter.update(
             status="completed",
             message="Done",
             investigation_id="inv-123",
-            risk_score=75.5,
+            some_random_field="ignored",
         )
 
-        body = mock_post.call_args.kwargs["json"]
-        assert body["investigation_id"] == "inv-123"
-        assert body["risk_score"] == 75.5
+        call_kwargs = mock_store.update_scan.call_args
+        assert "investigation_id" not in call_kwargs.kwargs
+        assert "some_random_field" not in call_kwargs.kwargs
 
-    @patch("ssi.worker.task_reporter.httpx.post")
-    def test_handles_http_error_gracefully(self, mock_post: MagicMock) -> None:
-        """HTTP errors are caught and logged, not raised."""
-        import httpx
+    @patch("ssi.worker.task_reporter.TaskStatusReporter._get_store")
+    def test_skips_none_extra_values(self, mock_get_store: MagicMock) -> None:
+        """None values for mapped columns are not written."""
+        mock_store = MagicMock()
+        mock_get_store.return_value = mock_store
 
-        mock_post.side_effect = httpx.ConnectError("Connection refused")
+        reporter = TaskStatusReporter(scan_id="scan-abc123")
+        reporter.update(status="completed", message="Done", risk_score=None, case_id=None)
 
-        reporter = TaskStatusReporter(
-            task_id="ssi-abc123",
-            endpoint="https://api.example.com/tasks",
-        )
+        call_kwargs = mock_store.update_scan.call_args
+        assert "risk_score" not in call_kwargs.kwargs
+        assert "case_id" not in call_kwargs.kwargs
+
+    @patch("ssi.worker.task_reporter.TaskStatusReporter._get_store")
+    def test_handles_db_error_gracefully(self, mock_get_store: MagicMock) -> None:
+        """DB errors are caught and logged, not raised."""
+        mock_store = MagicMock()
+        mock_store.update_scan.side_effect = RuntimeError("DB connection lost")
+        mock_get_store.return_value = mock_store
+
+        reporter = TaskStatusReporter(scan_id="scan-abc123")
         # Should not raise
         reporter.update(status="running", message="test")
 
-    @patch("ssi.worker.task_reporter.httpx.post")
-    def test_strips_trailing_slash_from_endpoint(self, mock_post: MagicMock) -> None:
-        """Trailing slash on endpoint is stripped before building URL."""
-        mock_post.return_value = MagicMock(status_code=200, raise_for_status=MagicMock())
+    @patch("ssi.worker.task_reporter.TaskStatusReporter._get_store")
+    def test_store_is_cached(self, mock_get_store: MagicMock) -> None:
+        """ScanStore is built once and reused across update calls."""
+        mock_store = MagicMock()
+        mock_get_store.return_value = mock_store
 
-        reporter = TaskStatusReporter(
-            task_id="ssi-abc123",
-            endpoint="https://api.example.com/tasks/",
-        )
-        reporter.update(status="running", message="test")
+        reporter = TaskStatusReporter(scan_id="scan-abc123")
+        reporter.update(status="running", message="start")
+        reporter.update(status="completed", message="done")
 
-        url = mock_post.call_args.args[0]
-        assert "/tasks//ssi" not in url
-        assert url == "https://api.example.com/tasks/ssi-abc123/update"
+        # _get_store called twice (once per update), but the lazy
+        # caching inside _get_store itself builds only once.
+        assert mock_store.update_scan.call_count == 2

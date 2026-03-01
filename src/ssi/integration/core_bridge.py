@@ -1,9 +1,19 @@
 """Bridge between SSI investigation results and i4g core platform.
 
-This module translates SSI's ``InvestigationResult`` into the data
-structures expected by core's case management, evidence storage, and
-dossier/LEO report pipeline.  It communicates with the core API over
-HTTP so the two systems remain independently deployable.
+.. deprecated::
+    This module uses HTTP calls to the core API, which fail with 403 in
+    Cloud Run Jobs / Services because the SSI service account cannot
+    authenticate through IAP.  New code should write to the shared
+    Cloud SQL database directly via ``ScanStore`` (see
+    ``ScanStore.create_case_record()`` and ``worker/jobs.py``).
+
+    Remaining callers:
+    - ``ssi.api.routes._push_to_core`` — SSI API service
+    - ``ssi.worker.batch_jobs._push_result_to_core`` — batch Cloud Run Job
+    - ``ssi.cli.investigate._push_to_core_cli`` — local CLI (low risk)
+
+    These should be migrated to direct DB writes before this module is
+    removed.
 
 Usage (local/dev)::
 
@@ -22,6 +32,7 @@ from __future__ import annotations
 
 import logging
 import mimetypes
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -79,6 +90,12 @@ class CoreBridge:
         core_api_url: str | None = None,
         timeout: float = 60.0,
     ) -> None:
+        warnings.warn(
+            "CoreBridge is deprecated — use ScanStore.create_case_record() "
+            "for direct DB writes instead of HTTP to core API.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if core_api_url is None:
             from ssi.settings import get_settings
 
@@ -151,6 +168,7 @@ class CoreBridge:
         *,
         dataset: str = "ssi",
         trigger_dossier: bool = False,
+        scan_id: str | None = None,
     ) -> str:
         """Push a complete SSI investigation into core.
 
@@ -167,11 +185,14 @@ class CoreBridge:
             result: Completed SSI investigation.
             dataset: Dataset label for the case (default ``"ssi"``).
             trigger_dossier: When True, queue a dossier job for the case.
+            scan_id: Authoritative scan ID from ``SSI_JOB__SCAN_ID``.
+                When provided, overrides ``result.investigation_id`` for
+                the ``ssi_investigation_id`` stored in case metadata.
 
         Returns:
             The ``case_id`` assigned by the core platform.
         """
-        case_id = self._create_case(result, dataset=dataset)
+        case_id = self._create_case(result, dataset=dataset, scan_id=scan_id)
         logger.info("Created case %s for investigation %s", case_id, result.investigation_id)
 
         self._attach_evidence(case_id, result)
@@ -179,6 +200,7 @@ class CoreBridge:
         self._create_entities(case_id, result)
         self._create_wallet_indicators(case_id, result, dataset=dataset)
         self._create_osint_entities(case_id, result)
+        self._create_timeline_events(case_id, result)
 
         if trigger_dossier:
             self._trigger_dossier(case_id, result)
@@ -224,9 +246,19 @@ class CoreBridge:
         prefix = intent_label if intent_label else "Investigation"
         return f"{prefix} — {domain}"
 
-    def _create_case(self, result: InvestigationResult, *, dataset: str) -> str:
-        """Create a case record in the core platform."""
+    def _create_case(
+        self, result: InvestigationResult, *, dataset: str, scan_id: str | None = None
+    ) -> str:
+        """Create a case record in the core platform.
+
+        Args:
+            result: Completed SSI investigation result.
+            dataset: Dataset label for the case.
+            scan_id: Authoritative scan ID (from ``SSI_JOB__SCAN_ID``).
+                Overrides ``result.investigation_id`` for case metadata.
+        """
         title = self._build_title(result)
+        resolved_inv_id = scan_id or str(result.investigation_id)
         payload: dict[str, Any] = {
             "dataset": dataset,
             "source_type": "ssi_investigation",
@@ -234,7 +266,7 @@ class CoreBridge:
             "title": title,
             "metadata": {
                 "title": title,
-                "ssi_investigation_id": str(result.investigation_id),
+                "ssi_investigation_id": resolved_inv_id,
                 "scan_type": result.scan_type if isinstance(result.scan_type, str) else result.scan_type.value,
                 "passive_only": result.passive_only,
                 "started_at": result.started_at.isoformat() if result.started_at else None,
@@ -298,6 +330,115 @@ class CoreBridge:
                 logger.debug("Attached %s to case %s", file_path.name, case_id)
         except httpx.HTTPError as e:
             logger.warning("Failed to attach %s to case %s: %s", file_path.name, case_id, e)
+
+    # ------------------------------------------------------------------
+    # Timeline events
+    # ------------------------------------------------------------------
+
+    def _create_timeline_events(self, case_id: str, result: InvestigationResult) -> None:
+        """Post investigation milestone events to the case timeline.
+
+        Builds a list of structured events from the ``InvestigationResult``
+        and sends them to core's ``POST /cases/{case_id}/timeline`` endpoint
+        so they appear on the case detail page.
+
+        Args:
+            case_id: The core case ID.
+            result: Completed SSI investigation result.
+        """
+        events: list[dict[str, Any]] = []
+
+        # 1. Investigation submitted
+        if result.started_at:
+            events.append({
+                "type": "investigation_submitted",
+                "description": f"SSI investigation initiated for {result.url}",
+                "actor": "ssi-agent",
+                "timestamp": result.started_at.isoformat(),
+            })
+
+        # 2. Classification completed
+        if result.taxonomy_result:
+            intent_label = "unknown"
+            if result.taxonomy_result.intent:
+                top = result.taxonomy_result.intent[0]
+                intent_label = getattr(top, "label", str(top)).replace("INTENT.", "").replace("_", " ").title()
+            events.append({
+                "type": "classification_completed",
+                "description": f"Classified as {intent_label} (risk score: {result.taxonomy_result.risk_score:.0f})",
+                "actor": "ssi-agent",
+                "timestamp": (result.completed_at or datetime.now(timezone.utc)).isoformat(),
+            })
+
+        # 3. Wallets harvested
+        wallet_count = 0
+        networks: set[str] = set()
+        if hasattr(result, "wallets") and result.wallets:
+            wallet_count = len(result.wallets)
+            for w in result.wallets:
+                net = getattr(w, "network_short", None) or getattr(w, "token_symbol", None)
+                if net:
+                    networks.add(str(net))
+        elif result.threat_indicators:
+            for ti in result.threat_indicators:
+                if ti.indicator_type == "crypto_wallet":
+                    wallet_count += 1
+                    if ti.context:
+                        networks.add(ti.context)
+        if wallet_count > 0:
+            net_str = ", ".join(sorted(networks)) if networks else "unknown"
+            events.append({
+                "type": "wallets_harvested",
+                "description": f"Found {wallet_count} wallet address{'es' if wallet_count != 1 else ''} ({net_str})",
+                "actor": "ssi-agent",
+                "timestamp": (result.completed_at or datetime.now(timezone.utc)).isoformat(),
+            })
+
+        # 4. Evidence collected
+        evidence_count = 0
+        if result.output_path:
+            inv_dir = Path(result.output_path)
+            if inv_dir.is_dir():
+                evidence_count = sum(1 for _ in inv_dir.rglob("*") if _.is_file())
+        if evidence_count > 0:
+            events.append({
+                "type": "evidence_collected",
+                "description": f"Collected {evidence_count} evidence artifact{'s' if evidence_count != 1 else ''}",
+                "actor": "ssi-agent",
+                "timestamp": (result.completed_at or datetime.now(timezone.utc)).isoformat(),
+            })
+
+        # 5. Report generated
+        if result.output_path:
+            report_path = Path(result.output_path) / "report.md"
+            if report_path.is_file():
+                events.append({
+                    "type": "report_generated",
+                    "description": "Investigation report generated",
+                    "actor": "ssi-agent",
+                    "timestamp": (result.completed_at or datetime.now(timezone.utc)).isoformat(),
+                })
+
+        # 6. Case created
+        events.append({
+            "type": "case_created",
+            "description": f"Case created from SSI investigation {result.investigation_id}",
+            "actor": "ssi-agent",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+        if not events:
+            return
+
+        try:
+            resp = self._client.post(
+                f"/cases/{case_id}/timeline",
+                json={"events": events},
+            )
+            resp.raise_for_status()
+            logger.info("Created %d timeline events on case %s", len(events), case_id)
+        except httpx.HTTPError as e:
+            logger.warning("Failed to create timeline events on case %s: %s", case_id, e)
 
     # ------------------------------------------------------------------
     # Classification

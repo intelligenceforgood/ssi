@@ -22,9 +22,9 @@ def job_investigate(
         help="Investigation mode: passive, active, or full.",
     ),
     passive_only: bool = typer.Option(False, "--passive", help="Shorthand for --scan-type passive."),
-    push_to_core: bool = typer.Option(False, "--push-to-core", help="Push results to i4g core platform."),
-    trigger_dossier: bool = typer.Option(False, "--trigger-dossier", help="Queue dossier generation in core."),
-    dataset: str = typer.Option("ssi", "--dataset", help="Dataset label for the core case."),
+    push_to_core: bool = typer.Option(False, "--push-to-core", envvar="SSI_JOB__PUSH_TO_CORE", help="Push results to i4g core platform."),
+    trigger_dossier: bool = typer.Option(False, "--trigger-dossier", envvar="SSI_JOB__TRIGGER_DOSSIER", help="Queue dossier generation in core."),
+    dataset: str = typer.Option("ssi", "--dataset", envvar="SSI_JOB__DATASET", help="Dataset label for the core case."),
 ) -> None:
     """Run an SSI investigation as a job.
 
@@ -68,9 +68,9 @@ def job_batch(
         "-t",
         help="Default scan type for entries without one.",
     ),
-    push_to_core: bool = typer.Option(False, "--push-to-core", help="Push results to i4g core platform."),
-    trigger_dossier: bool = typer.Option(False, "--trigger-dossier", help="Queue dossier generation in core."),
-    dataset: str = typer.Option("ssi", "--dataset", help="Dataset label for the core cases."),
+    push_to_core: bool = typer.Option(False, "--push-to-core", envvar="SSI_JOB__PUSH_TO_CORE", help="Push results to i4g core platform."),
+    trigger_dossier: bool = typer.Option(False, "--trigger-dossier", envvar="SSI_JOB__TRIGGER_DOSSIER", help="Queue dossier generation in core."),
+    dataset: str = typer.Option("ssi", "--dataset", envvar="SSI_JOB__DATASET", help="Dataset label for the core cases."),
 ) -> None:
     """Run batch SSI investigations from a JSON manifest.
 
@@ -93,7 +93,7 @@ def job_batch(
     exit_code = batch_main()
 
     if exit_code != 0:
-        console.print(f"[red]Batch job finished with failures.[/red]")
+        console.print("[red]Batch job finished with failures.[/red]")
         raise typer.Exit(code=exit_code)
 
     console.print("[green]Batch job completed — all URLs succeeded.[/green]")

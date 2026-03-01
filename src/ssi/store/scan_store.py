@@ -710,6 +710,436 @@ class ScanStore:
             agent_step_count,
         )
 
+    # ------------------------------------------------------------------
+    # Case creation (direct DB write to core's tables)
+    # ------------------------------------------------------------------
+
+    def create_case_record(
+        self,
+        *,
+        scan_id: str,
+        result: Any,
+        dataset: str = "ssi",
+    ) -> str | None:
+        """Create a case record directly in core's DB tables.
+
+        Inserts into ``cases``, ``scam_records``, and ``review_queue``
+        so the analyst console can display the case.  Also links the
+        scan row's ``case_id`` foreign key.
+
+        This is the direct-DB replacement for the HTTP-based
+        ``CoreBridge.push_investigation()`` path, which requires
+        IAP auth that Cloud Run Jobs don't have.
+
+        Args:
+            scan_id: The investigation's scan_id (links ``site_scans``).
+            result: An ``InvestigationResult`` instance.
+            dataset: Dataset label (e.g. ``"ssi"``).
+
+        Returns:
+            The ``case_id`` if the case was created, or ``None`` on failure.
+        """
+        import hashlib
+        import json
+        from urllib.parse import urlparse
+
+        now = datetime.now(timezone.utc)
+        case_id = str(uuid4())
+
+        # Build title
+        title = ""
+        try:
+            domain = urlparse(result.url).netloc or result.url
+            if domain.startswith("www."):
+                domain = domain[4:]
+            intent_label = ""
+            if result.taxonomy_result and result.taxonomy_result.intent:
+                top_intent = result.taxonomy_result.intent[0]
+                if top_intent.label:
+                    intent_label = top_intent.label.replace("INTENT.", "").replace("_", " ").title()
+            elif result.classification and result.classification.intent:
+                intent_label = result.classification.intent.replace("_", " ").title()
+            prefix = intent_label if intent_label else "Investigation"
+            title = f"{prefix} — {domain}"
+        except Exception:
+            title = f"Investigation — {result.url[:60] if result.url else 'unknown'}"
+
+        # Content hash for dedup (matches core's POST /cases logic)
+        metadata_dict = {
+            "title": title,
+            "ssi_investigation_id": scan_id,
+            "scan_type": result.scan_type if isinstance(result.scan_type, str) else (result.scan_type.value if result.scan_type else "full"),
+            "passive_only": result.passive_only,
+            "started_at": result.started_at.isoformat() if result.started_at else None,
+            "completed_at": result.completed_at.isoformat() if result.completed_at else None,
+            "duration_seconds": result.duration_seconds,
+        }
+        raw_content = json.dumps(metadata_dict, sort_keys=True) + (result.url or "")
+        raw_text_sha256 = hashlib.sha256(raw_content.encode()).hexdigest()
+
+        classification_result = None
+        risk_score: float = 0.0
+        if result.taxonomy_result:
+            classification_result = result.taxonomy_result.model_dump(mode="json")
+            risk_score = result.taxonomy_result.risk_score or 0.0
+
+        priority = "high" if risk_score >= 70 else "medium"
+
+        try:
+            with self._session_factory() as session:
+                # Check for existing case with same dataset + hash (dedup)
+                existing = session.execute(
+                    sa.select(sql_schema.cases.c.case_id)
+                    .where(sql_schema.cases.c.dataset == dataset)
+                    .where(sql_schema.cases.c.raw_text_sha256 == raw_text_sha256)
+                ).scalar()
+
+                if existing:
+                    case_id = existing
+                    # Update existing case with latest results
+                    update_vals: dict[str, Any] = {"updated_at": now}
+                    if classification_result:
+                        update_vals["classification_result"] = classification_result
+                        update_vals["classification_status"] = "completed"
+                    if risk_score:
+                        update_vals["risk_score"] = risk_score
+                    update_vals["metadata"] = metadata_dict
+                    session.execute(
+                        sa.update(sql_schema.cases)
+                        .where(sql_schema.cases.c.case_id == existing)
+                        .values(**update_vals)
+                    )
+                else:
+                    # Insert new case
+                    session.execute(
+                        sa.insert(sql_schema.cases).values(
+                            case_id=case_id,
+                            dataset=dataset,
+                            source_type="ssi_investigation",
+                            classification=None,
+                            classification_status="completed" if classification_result else "pending",
+                            classification_result=classification_result,
+                            confidence=0,
+                            risk_score=risk_score,
+                            raw_text_sha256=raw_text_sha256,
+                            status="open",
+                            metadata=metadata_dict,
+                            created_at=now,
+                            updated_at=now,
+                        )
+                    )
+
+                    # Insert scam_records row (needed for dashboard join)
+                    insert_sr = dialect_insert(session, sql_schema.scam_records)
+                    session.execute(
+                        insert_sr.values(
+                            case_id=case_id,
+                            text=result.url or "",
+                            entities=None,
+                            classification=None,
+                            confidence=0,
+                            classification_result=classification_result,
+                            tags=None,
+                            created_at=now,
+                            metadata=metadata_dict,
+                        ).on_conflict_do_nothing(index_elements=["case_id"])
+                    )
+
+                    # Insert review_queue row (makes case visible on dashboard)
+                    review_id = str(uuid4())
+                    insert_rq = dialect_insert(session, sql_schema.review_queue)
+                    session.execute(
+                        insert_rq.values(
+                            review_id=review_id,
+                            case_id=case_id,
+                            queued_at=now,
+                            priority=priority,
+                            status="new",
+                            last_updated=now,
+                            classification_result=classification_result,
+                        ).on_conflict_do_nothing(index_elements=["review_id"])
+                    )
+
+                    # Insert timeline events so the case detail page has
+                    # a populated timeline card.
+                    self._insert_timeline_events(
+                        session, review_id=review_id, result=result,
+                        scan_id=scan_id, now=now,
+                    )
+
+                    # Insert source_documents rows pointing at GCS
+                    # evidence files so the Artifacts card is populated.
+                    self._insert_evidence_documents(
+                        session, case_id=case_id, result=result, now=now,
+                    )
+
+                # Link the scan row to the case
+                session.execute(
+                    sa.update(sql_schema.site_scans)
+                    .where(sql_schema.site_scans.c.scan_id == scan_id)
+                    .values(case_id=case_id, updated_at=now)
+                )
+
+                session.commit()
+
+            logger.info("Created case record %s for scan %s (dataset=%s)", case_id, scan_id, dataset)
+            return case_id
+
+        except Exception:
+            logger.exception("Failed to create case record for scan %s", scan_id)
+            return None
+
+    # ------------------------------------------------------------------
+    # Timeline & evidence insertion helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _insert_timeline_events(
+        session: Any,
+        *,
+        review_id: str,
+        result: Any,
+        scan_id: str,
+        now: datetime,
+    ) -> int:
+        """Insert ``review_actions`` rows for SSI investigation milestones.
+
+        Mirrors the events produced by
+        ``CoreBridge._create_timeline_events`` but writes directly to
+        the database instead of calling the core HTTP API.
+
+        Args:
+            session: Active SQLAlchemy session.
+            review_id: The ``review_queue.review_id`` for this case.
+            result: An ``InvestigationResult`` instance.
+            scan_id: Investigation scan ID.
+            now: Current UTC timestamp.
+
+        Returns:
+            Number of events inserted.
+        """
+        events: list[dict[str, Any]] = []
+
+        # 1. Investigation submitted
+        if result.started_at:
+            events.append({
+                "action": "investigation_submitted",
+                "description": f"SSI investigation initiated for {result.url}",
+                "ts": result.started_at,
+            })
+
+        # 2. Classification completed
+        if result.taxonomy_result:
+            intent_label = "unknown"
+            if result.taxonomy_result.intent:
+                top = result.taxonomy_result.intent[0]
+                raw = getattr(top, "label", str(top))
+                intent_label = raw.replace("INTENT.", "").replace("_", " ").title()
+            events.append({
+                "action": "classification_completed",
+                "description": (
+                    f"Classified as {intent_label} "
+                    f"(risk score: {result.taxonomy_result.risk_score:.0f})"
+                ),
+                "ts": result.completed_at or now,
+            })
+
+        # 3. Wallets harvested
+        wallet_count = 0
+        networks: set[str] = set()
+        if hasattr(result, "wallets") and result.wallets:
+            wallet_count = len(result.wallets)
+            for w in result.wallets:
+                net = getattr(w, "network_short", None) or getattr(w, "token_symbol", None)
+                if net:
+                    networks.add(str(net))
+        elif result.threat_indicators:
+            for ti in result.threat_indicators:
+                if ti.indicator_type == "crypto_wallet":
+                    wallet_count += 1
+                    if ti.context:
+                        networks.add(ti.context)
+        if wallet_count > 0:
+            net_str = ", ".join(sorted(networks)) if networks else "unknown"
+            suffix = "es" if wallet_count != 1 else ""
+            events.append({
+                "action": "wallets_harvested",
+                "description": f"Found {wallet_count} wallet address{suffix} ({net_str})",
+                "ts": result.completed_at or now,
+            })
+
+        # 4. Evidence collected
+        evidence_count = 0
+        if result.chain_of_custody:
+            evidence_count = result.chain_of_custody.total_artifacts
+        elif result.output_path:
+            output = Path(result.output_path)
+            if output.is_dir():
+                evidence_count = sum(1 for f in output.rglob("*") if f.is_file())
+        if evidence_count > 0:
+            suffix = "s" if evidence_count != 1 else ""
+            events.append({
+                "action": "evidence_collected",
+                "description": f"Collected {evidence_count} evidence artifact{suffix}",
+                "ts": result.completed_at or now,
+            })
+
+        # 5. Report generated
+        has_report = False
+        if result.output_path:
+            report_path = Path(result.output_path)
+            if report_path.is_dir() and (report_path / "report.md").is_file():
+                has_report = True
+            elif str(result.output_path).startswith("gs://"):
+                # On GCS the file check is not possible but the report
+                # was always generated if the investigation succeeded.
+                has_report = result.success
+        if has_report:
+            events.append({
+                "action": "report_generated",
+                "description": "Investigation report generated",
+                "ts": result.completed_at or now,
+            })
+
+        # 6. Case created
+        events.append({
+            "action": "case_created",
+            "description": f"Case created from SSI investigation {scan_id}",
+            "ts": now,
+        })
+
+        rows = []
+        for ev in events:
+            rows.append({
+                "action_id": str(uuid4()),
+                "review_id": review_id,
+                "actor": "ssi-agent",
+                "action": ev["action"],
+                "payload": {
+                    "description": ev["description"],
+                    "timestamp": ev["ts"].isoformat() if hasattr(ev["ts"], "isoformat") else str(ev["ts"]),
+                },
+                "created_at": ev["ts"],
+            })
+
+        if rows:
+            session.execute(sa.insert(sql_schema.review_actions), rows)
+            logger.info("Inserted %d timeline events for review %s", len(rows), review_id)
+
+        return len(rows)
+
+    @staticmethod
+    def _insert_evidence_documents(
+        session: Any,
+        *,
+        case_id: str,
+        result: Any,
+        now: datetime,
+    ) -> int:
+        """Insert ``source_documents`` rows for SSI evidence artifacts.
+
+        Creates a document row for each artifact listed in
+        ``result.chain_of_custody.artifacts``.  When evidence is stored
+        on GCS (Cloud Run Job path), the ``source_url`` is the
+        ``gs://`` URI built from ``result.output_path``.
+
+        Args:
+            session: Active SQLAlchemy session.
+            case_id: The parent case.
+            result: An ``InvestigationResult`` instance.
+            now: Current UTC timestamp.
+
+        Returns:
+            Number of documents inserted.
+        """
+        _EVIDENCE_MIME: dict[str, str] = {
+            ".json": "application/json",
+            ".md": "text/markdown",
+            ".pdf": "application/pdf",
+            ".zip": "application/zip",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".html": "text/html",
+            ".har": "application/json",
+            ".stix": "application/json",
+        }
+
+        rows: list[dict[str, Any]] = []
+        output_path = result.output_path or ""
+        is_gcs = output_path.startswith("gs://")
+
+        # Prefer chain_of_custody artifacts (has per-file SHA-256)
+        if result.chain_of_custody and result.chain_of_custody.artifacts:
+            for art in result.chain_of_custody.artifacts:
+                filename = getattr(art, "file", "") or ""
+                if not filename:
+                    continue
+                ext = Path(filename).suffix.lower()
+                mime = _EVIDENCE_MIME.get(ext, "application/octet-stream")
+                source_url = f"{output_path}/{filename}" if is_gcs else None
+                rows.append({
+                    "document_id": str(uuid4()),
+                    "case_id": case_id,
+                    "title": filename,
+                    "source_url": source_url,
+                    "mime_type": mime,
+                    "file_sha256": getattr(art, "sha256", None),
+                    "captured_at": now,
+                    "created_at": now,
+                    "updated_at": now,
+                    "metadata": {"source": "ssi", "size_bytes": getattr(art, "size_bytes", None)},
+                })
+        elif is_gcs:
+            # Fallback: insert rows for the well-known evidence files
+            # when chain_of_custody isn't available.
+            known_files = [
+                ("investigation.json", "application/json"),
+                ("report.md", "text/markdown"),
+                ("report.pdf", "application/pdf"),
+                ("leo_evidence_report.md", "text/markdown"),
+                ("stix_bundle.json", "application/json"),
+                ("evidence.zip", "application/zip"),
+            ]
+            for fn, mime in known_files:
+                rows.append({
+                    "document_id": str(uuid4()),
+                    "case_id": case_id,
+                    "title": fn,
+                    "source_url": f"{output_path}/{fn}",
+                    "mime_type": mime,
+                    "captured_at": now,
+                    "created_at": now,
+                    "updated_at": now,
+                    "metadata": {"source": "ssi"},
+                })
+        elif not is_gcs and output_path:
+            # Local filesystem: list actual files in the output directory
+            out_dir = Path(output_path)
+            if out_dir.is_dir():
+                for f in sorted(out_dir.rglob("*")):
+                    if not f.is_file():
+                        continue
+                    ext = f.suffix.lower()
+                    mime = _EVIDENCE_MIME.get(ext, "application/octet-stream")
+                    rows.append({
+                        "document_id": str(uuid4()),
+                        "case_id": case_id,
+                        "title": f.name,
+                        "source_url": str(f),
+                        "mime_type": mime,
+                        "captured_at": now,
+                        "created_at": now,
+                        "updated_at": now,
+                        "metadata": {"source": "ssi"},
+                    })
+
+        if rows:
+            session.execute(sa.insert(sql_schema.source_documents), rows)
+            logger.info("Inserted %d evidence documents for case %s", len(rows), case_id)
+
+        return len(rows)
+
 
 # ---------------------------------------------------------------------------
 # Helpers

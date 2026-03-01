@@ -42,7 +42,7 @@ def main() -> int:
     """
     _configure_logging()
 
-    # Initialise the task reporter (no-ops when env vars are absent).
+    # Initialise the task reporter (no-ops when scan_id is absent).
     from ssi.worker.task_reporter import TaskStatusReporter
 
     reporter = TaskStatusReporter()
@@ -59,7 +59,7 @@ def main() -> int:
         passive_only = os.environ.get("SSI_JOB__PASSIVE_ONLY", "false").lower() in ("true", "1", "yes")
         scan_type = "passive" if passive_only else "full"
 
-    push_to_core = os.environ.get("SSI_JOB__PUSH_TO_CORE", "false").lower() in ("true", "1", "yes")
+    push_to_core = os.environ.get("SSI_JOB__PUSH_TO_CORE", "true").lower() in ("true", "1", "yes")
     trigger_dossier = os.environ.get("SSI_JOB__TRIGGER_DOSSIER", "false").lower() in ("true", "1", "yes")
     dataset = os.environ.get("SSI_JOB__DATASET", "ssi")
 
@@ -71,7 +71,7 @@ def main() -> int:
         scan_id,
     )
 
-    reporter.update(status="running", message=f"Starting investigation for {url}", scan_id=scan_id)
+    reporter.update(status="running", message=f"Starting investigation for {url}")
 
     start = time.monotonic()
 
@@ -104,15 +104,16 @@ def main() -> int:
             reporter.update(
                 status="failed",
                 message=result.error or "Investigation failed",
-                investigation_id=str(result.investigation_id),
-                scan_id=str(result.investigation_id),
             )
             return 1
 
-        # Push to core platform if requested
-        case_id = None
-        if push_to_core:
-            case_id = _push_to_core(result, dataset=dataset, trigger_dossier=trigger_dossier)
+        # Create case record directly in the shared DB (no HTTP to core API).
+        # The ScanStore already persisted the scan via persist_investigation()
+        # during run_investigation(); this adds the cases/scam_records/
+        # review_queue rows so the case appears on the /cases page.
+        # Always create the case — the push_to_core flag is unreliable
+        # via containerOverrides env vars in Cloud Run Jobs.
+        case_id = _create_case_direct(result, dataset=dataset, scan_id=scan_id)
 
         # Report completion with all enrichment fields so core's
         # get_task_status can return them to the UI immediately.
@@ -120,16 +121,10 @@ def main() -> int:
         reporter.update(
             status="completed",
             message=f"Investigation completed in {elapsed:.1f}s",
-            investigation_id=str(result.investigation_id),
-            scan_id=str(result.investigation_id),
             risk_score=risk_score,
             case_id=case_id,
             duration_seconds=elapsed,
         )
-
-        # Update the scan row in the shared DB with the evidence path
-        # (gs:// URI when GCS upload succeeded).
-        _update_core_scan(str(result.investigation_id), result, case_id=case_id)
 
         logger.info("SSI Job completed successfully in %.1fs", elapsed)
         return 0
@@ -140,90 +135,46 @@ def main() -> int:
         return 1
 
 
-def _push_to_core(
+def _create_case_direct(
     result: InvestigationResult,
     *,
     dataset: str = "ssi",
-    trigger_dossier: bool = False,
+    scan_id: str | None = None,
 ) -> str | None:
-    """Push investigation results to the i4g core platform.
+    """Create a case record directly in the shared database.
+
+    Uses ``ScanStore.create_case_record()`` to write the ``cases``,
+    ``scam_records``, and ``review_queue`` rows that the analyst console
+    reads.  This replaces the HTTP-based ``CoreBridge.push_investigation()``
+    path which required IAP/API-key auth.
 
     Args:
         result: Completed investigation result.
         dataset: Dataset label for the core case.
-        trigger_dossier: Queue dossier generation after push.
+        scan_id: Authoritative scan ID from ``SSI_JOB__SCAN_ID``.
 
     Returns:
         The core case ID if successful, None otherwise.
     """
-    from ssi.integration.core_bridge import CoreBridge
+    from ssi.store import build_scan_store
 
-    bridge = CoreBridge()
-
-    if not bridge.health_check():
-        logger.warning("Core API not reachable — skipping push to core")
-        return None
+    resolved_scan_id = scan_id or str(result.investigation_id)
 
     try:
-        case_id = bridge.push_investigation(
-            result,
+        store = build_scan_store()
+        case_id = store.create_case_record(
+            scan_id=resolved_scan_id,
+            result=result,
             dataset=dataset,
-            trigger_dossier=trigger_dossier,
         )
-        logger.info("Pushed to core: case_id=%s", case_id)
+        if case_id:
+            logger.info("Created case %s for scan %s (direct DB)", case_id, resolved_scan_id)
+        else:
+            logger.warning("create_case_record returned None for scan %s", resolved_scan_id)
         return case_id
     except Exception as e:
-        logger.error("Failed to push investigation to core: %s", e)
+        logger.error("Failed to create case record for scan %s: %s", resolved_scan_id, e)
         return None
-    finally:
-        bridge.close()
-
-
-def _update_core_scan(
-    scan_id: str,
-    result: InvestigationResult,
-    *,
-    case_id: str | None = None,
-) -> None:
-    """Update the pre-created scan row in core's DB via HTTP PATCH.
-
-    Core pre-creates a ``site_scans`` row at trigger time.  After
-    the investigation completes (and evidence is uploaded to GCS),
-    this function patches the row with the final evidence path,
-    risk score, and case ID so that core's report endpoint can
-    serve the PDF via a GCS signed URL.
-
-    Args:
-        scan_id: The scan_id (= investigation_id) shared with core.
-        result: Completed investigation result.
-        case_id: Core case ID returned by ``CoreBridge.push_investigation``.
-    """
-    from ssi.integration.core_bridge import CoreBridge
-
-    bridge = CoreBridge()
-    try:
-        # Build the completion payload matching core's SsiStore.complete_scan fields
-        payload: dict[str, Any] = {
-            "status": "completed" if result.success else "failed",
-            "evidence_path": result.output_path or None,
-            "duration_seconds": result.duration_seconds,
-        }
-        if case_id:
-            payload["case_id"] = case_id
-        if result.taxonomy_result:
-            payload["risk_score"] = result.taxonomy_result.risk_score
-            payload["classification_result"] = result.taxonomy_result.model_dump(mode="json")
-        if result.error:
-            payload["error_message"] = result.error
-
-        # Use the core API endpoint to update the scan
-        resp = bridge._client.patch(f"/investigations/ssi/{scan_id}", json=payload)
-        resp.raise_for_status()
-        logger.info("Updated core scan %s with evidence_path=%s", scan_id, result.output_path)
-    except Exception as e:
-        logger.warning("Failed to update core scan %s: %s", scan_id, e)
-    finally:
-        bridge.close()
 
 
 def _configure_logging() -> None:

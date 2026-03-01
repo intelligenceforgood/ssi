@@ -14,7 +14,7 @@
 
 3. **Coding Conventions** – Follow `core/.github/general-coding.instructions.md` for all language-specific standards. Python uses full type hints, Google-style docstrings, Black/isort at 120-char lines. Pydantic models use `snake_case` internally. For Playwright `Page` type on function parameters, guard the import with `TYPE_CHECKING` to avoid runtime dependency.
 
-4. **Architecture** – `src/ssi/investigator/orchestrator.py` is the investigation entry point. `src/ssi/osint/` contains passive recon modules. `src/ssi/browser/` handles Playwright automation. `src/ssi/identity/vault.py` generates synthetic PII. `src/ssi/store/scan_store.py` persists scan results to SQLite or PostgreSQL. `src/ssi/integration/core_bridge.py` pushes findings to the core API.
+4. **Architecture** – `src/ssi/investigator/orchestrator.py` is the investigation entry point. `src/ssi/osint/` contains passive recon modules. `src/ssi/browser/` handles Playwright automation. `src/ssi/identity/vault.py` generates synthetic PII. `src/ssi/store/scan_store.py` persists scan results to SQLite or PostgreSQL. `src/ssi/integration/core_bridge.py` pushes findings to the core API. **Read `core/.github/architecture-cheatsheet.instructions.md` at session start** — it covers UI↔API proxy routing, auth model per environment, SSI↔Core integration, storage flows, and common pitfalls that have wasted cycles in the past.
 
 5. **Developer Loop** – Conda env is `i4g-ssi`. Install editable (`conda run -n i4g-ssi pip install -e ".[dev,test]"`), then `conda run -n i4g-ssi playwright install chromium`. CLI entry point is `ssi`. Use `conda run -n i4g-ssi make test` for unit tests.
 

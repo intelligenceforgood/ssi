@@ -144,6 +144,101 @@ sa.Index("idx_pii_exposures_field_type", pii_exposures.c.field_type)
 
 
 # ---------------------------------------------------------------------------
+# Core platform tables (read/write via the shared Cloud SQL database)
+#
+# These are NOT managed by SSI — they are owned by core's Alembic
+# migrations.  We reference them here (with ``extend_existing=True``)
+# so the SSI Cloud Run Job can INSERT case rows directly into the
+# shared database without going through the core HTTP API.
+# ---------------------------------------------------------------------------
+
+CORE_METADATA = sa.MetaData()
+
+cases = sa.Table(
+    "cases",
+    CORE_METADATA,
+    sa.Column("case_id", sa.Text(), primary_key=True),
+    sa.Column("dataset", sa.Text(), nullable=False),
+    sa.Column("source_type", sa.Text(), nullable=False),
+    sa.Column("classification", sa.Text(), nullable=True),
+    sa.Column("classification_status", sa.Text(), nullable=False, server_default="pending"),
+    sa.Column("classification_result", JSON_TYPE, nullable=True),
+    sa.Column("tags", JSON_TYPE, nullable=True),
+    sa.Column("confidence", sa.Numeric(5, 4), nullable=False, server_default="0"),
+    sa.Column("risk_score", sa.Numeric(5, 1), nullable=False, server_default="0"),
+    sa.Column("taxonomy_version", sa.Text(), nullable=True),
+    sa.Column("raw_text_sha256", sa.Text(), nullable=False),
+    sa.Column("status", sa.Text(), nullable=False, server_default="open"),
+    sa.Column("metadata", JSON_TYPE, nullable=True),
+    sa.Column("created_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+    sa.Column("updated_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+)
+
+scam_records = sa.Table(
+    "scam_records",
+    CORE_METADATA,
+    sa.Column("case_id", sa.Text(), primary_key=True),
+    sa.Column("text", sa.Text(), nullable=True),
+    sa.Column("entities", JSON_TYPE, nullable=True),
+    sa.Column("classification", sa.Text(), nullable=True),
+    sa.Column("confidence", sa.Float(), nullable=True),
+    sa.Column("classification_result", JSON_TYPE, nullable=True),
+    sa.Column("tags", JSON_TYPE, nullable=True),
+    sa.Column("created_at", TIMESTAMP, nullable=True),
+    sa.Column("embedding", JSON_TYPE, nullable=True),
+    sa.Column("metadata", JSON_TYPE, nullable=True),
+)
+
+review_queue = sa.Table(
+    "review_queue",
+    CORE_METADATA,
+    sa.Column("review_id", sa.Text(), primary_key=True),
+    sa.Column("case_id", sa.Text(), nullable=False),
+    sa.Column("queued_at", TIMESTAMP, nullable=False),
+    sa.Column("priority", sa.Text(), server_default="medium"),
+    sa.Column("status", sa.Text(), server_default="new"),
+    sa.Column("assigned_to", sa.Text(), nullable=True),
+    sa.Column("notes", sa.Text(), nullable=True),
+    sa.Column("last_updated", TIMESTAMP, nullable=True),
+    sa.Column("classification_result", JSON_TYPE, nullable=True),
+    sa.Column("tags", JSON_TYPE, nullable=True),
+)
+
+review_actions = sa.Table(
+    "review_actions",
+    CORE_METADATA,
+    sa.Column("action_id", sa.Text(), primary_key=True),
+    sa.Column("review_id", sa.Text(), nullable=False),
+    sa.Column("actor", sa.Text(), nullable=True),
+    sa.Column("action", sa.Text(), nullable=True),
+    sa.Column("payload", JSON_TYPE, nullable=True),
+    sa.Column("created_at", TIMESTAMP, nullable=True),
+)
+
+source_documents = sa.Table(
+    "source_documents",
+    CORE_METADATA,
+    sa.Column("document_id", sa.Text(), primary_key=True),
+    sa.Column("case_id", sa.Text(), nullable=False),
+    sa.Column("title", sa.Text(), nullable=True),
+    sa.Column("source_url", sa.Text(), nullable=True),
+    sa.Column("mime_type", sa.Text(), nullable=True),
+    sa.Column("text", sa.Text(), nullable=True),
+    sa.Column("text_sha256", sa.Text(), nullable=True),
+    sa.Column("excerpt", sa.Text(), nullable=True),
+    sa.Column("chunk_index", sa.Integer(), nullable=False, server_default="0"),
+    sa.Column("chunk_count", sa.Integer(), nullable=False, server_default="1"),
+    sa.Column("score", sa.Numeric(6, 3), nullable=True),
+    sa.Column("captured_at", TIMESTAMP, nullable=True),
+    sa.Column("file_sha256", sa.Text(), nullable=True),
+    sa.Column("ingested_at", TIMESTAMP, nullable=True),
+    sa.Column("metadata", JSON_TYPE, nullable=True),
+    sa.Column("created_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+    sa.Column("updated_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+)
+
+
+# ---------------------------------------------------------------------------
 # Engine / session helpers
 # ---------------------------------------------------------------------------
 
