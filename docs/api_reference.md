@@ -165,4 +165,4 @@ These routes serve the built-in Jinja2 web interface and are not part of the JSO
 
 ## Authentication
 
-In production, SSI endpoints are served by the core FastAPI gateway, which runs behind IAP (Identity-Aware Proxy) on Cloud Run. No separate SSI API service exists in GCP. For local development, the standalone SSI app (`ssi/src/ssi/api/app.py`) does not require authentication.
+In production, SSI endpoints are served by the Core API (core-svc), which runs behind IAP (Identity-Aware Proxy) on Cloud Run. No separate SSI API service exists in GCP. For local development, the standalone SSI app (`ssi/src/ssi/api/app.py`) does not require authentication.
