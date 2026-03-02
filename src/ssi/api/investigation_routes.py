@@ -1,25 +1,377 @@
-"""REST API routes for investigation history and wallet search.
+"""REST API routes for SSI investigations.
 
-These endpoints expose the ScanStore's CRUD methods so the Next.js
-console can list past investigations, view details, and search wallets
-without needing direct DB access.
+Provides:
+- ``POST /trigger/investigate`` — trigger a single SSI investigation (returns 202).
+- ``POST /trigger/batch`` — trigger batch investigations from a manifest.
+- ``GET /investigations`` — list past investigations.
+- ``GET /investigations/{scan_id}`` — detail view for a single investigation.
+- ``GET /wallets`` — search wallet addresses across investigations.
+- Evidence bundle and LEA package downloads.
 """
 
 from __future__ import annotations
 
 import logging
 import tempfile
+import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel, Field
 
 from ssi.store import build_scan_store
 
 logger = logging.getLogger(__name__)
 
 investigation_router = APIRouter(tags=["investigations"])
+
+
+# ---------------------------------------------------------------------------
+# Request / Response schemas for investigation triggers
+# ---------------------------------------------------------------------------
+
+
+class InvestigateRequest(BaseModel):
+    """Payload for triggering a single SSI investigation."""
+
+    url: str = Field(..., description="The suspicious URL to investigate.")
+    scan_type: Literal["passive", "active", "full"] = Field(
+        default="full",
+        description="Investigation mode: passive, active, or full.",
+    )
+    scan_id: str | None = Field(
+        default=None,
+        description="Pre-assigned scan ID (from core's pre-created site_scans row).",
+    )
+    push_to_core: bool = Field(
+        default=True,
+        description="Create a case record in the shared database.",
+    )
+    dataset: str = Field(
+        default="ssi",
+        description="Dataset label for the case created in core.",
+    )
+
+
+class InvestigateResponse(BaseModel):
+    """Acknowledgement returned after spawning a background investigation."""
+
+    scan_id: str | None
+    status: str
+
+
+class BatchInvestigateRequest(BaseModel):
+    """Payload for triggering batch SSI investigations."""
+
+    manifest: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Inline manifest — JSON array of objects with at least a 'url' key.",
+    )
+    manifest_uri: str | None = Field(
+        default=None,
+        description="GCS URI (gs://bucket/path.json) to a manifest file.",
+    )
+    default_scan_type: Literal["passive", "active", "full"] = Field(
+        default="full",
+        description="Default scan type for entries that don't specify one.",
+    )
+    push_to_core: bool = Field(
+        default=True,
+        description="Create case records in the shared database.",
+    )
+    dataset: str = Field(
+        default="ssi",
+        description="Dataset label for core cases.",
+    )
+
+
+class BatchInvestigateResponse(BaseModel):
+    """Acknowledgement returned after spawning a batch investigation."""
+
+    status: str
+    entry_count: int
+
+
+# ---------------------------------------------------------------------------
+# Background investigation runner (no env-var patching)
+# ---------------------------------------------------------------------------
+
+
+def _run_investigation(
+    *,
+    url: str,
+    scan_type: str,
+    scan_id: str | None,
+    push_to_core: bool,
+    dataset: str,
+) -> None:
+    """Execute a single investigation in the background.
+
+    Calls the orchestrator directly with function arguments — no
+    environment variable patching.  Creates a case record in the
+    shared database on success.
+
+    Args:
+        url: Target URL to investigate.
+        scan_type: Investigation mode (passive/active/full).
+        scan_id: Pre-assigned scan ID.
+        push_to_core: Whether to create a case record.
+        dataset: Dataset label for the core case.
+    """
+    from ssi.investigator.orchestrator import run_investigation
+    from ssi.settings import get_settings
+    from ssi.worker.task_reporter import TaskStatusReporter
+
+    reporter = TaskStatusReporter(scan_id=scan_id)
+    reporter.update(status="running", message=f"Starting investigation for {url}")
+    start = time.monotonic()
+
+    try:
+        settings = get_settings()
+        output_dir = Path(settings.evidence.output_dir)
+
+        result = run_investigation(
+            url=url,
+            output_dir=output_dir,
+            scan_type=scan_type,
+            report_format="both",
+            investigation_id=scan_id,
+        )
+
+        elapsed = time.monotonic() - start
+        logger.info(
+            "Investigation %s completed: status=%s duration=%.1fs risk_score=%s",
+            result.investigation_id,
+            result.status.value,
+            elapsed,
+            f"{result.taxonomy_result.risk_score:.1f}" if result.taxonomy_result else "N/A",
+        )
+
+        if not result.success:
+            logger.error("Investigation failed: %s", result.error)
+            reporter.update(status="failed", message=result.error or "Investigation failed")
+            return
+
+        # Create case record directly in the shared DB.
+        case_id = _create_case_direct(result, dataset=dataset, scan_id=scan_id)
+
+        risk_score = result.taxonomy_result.risk_score if result.taxonomy_result else None
+        reporter.update(
+            status="completed",
+            message=f"Investigation completed in {elapsed:.1f}s",
+            risk_score=risk_score,
+            case_id=case_id,
+            duration_seconds=elapsed,
+        )
+        logger.info("Investigation completed successfully in %.1fs", elapsed)
+
+    except Exception:
+        logger.exception("Investigation failed for %s", url)
+        reporter.update(status="failed", message="Investigation failed with an exception")
+
+
+def _create_case_direct(
+    result: Any,
+    *,
+    dataset: str = "ssi",
+    scan_id: str | None = None,
+) -> str | None:
+    """Create a case record directly in the shared database.
+
+    Args:
+        result: Completed investigation result.
+        dataset: Dataset label for the core case.
+        scan_id: Authoritative scan ID from the trigger request.
+
+    Returns:
+        The core case ID if successful, None otherwise.
+    """
+    resolved_scan_id = scan_id or str(result.investigation_id)
+
+    try:
+        store = build_scan_store()
+        case_id = store.create_case_record(
+            scan_id=resolved_scan_id,
+            result=result,
+            dataset=dataset,
+        )
+        if case_id:
+            logger.info("Created case %s for scan %s (direct DB)", case_id, resolved_scan_id)
+        else:
+            logger.error(
+                "create_case_record returned None for scan %s — "
+                "case was NOT written to the cases table",
+                resolved_scan_id,
+            )
+        return case_id
+    except Exception:
+        logger.exception(
+            "Failed to create case record for scan %s — "
+            "case was NOT written to the cases table",
+            resolved_scan_id,
+        )
+        return None
+
+
+def _run_batch_investigation(
+    *,
+    manifest: list[dict[str, Any]],
+    default_scan_type: str,
+    push_to_core: bool,
+    dataset: str,
+) -> None:
+    """Execute batch investigations sequentially in the background.
+
+    Args:
+        manifest: List of entries, each with at least a ``url`` key.
+        default_scan_type: Scan type for entries that don't specify one.
+        push_to_core: Whether to create case records.
+        dataset: Dataset label for core cases.
+    """
+    total = len(manifest)
+    succeeded = 0
+    failed = 0
+
+    logger.info("Batch starting: %d URLs, scan_type=%s, push_to_core=%s", total, default_scan_type, push_to_core)
+
+    for i, entry in enumerate(manifest, 1):
+        url = entry["url"].strip()
+        scan_type = entry.get("scan_type", default_scan_type).strip().lower()
+        scan_id = entry.get("scan_id")
+
+        logger.info("[%d/%d] Investigating: %s (scan_type=%s)", i, total, url, scan_type)
+
+        try:
+            _run_investigation(
+                url=url,
+                scan_type=scan_type,
+                scan_id=scan_id,
+                push_to_core=push_to_core,
+                dataset=dataset,
+            )
+            succeeded += 1
+        except Exception:
+            failed += 1
+            logger.exception("[%d/%d] Exception investigating %s", i, total, url)
+
+    logger.info("Batch complete: %d total, %d succeeded, %d failed", total, succeeded, failed)
+
+
+# ---------------------------------------------------------------------------
+# Investigation trigger endpoints
+# ---------------------------------------------------------------------------
+
+
+@investigation_router.post(
+    "/trigger/investigate",
+    summary="Trigger an SSI investigation",
+    status_code=202,
+    response_model=InvestigateResponse,
+)
+def trigger_investigate(
+    payload: InvestigateRequest,
+    background_tasks: BackgroundTasks,
+) -> InvestigateResponse:
+    """Launch an SSI investigation as a background task.
+
+    Returns 202 immediately; the investigation runs in the background
+    with CPU always allocated (Cloud Run Service with
+    ``cpu_allocation=always``).
+
+    Args:
+        payload: Investigation parameters.
+        background_tasks: FastAPI background task runner.
+
+    Returns:
+        Acknowledgement with the scan ID and ``accepted`` status.
+    """
+    logger.info(
+        "POST /trigger/investigate: url=%s scan_type=%s scan_id=%s",
+        payload.url,
+        payload.scan_type,
+        payload.scan_id,
+    )
+
+    background_tasks.add_task(
+        _run_investigation,
+        url=payload.url,
+        scan_type=payload.scan_type,
+        scan_id=payload.scan_id,
+        push_to_core=payload.push_to_core,
+        dataset=payload.dataset,
+    )
+
+    return InvestigateResponse(scan_id=payload.scan_id, status="accepted")
+
+
+@investigation_router.post(
+    "/trigger/batch",
+    summary="Trigger batch SSI investigations",
+    status_code=202,
+    response_model=BatchInvestigateResponse,
+)
+def trigger_batch_investigate(
+    payload: BatchInvestigateRequest,
+    background_tasks: BackgroundTasks,
+) -> BatchInvestigateResponse:
+    """Launch batch SSI investigations as a background task.
+
+    Accepts either an inline manifest (JSON array) or a GCS URI
+    pointing to a manifest file.  Returns 202 immediately; the
+    investigations run sequentially in the background.
+
+    Args:
+        payload: Batch investigation parameters.
+        background_tasks: FastAPI background task runner.
+
+    Returns:
+        Acknowledgement with entry count and ``accepted`` status.
+
+    Raises:
+        HTTPException: If neither manifest nor manifest_uri is provided,
+            or if the manifest is invalid.
+    """
+    if payload.manifest:
+        manifest = payload.manifest
+    elif payload.manifest_uri:
+        from ssi.worker.batch import load_manifest
+
+        try:
+            manifest = load_manifest(payload.manifest_uri)
+        except (FileNotFoundError, ValueError, ImportError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail="Either 'manifest' (inline array) or 'manifest_uri' (GCS URI) is required.",
+        )
+
+    # Validate entries
+    valid_entries: list[dict[str, Any]] = []
+    for entry in manifest:
+        if isinstance(entry, dict) and entry.get("url", "").strip():
+            valid_entries.append(entry)
+
+    if not valid_entries:
+        raise HTTPException(status_code=422, detail="Manifest contains no valid entries with a 'url' key.")
+
+    logger.info(
+        "POST /trigger/batch: %d entries, scan_type=%s",
+        len(valid_entries),
+        payload.default_scan_type,
+    )
+
+    background_tasks.add_task(
+        _run_batch_investigation,
+        manifest=valid_entries,
+        default_scan_type=payload.default_scan_type,
+        push_to_core=payload.push_to_core,
+        dataset=payload.dataset,
+    )
+
+    return BatchInvestigateResponse(status="accepted", entry_count=len(valid_entries))
 
 
 # ---------------------------------------------------------------------------

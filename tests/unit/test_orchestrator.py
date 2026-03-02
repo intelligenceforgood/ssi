@@ -121,10 +121,10 @@ class TestScanCreationBranch:
     ) -> None:
         """When investigation_id IS provided, create_scan() must NOT be called.
 
-        This is the Cloud Run Job path: core pre-creates the ``site_scans``
-        row at trigger time and passes the scan_id to the job via
-        ``SSI_JOB__SCAN_ID``.  Calling ``create_scan()`` again would raise
-        an IntegrityError on the duplicate primary key.
+        This is the service trigger path: core pre-creates the ``site_scans``
+        row at trigger time and passes the scan_id in the request body.
+        Calling ``create_scan()`` again would raise an IntegrityError on the
+        duplicate primary key.
         """
         pre_assigned_id = str(uuid4())
         mock_store = _build_mock_scan_store()

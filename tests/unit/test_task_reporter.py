@@ -30,19 +30,10 @@ class TestTaskStatusReporterInit:
         reporter = TaskStatusReporter(scan_id="scan-abc123")
         assert reporter.is_enabled
 
-    def test_reads_scan_id_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Reporter reads SSI_JOB__SCAN_ID from environment."""
-        monkeypatch.setenv("SSI_JOB__SCAN_ID", "scan-from-env")
-
+    def test_disabled_when_no_scan_id_arg(self) -> None:
+        """Reporter is disabled when no scan_id is passed."""
         reporter = TaskStatusReporter()
-        assert reporter.scan_id == "scan-from-env"
-        assert reporter.is_enabled
-
-    def test_constructor_arg_overrides_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Explicit scan_id takes precedence over env var."""
-        monkeypatch.setenv("SSI_JOB__SCAN_ID", "env-id")
-        reporter = TaskStatusReporter(scan_id="arg-id")
-        assert reporter.scan_id == "arg-id"
+        assert not reporter.is_enabled
 
 
 class TestTaskStatusReporterUpdate:

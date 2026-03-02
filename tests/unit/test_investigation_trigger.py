@@ -1,7 +1,8 @@
-"""Unit tests for the SSI job HTTP endpoint (Phase 3.0: task 3.0.1).
+"""Unit tests for SSI investigation trigger endpoints.
 
 Tests verify:
-- ``POST /jobs/investigate`` returns 202 with scan_id and status.
+- ``POST /trigger/investigate`` returns 202 with scan_id and status.
+- ``POST /trigger/batch`` returns 202 with entry count.
 - Request validation rejects missing required fields.
 - Background task is spawned with correct parameters.
 """
@@ -19,14 +20,14 @@ app = create_app()
 client = TestClient(app)
 
 
-class TestJobsInvestigateEndpoint:
-    """Tests for POST /jobs/investigate."""
+class TestInvestigateEndpoint:
+    """Tests for POST /trigger/investigate."""
 
-    @patch("ssi.api.job_routes._run_investigation_job")
+    @patch("ssi.api.investigation_routes._run_investigation")
     def test_returns_202_accepted(self, mock_run: MagicMock) -> None:
         """Endpoint returns 202 with scan_id and 'accepted' status."""
         resp = client.post(
-            "/jobs/investigate",
+            "/trigger/investigate",
             json={"url": "https://scam.example.com", "scan_id": "scan-abc"},
         )
         assert resp.status_code == 202
@@ -34,11 +35,11 @@ class TestJobsInvestigateEndpoint:
         assert data["status"] == "accepted"
         assert data["scan_id"] == "scan-abc"
 
-    @patch("ssi.api.job_routes._run_investigation_job")
+    @patch("ssi.api.investigation_routes._run_investigation")
     def test_spawns_background_task(self, mock_run: MagicMock) -> None:
         """Background task is spawned with correct investigation parameters."""
         resp = client.post(
-            "/jobs/investigate",
+            "/trigger/investigate",
             json={
                 "url": "https://scam.example.com",
                 "scan_type": "passive",
@@ -49,8 +50,7 @@ class TestJobsInvestigateEndpoint:
         )
         assert resp.status_code == 202
 
-        # FastAPI BackgroundTasks runs the task after the response is sent.
-        # In the test client, background tasks run synchronously.
+        # FastAPI BackgroundTasks runs the task synchronously in the test client.
         mock_run.assert_called_once_with(
             url="https://scam.example.com",
             scan_type="passive",
@@ -59,11 +59,11 @@ class TestJobsInvestigateEndpoint:
             dataset="tutorial",
         )
 
-    @patch("ssi.api.job_routes._run_investigation_job")
+    @patch("ssi.api.investigation_routes._run_investigation")
     def test_defaults_applied(self, mock_run: MagicMock) -> None:
         """Default values are applied for optional fields."""
         resp = client.post(
-            "/jobs/investigate",
+            "/trigger/investigate",
             json={"url": "https://scam.example.com"},
         )
         assert resp.status_code == 202
@@ -76,25 +76,62 @@ class TestJobsInvestigateEndpoint:
 
     def test_requires_url(self) -> None:
         """Request without URL returns 422."""
-        resp = client.post("/jobs/investigate", json={})
+        resp = client.post("/trigger/investigate", json={})
         assert resp.status_code == 422
 
-    @patch("ssi.api.job_routes._run_investigation_job")
+    @patch("ssi.api.investigation_routes._run_investigation")
     def test_rejects_invalid_scan_type(self, mock_run: MagicMock) -> None:
         """Invalid scan_type values are rejected."""
         resp = client.post(
-            "/jobs/investigate",
+            "/trigger/investigate",
             json={"url": "https://scam.example.com", "scan_type": "invalid"},
         )
         assert resp.status_code == 422
 
-    @patch("ssi.api.job_routes._run_investigation_job")
+    @patch("ssi.api.investigation_routes._run_investigation")
     def test_scan_id_none_when_omitted(self, mock_run: MagicMock) -> None:
         """scan_id is None when not provided in the request."""
         resp = client.post(
-            "/jobs/investigate",
+            "/trigger/investigate",
             json={"url": "https://scam.example.com"},
         )
         assert resp.status_code == 202
         data = resp.json()
         assert data["scan_id"] is None
+
+
+class TestBatchInvestigateEndpoint:
+    """Tests for POST /trigger/batch."""
+
+    @patch("ssi.api.investigation_routes._run_batch_investigation")
+    def test_inline_manifest_returns_202(self, mock_run: MagicMock) -> None:
+        """Inline manifest returns 202 with correct entry count."""
+        resp = client.post(
+            "/trigger/batch",
+            json={
+                "manifest": [
+                    {"url": "https://scam1.example.com"},
+                    {"url": "https://scam2.example.com"},
+                ],
+            },
+        )
+        assert resp.status_code == 202
+        data = resp.json()
+        assert data["status"] == "accepted"
+        assert data["entry_count"] == 2
+
+    @patch("ssi.api.investigation_routes._run_batch_investigation")
+    def test_manifest_uri_dispatches(self, mock_run: MagicMock) -> None:
+        """A manifest_uri dispatches to batch loader."""
+        with patch("ssi.worker.batch.load_manifest") as mock_load:
+            mock_load.return_value = [{"url": "https://example.com"}]
+            resp = client.post(
+                "/trigger/batch",
+                json={"manifest_uri": "gs://bucket/manifest.json"},
+            )
+        assert resp.status_code == 202
+
+    def test_requires_manifest_or_uri(self) -> None:
+        """Request without manifest or manifest_uri returns 422."""
+        resp = client.post("/trigger/batch", json={})
+        assert resp.status_code == 422

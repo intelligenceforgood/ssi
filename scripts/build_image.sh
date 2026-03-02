@@ -7,8 +7,8 @@ set -euo pipefail
 #   scripts/build_image.sh <name> <tag> [options]
 #
 # Examples:
-#   scripts/build_image.sh ssi-job dev
-#   scripts/build_image.sh ssi-job dev --no-cache
+#   scripts/build_image.sh ssi-svc dev
+#   scripts/build_image.sh ssi-svc dev --no-cache
 # ---------------------------------------------------------------------------
 
 usage() {
@@ -16,7 +16,7 @@ usage() {
 Usage: scripts/build_image.sh <name> <tag> [options]
 
 Positional arguments:
-  name                  Image/Dockerfile base name (e.g. ssi-job)
+  name                  Image/Dockerfile base name (e.g. ssi-svc)
   tag                   Image tag suffix (e.g. dev, prod, latest)
 
 Options:
@@ -82,7 +82,12 @@ NAME="${POSITIONAL[0]}"
 TAG_VALUE="${POSITIONAL[1]}"
 
 if [[ -z "$DOCKERFILE" ]]; then
-    DOCKERFILE="$REPO_ROOT/docker/${NAME}.Dockerfile"
+    # Prefer docker/<name>.Dockerfile; fall back to docker/Dockerfile.
+    if [[ -f "$REPO_ROOT/docker/${NAME}.Dockerfile" ]]; then
+        DOCKERFILE="$REPO_ROOT/docker/${NAME}.Dockerfile"
+    else
+        DOCKERFILE="$REPO_ROOT/docker/Dockerfile"
+    fi
 fi
 
 if [[ -z "$IMAGE_TAG" ]]; then

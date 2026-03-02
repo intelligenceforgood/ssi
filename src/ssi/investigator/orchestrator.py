@@ -88,8 +88,8 @@ def run_investigation(
 
     start = time.monotonic()
 
-    # When investigation_id is supplied (from SSI_JOB__SCAN_ID), reuse it
-    # so the result matches the scan row pre-created by core at trigger time.
+    # When investigation_id is supplied, reuse it so the result matches
+    # the scan row pre-created by core at trigger time.
     init_kwargs: dict[str, Any] = {
         "url": url,
         "scan_type": resolved_scan_type,
@@ -129,10 +129,10 @@ def run_investigation(
             scan_store = build_scan_store()
             scan_type_label = resolved_scan_type.value
 
-            # When investigation_id is provided (e.g. from SSI_JOB__SCAN_ID),
-            # the scan row was pre-created by core at trigger time.  Skip the
-            # INSERT to avoid an IntegrityError on the duplicate primary key
-            # and reuse the existing row for persist_investigation().
+            # When investigation_id is provided, the scan row was
+            # pre-created by core at trigger time.  Skip the INSERT to
+            # avoid an IntegrityError on the duplicate primary key and
+            # reuse the existing row for persist_investigation().
             if investigation_id:
                 scan_id = str(result.investigation_id)
                 logger.debug("Reusing pre-created scan record %s", scan_id)

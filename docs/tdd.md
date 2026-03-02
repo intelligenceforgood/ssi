@@ -761,10 +761,10 @@ SSI API endpoints are served by the core gateway Cloud Run Service (no separate 
 ### 9.3 Docker Images
 
 ```
-docker/ssi-job.Dockerfile      → Chromium + zendriver + Playwright + OSINT + WeasyPrint
+docker/Dockerfile              → SSI Cloud Run Service (Chromium + zendriver + Playwright + OSINT + WeasyPrint)
 ```
 
-The SSI API is served by the core gateway image (`core/docker/fastapi.Dockerfile`).
+The SSI service runs as its own Cloud Run Service with `POST /investigate` and `POST /investigate/batch` endpoints.
 
 ---
 

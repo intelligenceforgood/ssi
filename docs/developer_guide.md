@@ -148,7 +148,7 @@ ssi/
 │   ├── settings.default.toml    # Default configuration
 │   └── settings.local.toml.example  # Template for local overrides
 ├── docker/
-│   └── ssi-job.Dockerfile       # Cloud Run Job image
+│   └── Dockerfile               # Cloud Run Service image
 ├── scripts/
 │   ├── campaign_runner.py       # Batch campaign script
 │   └── phase0_smoke.py          # Smoke test script
@@ -414,24 +414,22 @@ export SSI_LLM__MODEL=llama3.3
 
 ## 9. Docker Builds
 
-One Docker image is provided for the SSI Cloud Run Job:
+One Docker image is provided for the SSI Cloud Run Service:
 
 ```bash
-# Cloud Run Job image
-make build-job
-# or: docker build -f docker/ssi-job.Dockerfile -t ssi-job .
+# Cloud Run Service image
+make build-svc
+# or: docker build -f docker/Dockerfile -t ssi-svc:local .
 ```
-
-The SSI API runs on the core gateway (see `core/docker/fastapi.Dockerfile`), so there is no separate SSI API image.
 
 ### Pushing to Artifact Registry
 
-Build and push the job image to the `i4g-dev` Artifact Registry using the build script:
+Build and push the service image to the `i4g-dev` Artifact Registry using the build script:
 
 ```bash
-# Push Job image
-make push-job
-# or: scripts/build_image.sh ssi-job dev
+# Push service image
+make push-svc
+# or: scripts/build_image.sh ssi-svc dev
 ```
 
 Requires `gcloud` auth: `gcloud auth login` and `gcloud auth configure-docker us-central1-docker.pkg.dev`.

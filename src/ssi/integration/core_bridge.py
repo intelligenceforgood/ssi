@@ -1,15 +1,14 @@
 """Bridge between SSI investigation results and i4g core platform.
 
 .. deprecated::
-    This module uses HTTP calls to the core API, which fail with 403 in
-    Cloud Run Jobs / Services because the SSI service account cannot
-    authenticate through IAP.  New code should write to the shared
-    Cloud SQL database directly via ``ScanStore`` (see
-    ``ScanStore.create_case_record()`` and ``worker/jobs.py``).
+    This module uses HTTP calls to the core API, which fail with 403
+    because the SSI service account cannot authenticate through IAP.
+    New code should write to the shared Cloud SQL database directly
+    via ``ScanStore`` (see ``ScanStore.create_case_record()`` and the
+    ``_create_case_direct()`` helper in ``investigation_routes.py``).
 
     Remaining callers:
     - ``ssi.api.routes._push_to_core`` — SSI API service
-    - ``ssi.worker.batch_jobs._push_result_to_core`` — batch Cloud Run Job
     - ``ssi.cli.investigate._push_to_core_cli`` — local CLI (low risk)
 
     These should be migrated to direct DB writes before this module is
@@ -185,7 +184,7 @@ class CoreBridge:
             result: Completed SSI investigation.
             dataset: Dataset label for the case (default ``"ssi"``).
             trigger_dossier: When True, queue a dossier job for the case.
-            scan_id: Authoritative scan ID from ``SSI_JOB__SCAN_ID``.
+            scan_id: Authoritative scan ID from the trigger request.
                 When provided, overrides ``result.investigation_id`` for
                 the ``ssi_investigation_id`` stored in case metadata.
 
@@ -254,7 +253,7 @@ class CoreBridge:
         Args:
             result: Completed SSI investigation result.
             dataset: Dataset label for the case.
-            scan_id: Authoritative scan ID (from ``SSI_JOB__SCAN_ID``).
+            scan_id: Authoritative scan ID from the trigger request.
                 Overrides ``result.investigation_id`` for case metadata.
         """
         title = self._build_title(result)

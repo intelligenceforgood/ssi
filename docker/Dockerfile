@@ -1,9 +1,13 @@
 # syntax=docker/dockerfile:1
 
-# Job image for running SSI investigations as Cloud Run Jobs.
-# Same base system deps as the API but entrypoint is the CLI.
-# Includes zendriver + Chromium for active browser agent and
-# wallet extraction (coin tab discovery, JS regex, LLM verify).
+# SSI Cloud Run Service image.
+# Runs a persistent FastAPI server (uvicorn) that handles both
+# interactive and batch investigations via HTTP endpoints.
+#
+# Cloud Run Service config:
+#   min_instances=1, max_instances=3
+#   cpu_allocation=CPU_ALLOCATION_ALWAYS (background tasks need CPU after 202)
+#   timeout=600s
 #
 # NOTE: Runs as root because Chromium requires --no-sandbox on Cloud Run.
 
@@ -61,5 +65,7 @@ RUN mkdir -p /app/data && chmod 755 /app/data
 
 ENV SSI_ENV=dev
 
-# Run as a Cloud Run Job — reads SSI_JOB__URL and SSI_JOB__* env vars
-ENTRYPOINT ["ssi", "job", "investigate"]
+# Run as a Cloud Run Service — persistent FastAPI server
+# Cloud Run injects PORT env var (default 8080)
+EXPOSE 8080
+ENTRYPOINT ["uvicorn", "ssi.api.app:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -42,11 +42,11 @@ investigate:
 	ssi investigate $(URL)
 
 # ---------- Docker ----------
-build-job:
-	docker build -f docker/ssi-job.Dockerfile -t ssi-job:local .
+build-svc:
+	docker build -f docker/Dockerfile -t ssi-svc:local .
 
-push-job:
-	scripts/build_image.sh ssi-job dev
+push-svc:
+	scripts/build_image.sh ssi-svc dev
 
 # ---------- Clean ----------
 clean:
