@@ -11,6 +11,7 @@ import json
 import logging
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from ssi.browser.actions import execute_action
@@ -18,12 +19,7 @@ from ssi.browser.dom_extractor import extract_page_observation
 from ssi.browser.downloads import DownloadInterceptor
 from ssi.browser.llm_client import AgentLLMClient
 from ssi.identity.vault import IdentityVault, SyntheticIdentity
-from ssi.models.agent import (
-    ActionType,
-    AgentMetrics,
-    AgentSession,
-    AgentStep,
-)
+from ssi.models.agent import ActionType, AgentMetrics, AgentSession, AgentStep
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +44,9 @@ class BrowserAgent:
         max_steps: Maximum number of interaction steps.
         token_budget: Maximum total tokens (input + output) before stopping.
         output_dir: Directory for screenshots and session artifacts.
+        step_callback: Optional callable invoked after each step with the
+            path to the post-action screenshot PNG.  Used by the orchestrator
+            to stream live screenshots via the WebSocket event bus.
     """
 
     def __init__(
@@ -57,6 +56,7 @@ class BrowserAgent:
         max_steps: int = _DEFAULT_MAX_STEPS,
         token_budget: int = _DEFAULT_TOKEN_BUDGET,
         output_dir: Path | None = None,
+        step_callback: Callable[[str], None] | None = None,
     ) -> None:
         from ssi.settings import get_settings
 
@@ -67,6 +67,9 @@ class BrowserAgent:
         self.max_steps = max_steps
         self.token_budget = token_budget or settings.llm.token_budget_per_session
         self.output_dir = output_dir
+        # Called after each agent step with the path to the post-action screenshot.
+        # Used by the orchestrator to stream live screenshots to the WebSocket monitor.
+        self._step_callback = step_callback
 
         self._session = AgentSession(identity_id=self.identity.identity_id)
         self._history: list[dict[str, str]] = []
@@ -103,7 +106,11 @@ class BrowserAgent:
         with sync_playwright() as pw:
             # Build stealth-aware browser profile
             proxy_pool = ProxyPool(settings.stealth.proxy_urls) if settings.stealth.proxy_urls else None
-            har_path = str(self.output_dir / "agent_session.har") if (settings.browser.record_har and self.output_dir) else None
+            har_path = (
+                str(self.output_dir / "agent_session.har")
+                if (settings.browser.record_har and self.output_dir)
+                else None
+            )
             video_dir = str(self.output_dir / "video") if (settings.browser.record_video and self.output_dir) else None
 
             profile = build_browser_profile(
@@ -125,7 +132,9 @@ class BrowserAgent:
                 apply_stealth_scripts(page)
 
             # Attach download interceptor for malware capture
-            downloads_dir = self.output_dir / "downloads" if self.output_dir else Path(tempfile.mkdtemp(prefix="ssi-downloads-"))
+            downloads_dir = (
+                self.output_dir / "downloads" if self.output_dir else Path(tempfile.mkdtemp(prefix="ssi-downloads-"))
+            )
             self._download_interceptor = DownloadInterceptor(
                 output_dir=downloads_dir,
                 check_virustotal=bool(settings.osint.virustotal_api_key),
@@ -162,6 +171,18 @@ class BrowserAgent:
                 for step_num in range(self.max_steps):
                     step = self._execute_step(page, step_num)
                     self._session.steps.append(step)
+
+                    # Emit live screenshots to the WebSocket monitor after each step.
+                    # We emit screenshot_before (observation, always reliable — page is
+                    # stable before the action fires) AND screenshot_after (post-action,
+                    # may fail silently if a navigation is in progress).  Emitting before
+                    # ensures registration/form frames are visible even when after-capture
+                    # races against a page transition and fails.
+                    if self._step_callback:
+                        if step.screenshot_before:
+                            self._step_callback(step.screenshot_before)
+                        if step.screenshot_after and step.screenshot_after != step.screenshot_before:
+                            self._step_callback(step.screenshot_after)
 
                     # Track pages visited
                     current_url = page.url
@@ -264,11 +285,10 @@ class BrowserAgent:
 
         # 3. Execute the action
         browser_start = time.monotonic()
-        exec_result = ""
         error = ""
         if action.action_type not in _TERMINAL_ACTIONS:
             try:
-                exec_result = execute_action(page, action, observation.interactive_elements)
+                execute_action(page, action, observation.interactive_elements)
             except Exception as e:
                 error = str(e)
                 logger.warning("Action execution error at step %d: %s", step_number, e)

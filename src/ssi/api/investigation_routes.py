@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Literal
 
@@ -106,6 +107,7 @@ def _run_investigation(
     scan_id: str | None,
     push_to_core: bool,
     dataset: str,
+    event_bus: Any | None = None,
 ) -> None:
     """Execute a single investigation in the background.
 
@@ -113,13 +115,19 @@ def _run_investigation(
     environment variable patching.  Creates a case record in the
     shared database on success.
 
+    The ``EventBus`` is created and registered by the endpoint handler
+    (on the main event loop) and passed in via ``event_bus``.  This
+    function only emits events and unregisters the bus when done.
+
     Args:
         url: Target URL to investigate.
         scan_type: Investigation mode (passive/active/full).
         scan_id: Pre-assigned scan ID.
         push_to_core: Whether to create a case record.
         dataset: Dataset label for the core case.
+        event_bus: Pre-created EventBus for live monitoring (optional).
     """
+    from ssi.api.ws_routes import unregister_bus
     from ssi.investigator.orchestrator import run_investigation
     from ssi.settings import get_settings
     from ssi.worker.task_reporter import TaskStatusReporter
@@ -127,6 +135,11 @@ def _run_investigation(
     reporter = TaskStatusReporter(scan_id=scan_id)
     reporter.update(status="running", message=f"Starting investigation for {url}")
     start = time.monotonic()
+
+    bus = event_bus
+    monitor_id = scan_id or ""
+    if bus:
+        bus.emit_sync("site_started", {"url": url, "scan_type": scan_type})
 
     try:
         settings = get_settings()
@@ -138,6 +151,7 @@ def _run_investigation(
             scan_type=scan_type,
             report_format="both",
             investigation_id=scan_id,
+            event_bus=bus,
         )
 
         elapsed = time.monotonic() - start
@@ -151,6 +165,8 @@ def _run_investigation(
 
         if not result.success:
             logger.error("Investigation failed: %s", result.error)
+            if bus:
+                bus.emit_sync("error", {"message": result.error or "Investigation failed"})
             reporter.update(status="failed", message=result.error or "Investigation failed")
             return
 
@@ -158,6 +174,17 @@ def _run_investigation(
         case_id = _create_case_direct(result, dataset=dataset, scan_id=scan_id)
 
         risk_score = result.taxonomy_result.risk_score if result.taxonomy_result else None
+        if bus:
+            bus.emit_sync(
+                "site_completed",
+                {
+                    "url": url,
+                    "status": "completed",
+                    "risk_score": risk_score,
+                    "case_id": case_id,
+                    "duration_seconds": elapsed,
+                },
+            )
         reporter.update(
             status="completed",
             message=f"Investigation completed in {elapsed:.1f}s",
@@ -169,7 +196,20 @@ def _run_investigation(
 
     except Exception:
         logger.exception("Investigation failed for %s", url)
+        if bus:
+            bus.emit_sync("error", {"message": "Investigation failed with an exception"})
         reporter.update(status="failed", message="Investigation failed with an exception")
+    finally:
+        # Unregister the bus after a short delay so WebSocket clients
+        # receive the final event before disconnection.
+        if monitor_id:
+            import threading
+
+            def _deferred_unregister() -> None:
+                time.sleep(2)
+                unregister_bus(monitor_id)
+
+            threading.Thread(target=_deferred_unregister, daemon=True).start()
 
 
 def _create_case_direct(
@@ -201,15 +241,13 @@ def _create_case_direct(
             logger.info("Created case %s for scan %s (direct DB)", case_id, resolved_scan_id)
         else:
             logger.error(
-                "create_case_record returned None for scan %s — "
-                "case was NOT written to the cases table",
+                "create_case_record returned None for scan %s — " "case was NOT written to the cases table",
                 resolved_scan_id,
             )
         return case_id
     except Exception:
         logger.exception(
-            "Failed to create case record for scan %s — "
-            "case was NOT written to the cases table",
+            "Failed to create case record for scan %s — " "case was NOT written to the cases table",
             resolved_scan_id,
         )
         return None
@@ -270,7 +308,7 @@ def _run_batch_investigation(
     status_code=202,
     response_model=InvestigateResponse,
 )
-def trigger_investigate(
+async def trigger_investigate(
     payload: InvestigateRequest,
     background_tasks: BackgroundTasks,
 ) -> InvestigateResponse:
@@ -280,6 +318,10 @@ def trigger_investigate(
     with CPU always allocated (Cloud Run Service with
     ``cpu_allocation=always``).
 
+    The ``EventBus`` is created here (on the main event loop) so that
+    ``emit_sync`` can schedule WebSocket sends via
+    ``run_coroutine_threadsafe`` from the background thread.
+
     Args:
         payload: Investigation parameters.
         background_tasks: FastAPI background task runner.
@@ -287,6 +329,9 @@ def trigger_investigate(
     Returns:
         Acknowledgement with the scan ID and ``accepted`` status.
     """
+    from ssi.api.ws_routes import register_bus
+    from ssi.monitoring.event_bus import EventBus
+
     logger.info(
         "POST /trigger/investigate: url=%s scan_type=%s scan_id=%s",
         payload.url,
@@ -294,16 +339,39 @@ def trigger_investigate(
         payload.scan_id,
     )
 
+    from ssi.store import build_scan_store
+
+    # Always ensure a scan_id exists so the EventBus can be registered
+    # and the poll proxy can query /investigations/{scan_id} immediately.
+    scan_id: str = payload.scan_id or uuid.uuid4().hex
+
+    # Pre-create the scan row so the poll proxy finds it right away.
+    try:
+        store = build_scan_store()
+        store.create_scan(
+            scan_id=scan_id,
+            url=payload.url,
+            scan_type=payload.scan_type,
+        )
+    except Exception:
+        logger.debug("Scan row may already exist for %s", scan_id)
+
+    # Create the EventBus on the main event loop so self._loop is
+    # captured correctly for cross-thread dispatching.
+    bus = EventBus(investigation_id=scan_id)
+    register_bus(scan_id, bus)
+
     background_tasks.add_task(
         _run_investigation,
         url=payload.url,
         scan_type=payload.scan_type,
-        scan_id=payload.scan_id,
+        scan_id=scan_id,
         push_to_core=payload.push_to_core,
         dataset=payload.dataset,
+        event_bus=bus,
     )
 
-    return InvestigateResponse(scan_id=payload.scan_id, status="accepted")
+    return InvestigateResponse(scan_id=scan_id, status="accepted")
 
 
 @investigation_router.post(
@@ -341,7 +409,7 @@ def trigger_batch_investigate(
         try:
             manifest = load_manifest(payload.manifest_uri)
         except (FileNotFoundError, ValueError, ImportError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     else:
         raise HTTPException(
             status_code=422,
@@ -461,7 +529,10 @@ def search_wallets(
     """
     store = build_scan_store()
     wallets = store.search_wallets(
-        address=address, token_symbol=token_symbol, limit=limit, deduplicate=deduplicate,
+        address=address,
+        token_symbol=token_symbol,
+        limit=limit,
+        deduplicate=deduplicate,
     )
     for wallet in wallets:
         for key, val in wallet.items():
@@ -707,4 +778,3 @@ def download_lea_package(scan_id: str) -> Response:
             "Content-Disposition": f'attachment; filename="lea_package_{scan_id[:8]}.zip"',
         },
     )
-

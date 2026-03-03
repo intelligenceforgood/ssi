@@ -12,7 +12,7 @@ can persist an entire investigation result in one call.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -21,11 +21,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker
 
 from ssi.store import sql as sql_schema
-from ssi.store.sql import (
-    METADATA,
-    build_session_factory,
-    dialect_insert,
-)
+from ssi.store.sql import METADATA, build_session_factory, dialect_insert
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +105,7 @@ class ScanStore:
                 the DB record and the result object share the same identifier.
         """
         scan_id = scan_id or str(uuid4())
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         with self._session_factory() as session:
             session.execute(
                 sa.insert(sql_schema.site_scans).values(
@@ -131,12 +127,10 @@ class ScanStore:
 
     def update_scan(self, scan_id: str, **fields: Any) -> None:
         """Update arbitrary columns on a ``site_scans`` row."""
-        fields["updated_at"] = datetime.now(timezone.utc)
+        fields["updated_at"] = datetime.now(UTC)
         with self._session_factory() as session:
             session.execute(
-                sa.update(sql_schema.site_scans)
-                .where(sql_schema.site_scans.c.scan_id == scan_id)
-                .values(**fields)
+                sa.update(sql_schema.site_scans).where(sql_schema.site_scans.c.scan_id == scan_id).values(**fields)
             )
             session.commit()
 
@@ -160,7 +154,7 @@ class ScanStore:
         evidence_zip_sha256: str | None = None,
     ) -> None:
         """Finalise a scan with aggregated results."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         values: dict[str, Any] = {
             "status": status,
             "wallet_count": wallet_count,
@@ -192,9 +186,7 @@ class ScanStore:
 
         with self._session_factory() as session:
             session.execute(
-                sa.update(sql_schema.site_scans)
-                .where(sql_schema.site_scans.c.scan_id == scan_id)
-                .values(**values)
+                sa.update(sql_schema.site_scans).where(sql_schema.site_scans.c.scan_id == scan_id).values(**values)
             )
             session.commit()
         logger.info("Completed scan %s with status=%s", scan_id, status)
@@ -262,8 +254,8 @@ class ScanStore:
                 confidence=confidence,
                 site_url=site_url,
                 metadata=metadata or {},
-                harvested_at=harvested_at or datetime.now(timezone.utc),
-                created_at=datetime.now(timezone.utc),
+                harvested_at=harvested_at or datetime.now(UTC),
+                created_at=datetime.now(UTC),
             )
             # On conflict (duplicate address for same scan), update confidence
             stmt = stmt.on_conflict_do_update(
@@ -282,7 +274,7 @@ class ScanStore:
         """Bulk-insert wallets from a list of dicts.  Returns count inserted."""
         if not wallets:
             return 0
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         rows = []
         for w in wallets:
             rows.append(
@@ -344,27 +336,24 @@ class ScanStore:
         hw = sql_schema.harvested_wallets
 
         if deduplicate:
-            stmt = (
-                sa.select(
-                    hw.c.wallet_address,
-                    hw.c.token_symbol,
-                    hw.c.token_label,
-                    hw.c.network_short,
-                    hw.c.network_label,
-                    sa.func.max(hw.c.confidence).label("confidence"),
-                    sa.func.max(hw.c.source).label("source"),
-                    sa.func.max(hw.c.site_url).label("site_url"),
-                    sa.func.min(hw.c.harvested_at).label("first_seen_at"),
-                    sa.func.max(hw.c.harvested_at).label("last_seen_at"),
-                    sa.func.count().label("seen_count"),
-                )
-                .group_by(
-                    hw.c.wallet_address,
-                    hw.c.token_symbol,
-                    hw.c.token_label,
-                    hw.c.network_short,
-                    hw.c.network_label,
-                )
+            stmt = sa.select(
+                hw.c.wallet_address,
+                hw.c.token_symbol,
+                hw.c.token_label,
+                hw.c.network_short,
+                hw.c.network_label,
+                sa.func.max(hw.c.confidence).label("confidence"),
+                sa.func.max(hw.c.source).label("source"),
+                sa.func.max(hw.c.site_url).label("site_url"),
+                sa.func.min(hw.c.harvested_at).label("first_seen_at"),
+                sa.func.max(hw.c.harvested_at).label("last_seen_at"),
+                sa.func.count().label("seen_count"),
+            ).group_by(
+                hw.c.wallet_address,
+                hw.c.token_symbol,
+                hw.c.token_label,
+                hw.c.network_short,
+                hw.c.network_label,
             )
             if address is not None:
                 stmt = stmt.where(hw.c.wallet_address == address)
@@ -427,7 +416,7 @@ class ScanStore:
                     error=error,
                     sequence=sequence,
                     metadata=metadata or {},
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                 )
             )
             session.commit()
@@ -476,8 +465,8 @@ class ScanStore:
                     is_required=is_required,
                     was_submitted=was_submitted,
                     metadata=metadata or {},
-                    detected_at=detected_at or datetime.now(timezone.utc),
-                    created_at=datetime.now(timezone.utc),
+                    detected_at=detected_at or datetime.now(UTC),
+                    created_at=datetime.now(UTC),
                 )
             )
             session.commit()
@@ -487,7 +476,7 @@ class ScanStore:
         """Bulk-insert PII exposure records.  Returns count inserted."""
         if not exposures:
             return 0
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         rows = []
         for e in exposures:
             rows.append(
@@ -552,13 +541,17 @@ class ScanStore:
         # Build passive result summary
         passive_result: dict[str, Any] = {}
         if result.whois:
-            passive_result["whois"] = result.whois.model_dump(mode="json") if hasattr(result.whois, "model_dump") else {}
+            passive_result["whois"] = (
+                result.whois.model_dump(mode="json") if hasattr(result.whois, "model_dump") else {}
+            )
         if result.dns:
             passive_result["dns"] = result.dns.model_dump(mode="json") if hasattr(result.dns, "model_dump") else {}
         if result.ssl:
             passive_result["ssl"] = result.ssl.model_dump(mode="json") if hasattr(result.ssl, "model_dump") else {}
         if result.geoip:
-            passive_result["geoip"] = result.geoip.model_dump(mode="json") if hasattr(result.geoip, "model_dump") else {}
+            passive_result["geoip"] = (
+                result.geoip.model_dump(mode="json") if hasattr(result.geoip, "model_dump") else {}
+            )
 
         # Build active result summary from site_result
         active_result: dict[str, Any] | None = None
@@ -579,7 +572,9 @@ class ScanStore:
         llm_output_tokens = getattr(result, "total_output_tokens", 0) or 0
         total_cost_usd: float | None = None
         if result.cost_summary:
-            total_cost_usd = result.cost_summary.get("total_cost_usd") if isinstance(result.cost_summary, dict) else None
+            total_cost_usd = (
+                result.cost_summary.get("total_cost_usd") if isinstance(result.cost_summary, dict) else None
+            )
 
         # Wallet count — prefer site_result wallets, fall back to InvestigationResult.wallets
         wallet_entries = []
@@ -589,12 +584,7 @@ class ScanStore:
             wallet_entries = result.wallets or []
 
         # Complete the scan row
-        if not result.status:
-            status = "completed"
-        elif result.status.value == "completed":
-            status = "completed"
-        else:
-            status = str(result.status.value)
+        status = "completed" if not result.status or result.status.value == "completed" else str(result.status.value)
         self.complete_scan(
             scan_id,
             status=status,
@@ -610,9 +600,9 @@ class ScanStore:
             duration_seconds=result.duration_seconds,
             error_message=None,
             evidence_path=result.output_path,
-            evidence_zip_sha256=getattr(result.chain_of_custody, "package_sha256", None)
-            if result.chain_of_custody
-            else None,
+            evidence_zip_sha256=(
+                getattr(result.chain_of_custody, "package_sha256", None) if result.chain_of_custody else None
+            ),
         )
 
         # Bulk-insert wallets
@@ -673,7 +663,7 @@ class ScanStore:
         agent_step_count = 0
         agent_steps = getattr(result, "agent_steps", None) or []
         if agent_steps:
-            now_ts = datetime.now(timezone.utc)
+            now_ts = datetime.now(UTC)
             step_rows = []
             for step in agent_steps:
                 step_rows.append(
@@ -743,7 +733,7 @@ class ScanStore:
         import json
         from urllib.parse import urlparse
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         case_id = str(uuid4())
 
         # Build title
@@ -768,7 +758,11 @@ class ScanStore:
         metadata_dict = {
             "title": title,
             "ssi_investigation_id": scan_id,
-            "scan_type": result.scan_type if isinstance(result.scan_type, str) else (result.scan_type.value if result.scan_type else "full"),
+            "scan_type": (
+                result.scan_type
+                if isinstance(result.scan_type, str)
+                else (result.scan_type.value if result.scan_type else "full")
+            ),
             "passive_only": result.passive_only,
             "started_at": result.started_at.isoformat() if result.started_at else None,
             "completed_at": result.completed_at.isoformat() if result.completed_at else None,
@@ -805,9 +799,7 @@ class ScanStore:
                         update_vals["risk_score"] = risk_score
                     update_vals["metadata"] = metadata_dict
                     session.execute(
-                        sa.update(sql_schema.cases)
-                        .where(sql_schema.cases.c.case_id == existing)
-                        .values(**update_vals)
+                        sa.update(sql_schema.cases).where(sql_schema.cases.c.case_id == existing).values(**update_vals)
                     )
                 else:
                     # Insert new case
@@ -863,14 +855,20 @@ class ScanStore:
                     # Insert timeline events so the case detail page has
                     # a populated timeline card.
                     self._insert_timeline_events(
-                        session, review_id=review_id, result=result,
-                        scan_id=scan_id, now=now,
+                        session,
+                        review_id=review_id,
+                        result=result,
+                        scan_id=scan_id,
+                        now=now,
                     )
 
                     # Insert source_documents rows pointing at GCS
                     # evidence files so the Artifacts card is populated.
                     self._insert_evidence_documents(
-                        session, case_id=case_id, result=result, now=now,
+                        session,
+                        case_id=case_id,
+                        result=result,
+                        now=now,
                     )
 
                 # Link the scan row to the case
@@ -922,11 +920,13 @@ class ScanStore:
 
         # 1. Investigation submitted
         if result.started_at:
-            events.append({
-                "action": "investigation_submitted",
-                "description": f"SSI investigation initiated for {result.url}",
-                "ts": result.started_at,
-            })
+            events.append(
+                {
+                    "action": "investigation_submitted",
+                    "description": f"SSI investigation initiated for {result.url}",
+                    "ts": result.started_at,
+                }
+            )
 
         # 2. Classification completed
         if result.taxonomy_result:
@@ -935,14 +935,15 @@ class ScanStore:
                 top = result.taxonomy_result.intent[0]
                 raw = getattr(top, "label", str(top))
                 intent_label = raw.replace("INTENT.", "").replace("_", " ").title()
-            events.append({
-                "action": "classification_completed",
-                "description": (
-                    f"Classified as {intent_label} "
-                    f"(risk score: {result.taxonomy_result.risk_score:.0f})"
-                ),
-                "ts": result.completed_at or now,
-            })
+            events.append(
+                {
+                    "action": "classification_completed",
+                    "description": (
+                        f"Classified as {intent_label} " f"(risk score: {result.taxonomy_result.risk_score:.0f})"
+                    ),
+                    "ts": result.completed_at or now,
+                }
+            )
 
         # 3. Wallets harvested
         wallet_count = 0
@@ -962,11 +963,13 @@ class ScanStore:
         if wallet_count > 0:
             net_str = ", ".join(sorted(networks)) if networks else "unknown"
             suffix = "es" if wallet_count != 1 else ""
-            events.append({
-                "action": "wallets_harvested",
-                "description": f"Found {wallet_count} wallet address{suffix} ({net_str})",
-                "ts": result.completed_at or now,
-            })
+            events.append(
+                {
+                    "action": "wallets_harvested",
+                    "description": f"Found {wallet_count} wallet address{suffix} ({net_str})",
+                    "ts": result.completed_at or now,
+                }
+            )
 
         # 4. Evidence collected
         evidence_count = 0
@@ -978,11 +981,13 @@ class ScanStore:
                 evidence_count = sum(1 for f in output.rglob("*") if f.is_file())
         if evidence_count > 0:
             suffix = "s" if evidence_count != 1 else ""
-            events.append({
-                "action": "evidence_collected",
-                "description": f"Collected {evidence_count} evidence artifact{suffix}",
-                "ts": result.completed_at or now,
-            })
+            events.append(
+                {
+                    "action": "evidence_collected",
+                    "description": f"Collected {evidence_count} evidence artifact{suffix}",
+                    "ts": result.completed_at or now,
+                }
+            )
 
         # 5. Report generated
         has_report = False
@@ -995,32 +1000,38 @@ class ScanStore:
                 # was always generated if the investigation succeeded.
                 has_report = result.success
         if has_report:
-            events.append({
-                "action": "report_generated",
-                "description": "Investigation report generated",
-                "ts": result.completed_at or now,
-            })
+            events.append(
+                {
+                    "action": "report_generated",
+                    "description": "Investigation report generated",
+                    "ts": result.completed_at or now,
+                }
+            )
 
         # 6. Case created
-        events.append({
-            "action": "case_created",
-            "description": f"Case created from SSI investigation {scan_id}",
-            "ts": now,
-        })
+        events.append(
+            {
+                "action": "case_created",
+                "description": f"Case created from SSI investigation {scan_id}",
+                "ts": now,
+            }
+        )
 
         rows = []
         for ev in events:
-            rows.append({
-                "action_id": str(uuid4()),
-                "review_id": review_id,
-                "actor": "ssi-agent",
-                "action": ev["action"],
-                "payload": {
-                    "description": ev["description"],
-                    "timestamp": ev["ts"].isoformat() if hasattr(ev["ts"], "isoformat") else str(ev["ts"]),
-                },
-                "created_at": ev["ts"],
-            })
+            rows.append(
+                {
+                    "action_id": str(uuid4()),
+                    "review_id": review_id,
+                    "actor": "ssi-agent",
+                    "action": ev["action"],
+                    "payload": {
+                        "description": ev["description"],
+                        "timestamp": ev["ts"].isoformat() if hasattr(ev["ts"], "isoformat") else str(ev["ts"]),
+                    },
+                    "created_at": ev["ts"],
+                }
+            )
 
         if rows:
             session.execute(sa.insert(sql_schema.review_actions), rows)
@@ -1052,7 +1063,7 @@ class ScanStore:
         Returns:
             Number of documents inserted.
         """
-        _EVIDENCE_MIME: dict[str, str] = {
+        evidence_mime: dict[str, str] = {
             ".json": "application/json",
             ".md": "text/markdown",
             ".pdf": "application/pdf",
@@ -1076,20 +1087,27 @@ class ScanStore:
                 if not filename:
                     continue
                 ext = Path(filename).suffix.lower()
-                mime = _EVIDENCE_MIME.get(ext, "application/octet-stream")
-                source_url = f"{output_path}/{filename}" if is_gcs else None
-                rows.append({
-                    "document_id": str(uuid4()),
-                    "case_id": case_id,
-                    "title": filename,
-                    "source_url": source_url,
-                    "mime_type": mime,
-                    "file_sha256": getattr(art, "sha256", None),
-                    "captured_at": now,
-                    "created_at": now,
-                    "updated_at": now,
-                    "metadata": {"source": "ssi", "size_bytes": getattr(art, "size_bytes", None)},
-                })
+                mime = evidence_mime.get(ext, "application/octet-stream")
+                if is_gcs:
+                    source_url: str | None = f"{output_path}/{filename}"
+                elif output_path:
+                    source_url = str(Path(output_path) / filename)
+                else:
+                    source_url = None
+                rows.append(
+                    {
+                        "document_id": str(uuid4()),
+                        "case_id": case_id,
+                        "title": filename,
+                        "source_url": source_url,
+                        "mime_type": mime,
+                        "file_sha256": getattr(art, "sha256", None),
+                        "captured_at": now,
+                        "created_at": now,
+                        "updated_at": now,
+                        "metadata": {"source": "ssi", "size_bytes": getattr(art, "size_bytes", None)},
+                    }
+                )
         elif is_gcs:
             # Fallback: insert rows for the well-known evidence files
             # when chain_of_custody isn't available.
@@ -1102,17 +1120,19 @@ class ScanStore:
                 ("evidence.zip", "application/zip"),
             ]
             for fn, mime in known_files:
-                rows.append({
-                    "document_id": str(uuid4()),
-                    "case_id": case_id,
-                    "title": fn,
-                    "source_url": f"{output_path}/{fn}",
-                    "mime_type": mime,
-                    "captured_at": now,
-                    "created_at": now,
-                    "updated_at": now,
-                    "metadata": {"source": "ssi"},
-                })
+                rows.append(
+                    {
+                        "document_id": str(uuid4()),
+                        "case_id": case_id,
+                        "title": fn,
+                        "source_url": f"{output_path}/{fn}",
+                        "mime_type": mime,
+                        "captured_at": now,
+                        "created_at": now,
+                        "updated_at": now,
+                        "metadata": {"source": "ssi"},
+                    }
+                )
         elif not is_gcs and output_path:
             # Local filesystem: list actual files in the output directory
             out_dir = Path(output_path)
@@ -1121,18 +1141,20 @@ class ScanStore:
                     if not f.is_file():
                         continue
                     ext = f.suffix.lower()
-                    mime = _EVIDENCE_MIME.get(ext, "application/octet-stream")
-                    rows.append({
-                        "document_id": str(uuid4()),
-                        "case_id": case_id,
-                        "title": f.name,
-                        "source_url": str(f),
-                        "mime_type": mime,
-                        "captured_at": now,
-                        "created_at": now,
-                        "updated_at": now,
-                        "metadata": {"source": "ssi"},
-                    })
+                    mime = evidence_mime.get(ext, "application/octet-stream")
+                    rows.append(
+                        {
+                            "document_id": str(uuid4()),
+                            "case_id": case_id,
+                            "title": f.name,
+                            "source_url": str(f),
+                            "mime_type": mime,
+                            "captured_at": now,
+                            "created_at": now,
+                            "updated_at": now,
+                            "metadata": {"source": "ssi"},
+                        }
+                    )
 
         if rows:
             session.execute(sa.insert(sql_schema.source_documents), rows)

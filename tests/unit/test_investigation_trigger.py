@@ -9,9 +9,8 @@ Tests verify:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from ssi.api.app import create_app
@@ -57,6 +56,7 @@ class TestInvestigateEndpoint:
             scan_id="scan-123",
             push_to_core=False,
             dataset="tutorial",
+            event_bus=ANY,
         )
 
     @patch("ssi.api.investigation_routes._run_investigation")
@@ -72,7 +72,8 @@ class TestInvestigateEndpoint:
         assert call_kwargs["scan_type"] == "full"
         assert call_kwargs["push_to_core"] is True
         assert call_kwargs["dataset"] == "ssi"
-        assert call_kwargs["scan_id"] is None
+        # scan_id is auto-generated when not provided
+        assert isinstance(call_kwargs["scan_id"], str) and call_kwargs["scan_id"]
 
     def test_requires_url(self) -> None:
         """Request without URL returns 422."""
@@ -89,15 +90,16 @@ class TestInvestigateEndpoint:
         assert resp.status_code == 422
 
     @patch("ssi.api.investigation_routes._run_investigation")
-    def test_scan_id_none_when_omitted(self, mock_run: MagicMock) -> None:
-        """scan_id is None when not provided in the request."""
+    def test_scan_id_generated_when_omitted(self, mock_run: MagicMock) -> None:
+        """scan_id is auto-generated when not provided in the request."""
         resp = client.post(
             "/trigger/investigate",
             json={"url": "https://scam.example.com"},
         )
         assert resp.status_code == 202
         data = resp.json()
-        assert data["scan_id"] is None
+        # scan_id must be a non-empty string (auto-generated UUID hex)
+        assert isinstance(data["scan_id"], str) and data["scan_id"]
 
 
 class TestBatchInvestigateEndpoint:

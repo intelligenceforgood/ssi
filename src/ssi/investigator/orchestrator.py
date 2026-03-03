@@ -9,7 +9,7 @@ import json
 import logging
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from ssi.browser.capture import PageSnapshot
     from ssi.models.agent import AgentSession
     from ssi.models.investigation import FraudTaxonomyResult
+    from ssi.monitoring.event_bus import EventBus
     from ssi.osint.dns_lookup import DNSRecords
     from ssi.osint.geoip_lookup import GeoIPInfo
     from ssi.osint.ssl_inspect import SSLInfo
@@ -40,6 +41,7 @@ def run_investigation(
     skip_urlscan: bool = False,
     report_format: str = "json",
     investigation_id: str | None = None,
+    event_bus: EventBus | None = None,
 ) -> InvestigationResult:
     """Execute an investigation against *url*.
 
@@ -72,6 +74,10 @@ def run_investigation(
             ``InvestigationResult.investigation_id`` is set to this value so
             that the DB row created by core at trigger time and the result
             object share the same identifier.
+        event_bus: Optional ``EventBus`` for live-monitoring integration.
+            When provided, milestone events (state changes, wallet findings,
+            screenshots) are emitted so that WebSocket clients receive
+            real-time updates.
 
     Returns:
         An ``InvestigationResult`` populated with all collected intelligence.
@@ -133,8 +139,11 @@ def run_investigation(
             # pre-created by core at trigger time.  Skip the INSERT to
             # avoid an IntegrityError on the duplicate primary key and
             # reuse the existing row for persist_investigation().
+            # IMPORTANT: use the original investigation_id string (hex,
+            # no dashes) — do NOT use str(result.investigation_id) which
+            # adds dashes and breaks the DB lookup.
             if investigation_id:
-                scan_id = str(result.investigation_id)
+                scan_id = investigation_id
                 logger.debug("Reusing pre-created scan record %s", scan_id)
             else:
                 scan_id = scan_store.create_scan(
@@ -151,6 +160,11 @@ def run_investigation(
 
     site_result = None  # Populated from agent_session after Phase 2 completes
 
+    # Helper to emit events to the bus when provided
+    def _emit(event_type: str, data: dict[str, Any] | None = None) -> None:
+        if event_bus is not None:
+            event_bus.emit_sync(event_type, data or {})
+
     try:
         # --- Pre-flight: Domain resolution check ----------------------------
         domain_resolves = _check_domain_resolution(url)
@@ -164,6 +178,7 @@ def run_investigation(
 
         # --- Phase 1: Passive Reconnaissance --------------------------------
         logger.info("Phase 1: Passive recon for %s (scan_type=%s)", url, resolved_scan_type.value)
+        _emit("state_changed", {"new_state": "PASSIVE_RECON", "message": "Starting passive reconnaissance"})
 
         if run_passive and not skip_whois:
             result.whois = _run_whois(url)
@@ -188,13 +203,25 @@ def run_investigation(
         # Screenshot is captured for all scan types (passive, active, full)
         # unless explicitly skipped by the caller or the domain is unreachable.
         if not skip_screenshot and domain_resolves:
+            _emit("state_changed", {"new_state": "SCREENSHOT", "message": "Capturing page screenshot"})
             result.page_snapshot = _run_browser_capture(url, inv_dir)
+
+            # Emit screenshot to live monitor if available
+            if result.page_snapshot and result.page_snapshot.screenshot_path and event_bus is not None:
+                try:
+                    import base64
+
+                    screenshot_file = Path(result.page_snapshot.screenshot_path)
+                    if screenshot_file.is_file():
+                        screenshot_bytes = screenshot_file.read_bytes()
+                        screenshot_b64 = base64.b64encode(screenshot_bytes).decode("ascii")
+                        _emit("screenshot_update", {"screenshot_b64": screenshot_b64})
+                except Exception:
+                    logger.debug("Failed to emit screenshot to event bus", exc_info=True)
 
             # Collect passive-capture downloads
             if result.page_snapshot and result.page_snapshot.captured_downloads:
-                result.downloads.extend(
-                    _to_download_artifacts(result.page_snapshot.captured_downloads)
-                )
+                result.downloads.extend(_to_download_artifacts(result.page_snapshot.captured_downloads))
 
         if run_passive and not skip_virustotal:
             _run_virustotal(url, result)
@@ -216,15 +243,14 @@ def run_investigation(
         agent_session = None
         if run_active and domain_resolves:
             logger.info("Phase 2: Active interaction via AI agent")
-            agent_session = _run_agent_interaction(url, inv_dir)
+            _emit("state_changed", {"new_state": "ACTIVE_INTERACTION", "message": "Starting AI agent interaction"})
+            agent_session = _run_agent_interaction(url, inv_dir, event_bus=event_bus)
         elif run_active and not domain_resolves:
             logger.info("Phase 2: Skipping active interaction — domain does not resolve")
 
         if agent_session:
             # Store raw agent session metrics on the result
-            result.token_usage = (
-                agent_session.metrics.total_input_tokens + agent_session.metrics.total_output_tokens
-            )
+            result.token_usage = agent_session.metrics.total_input_tokens + agent_session.metrics.total_output_tokens
             result.agent_steps = [
                 {
                     "step": s.step_number,
@@ -249,9 +275,7 @@ def run_investigation(
 
             # Collect agent-session downloads
             if agent_session.captured_downloads:
-                result.downloads.extend(
-                    _to_download_artifacts(agent_session.captured_downloads)
-                )
+                result.downloads.extend(_to_download_artifacts(agent_session.captured_downloads))
 
             # Expose agent_session as site_result for persist_investigation
             site_result = agent_session
@@ -264,10 +288,25 @@ def run_investigation(
             cost_tracker.check_budget()
 
         # --- Phase 2.6: Wallet Extraction -----------------------------------
+        _emit("state_changed", {"new_state": "WALLET_EXTRACTION", "message": "Extracting wallet addresses"})
         _extract_wallets(result, url)
+
+        # Emit wallet findings
+        wallet_count = len(result.wallets) if result.wallets else 0
+        if wallet_count > 0:
+            for w in result.wallets[:10]:  # Emit first 10 individually
+                _emit(
+                    "wallet_found",
+                    {
+                        "address": w.address if hasattr(w, "address") else str(w),
+                        "network": w.network if hasattr(w, "network") else "unknown",
+                    },
+                )
+            _emit("log", {"message": f"Found {wallet_count} wallet address(es)"})
 
         # --- Phase 3: Classification & Evidence Packaging -------------------
         logger.info("Phase 3: Classification & evidence packaging")
+        _emit("state_changed", {"new_state": "CLASSIFICATION", "message": "Classifying fraud type"})
         _run_classification(result)
 
         result.status = InvestigationStatus.COMPLETED
@@ -293,7 +332,7 @@ def run_investigation(
 
     # Record timing and cost *before* evidence packaging so the JSON is complete.
     elapsed = time.monotonic() - start
-    result.completed_at = datetime.now(timezone.utc)
+    result.completed_at = datetime.now(UTC)
     result.duration_seconds = elapsed
 
     if cost_tracker:
@@ -427,6 +466,7 @@ def _run_urlscan(url: str, result: InvestigationResult) -> None:
     except Exception as e:
         logger.warning("urlscan.io check failed: %s", e)
 
+
 def _run_har_analysis(result: InvestigationResult) -> None:
     """Analyze HAR files for IOCs and suspicious patterns."""
     from ssi.browser.har_analyzer import analyze_har, har_to_threat_indicators
@@ -468,13 +508,12 @@ def _extract_wallets(result: InvestigationResult, url: str) -> None:
     text_parts: list[str] = []
 
     # Page snapshot (passive capture)
-    if result.page_snapshot:
-        if result.page_snapshot.dom_snapshot_path:
-            try:
-                dom_text = Path(result.page_snapshot.dom_snapshot_path).read_text(errors="replace")
-                text_parts.append(dom_text)
-            except Exception:
-                pass
+    if result.page_snapshot and result.page_snapshot.dom_snapshot_path:
+        try:
+            dom_text = Path(result.page_snapshot.dom_snapshot_path).read_text(errors="replace")
+            text_parts.append(dom_text)
+        except Exception:
+            pass
 
     # Agent step observations (active phase)
     for step in result.agent_steps:
@@ -544,7 +583,7 @@ def _extract_wallets(result: InvestigationResult, url: str) -> None:
 
 def _run_classification(result: InvestigationResult) -> None:
     """Classify the investigation using the five-axis fraud taxonomy."""
-    from ssi.classification.classifier import FraudTaxonomyResult, classify_investigation
+    from ssi.classification.classifier import classify_investigation
 
     try:
         taxonomy = classify_investigation(result)
@@ -559,7 +598,7 @@ def _run_classification(result: InvestigationResult) -> None:
         logger.warning("Fraud taxonomy classification failed: %s", e)
 
 
-def _taxonomy_to_model(taxonomy: "FraudTaxonomyResult") -> FraudTaxonomyResult:
+def _taxonomy_to_model(taxonomy: FraudTaxonomyResult) -> FraudTaxonomyResult:
     """Convert classifier output to the Pydantic model stored on the result."""
     from ssi.models.investigation import FraudTaxonomyResult as TaxonomyModel
     from ssi.models.investigation import TaxonomyScoredLabel
@@ -580,6 +619,7 @@ def _taxonomy_to_model(taxonomy: "FraudTaxonomyResult") -> FraudTaxonomyResult:
         risk_score=taxonomy.risk_score,
         taxonomy_version=taxonomy.taxonomy_version,
     )
+
 
 def _package_evidence(result: InvestigationResult, inv_dir: Path, *, report_format: str = "json") -> None:
     """Write result JSON, optional markdown report, and create evidence ZIP with chain-of-custody."""
@@ -665,17 +705,19 @@ def _write_wallet_manifest(result: InvestigationResult, inv_dir: Path) -> None:
         tokens: set[str] = set()
 
         for w in result.wallets:
-            wallets_data.append({
-                "token_symbol": w.token_symbol,
-                "token_label": w.token_label,
-                "network_short": w.network_short,
-                "network_label": w.network_label,
-                "wallet_address": w.wallet_address,
-                "source": w.source,
-                "confidence": w.confidence,
-                "harvested_at": w.harvested_at.isoformat() if w.harvested_at else None,
-                "site_url": w.site_url,
-            })
+            wallets_data.append(
+                {
+                    "token_symbol": w.token_symbol,
+                    "token_label": w.token_label,
+                    "network_short": w.network_short,
+                    "network_label": w.network_label,
+                    "wallet_address": w.wallet_address,
+                    "source": w.source,
+                    "confidence": w.confidence,
+                    "harvested_at": w.harvested_at.isoformat() if w.harvested_at else None,
+                    "site_url": w.site_url,
+                }
+            )
             if w.network_short:
                 networks.add(w.network_short)
             if w.token_symbol:
@@ -716,7 +758,7 @@ def _create_evidence_zip(result: InvestigationResult, inv_dir: Path) -> None:
     total_size = 0
 
     # Description map for well-known file names
-    _DESCRIPTIONS: dict[str, str] = {
+    descriptions: dict[str, str] = {
         "investigation.json": "Complete investigation result in structured JSON",
         "report.md": "Human-readable investigation report (Markdown)",
         "report.pdf": "Human-readable investigation report (PDF)",
@@ -745,7 +787,7 @@ def _create_evidence_zip(result: InvestigationResult, inv_dir: Path) -> None:
                             file=arcname,
                             sha256=sha256,
                             size_bytes=size,
-                            description=_DESCRIPTIONS.get(file_path.name, ""),
+                            description=descriptions.get(file_path.name, ""),
                             mime_type=mime or "application/octet-stream",
                         )
                     )
@@ -761,7 +803,7 @@ def _create_evidence_zip(result: InvestigationResult, inv_dir: Path) -> None:
             custody = ChainOfCustody(
                 investigation_id=str(result.investigation_id),
                 target_url=result.url,
-                collected_at=datetime.now(timezone.utc).isoformat(),
+                collected_at=datetime.now(UTC).isoformat(),
                 tool_version=tool_version,
                 artifacts=artifacts,
                 total_artifacts=len(artifacts),
@@ -830,12 +872,26 @@ def _upload_evidence_to_gcs(result: InvestigationResult, inv_dir: Path) -> None:
         logger.warning("GCS evidence upload failed (local copy retained): %s", e)
 
 
-def _run_agent_interaction(url: str, output_dir: Path) -> AgentSession | None:
+def _run_agent_interaction(
+    url: str,
+    output_dir: Path,
+    event_bus: EventBus | None = None,
+) -> AgentSession | None:
     """Launch the AI browser agent for active site interaction.
+
+    Args:
+        url: Target URL to investigate.
+        output_dir: Directory for agent artifacts (screenshots, session files).
+        event_bus: Optional event bus for live screenshot streaming.
+            When provided, a ``screenshot_update`` event is emitted after
+            each agent step so WebSocket clients see the browser state
+            update in real time.
 
     Returns:
         An ``AgentSession`` or ``None`` if the agent cannot start.
     """
+    import base64
+
     from ssi.browser.agent import BrowserAgent
     from ssi.browser.llm_client import AgentLLMClient
 
@@ -855,7 +911,24 @@ def _run_agent_interaction(url: str, output_dir: Path) -> AgentSession | None:
             return None
 
         logger.info("LLM provider '%s' connectivity verified — starting agent", provider_name)
-        agent = BrowserAgent(llm_client=llm, output_dir=output_dir / "agent")
+
+        # Build a step callback that emits each post-action screenshot to the
+        # live monitor so the Live View panel updates as the agent browses.
+        step_callback = None
+        if event_bus is not None:
+
+            def _on_screenshot(screenshot_path: str) -> None:
+                """Read the screenshot file and emit a screenshot_update event."""
+                try:
+                    screenshot_bytes = Path(screenshot_path).read_bytes()
+                    screenshot_b64 = base64.b64encode(screenshot_bytes).decode("ascii")
+                    event_bus.emit_sync("screenshot_update", {"screenshot_b64": screenshot_b64})
+                except Exception:
+                    logger.debug("Failed to emit agent step screenshot", exc_info=True)
+
+            step_callback = _on_screenshot
+
+        agent = BrowserAgent(llm_client=llm, output_dir=output_dir / "agent", step_callback=step_callback)
         session = agent.run(url)
         llm.close()
         return session

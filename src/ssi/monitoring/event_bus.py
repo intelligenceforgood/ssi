@@ -17,7 +17,7 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Protocol, runtime_checkable
 
@@ -69,7 +69,7 @@ class Event(BaseModel):
     """Structured event emitted by the event bus."""
 
     event_type: EventType
-    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     investigation_id: str = ""
     data: dict[str, Any] = Field(default_factory=dict)
 
@@ -207,6 +207,13 @@ class EventBus:
         self._latest_url: str = ""
         self._started_at: float = time.monotonic()
 
+        # Capture the event loop at construction time so emit_sync can
+        # schedule coroutines on it from background threads.
+        try:
+            self._loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+        except RuntimeError:
+            self._loop = None
+
     # ------------------------------------------------------------------
     # Sink management
     # ------------------------------------------------------------------
@@ -258,6 +265,40 @@ class EventBus:
                 await sink.handle_event(event)
             except Exception as exc:
                 logger.warning("EventBus sink error (%s): %s", type(sink).__name__, exc)
+
+    def emit_sync(self, event_type: EventType | str, data: dict[str, Any] | None = None) -> None:
+        """Emit an event from synchronous code.
+
+        Bridges the sync/async boundary by scheduling ``emit`` on the
+        event loop captured at construction time.  When called from a
+        background thread (e.g., FastAPI ``BackgroundTasks``), the
+        coroutine is dispatched via ``run_coroutine_threadsafe`` so
+        WebSocket sinks send on the correct event loop.
+
+        Args:
+            event_type: The event type (``EventType`` enum or raw string).
+            data: Optional payload data.
+        """
+        # Always update the snapshot synchronously so late-joining
+        # clients see up-to-date state regardless of sink delivery.
+        if isinstance(event_type, str):
+            try:
+                resolved = EventType(event_type)
+            except ValueError:
+                resolved = EventType.LOG
+        else:
+            resolved = event_type
+        self._update_snapshot(resolved, data or {})
+
+        if self._loop is not None and self._loop.is_running():
+            # Schedule on the main event loop from a background thread
+            asyncio.run_coroutine_threadsafe(self.emit(event_type, data), self._loop)
+        else:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self.emit(event_type, data))
+            except RuntimeError:
+                asyncio.run(self.emit(event_type, data))
 
     def _update_snapshot(self, event_type: EventType, data: dict[str, Any]) -> None:
         """Update internal snapshot cache."""
