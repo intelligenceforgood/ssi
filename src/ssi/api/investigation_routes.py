@@ -200,6 +200,17 @@ def _run_investigation(
             bus.emit_sync("error", {"message": "Investigation failed with an exception"})
         reporter.update(status="failed", message="Investigation failed with an exception")
     finally:
+        # Flush any buffered HTTP events before unregistering the bus.
+        if bus is not None:
+            from contextlib import suppress
+
+            from ssi.monitoring.http_event_sink import HttpEventSink
+
+            for sink in getattr(bus, "_sinks", []):
+                if isinstance(sink, HttpEventSink):
+                    with suppress(Exception):
+                        sink.flush_sync()
+
         # Unregister the bus after a short delay so WebSocket clients
         # receive the final event before disconnection.
         if monitor_id:
@@ -331,6 +342,7 @@ async def trigger_investigate(
     """
     from ssi.api.ws_routes import register_bus
     from ssi.monitoring.event_bus import EventBus
+    from ssi.settings import get_settings as get_ssi_settings
 
     logger.info(
         "POST /trigger/investigate: url=%s scan_type=%s scan_id=%s",
@@ -360,6 +372,28 @@ async def trigger_investigate(
     # captured correctly for cross-thread dispatching.
     bus = EventBus(investigation_id=scan_id)
     register_bus(scan_id, bus)
+
+    # Phase 3B: attach HttpEventSink when cloud event relay is enabled.
+    ssi_cfg = get_ssi_settings()
+    integration = ssi_cfg.integration
+    if integration.push_events_to_core and integration.core_api_url:
+        from ssi.monitoring.http_event_sink import HttpEventSink
+
+        http_sink = HttpEventSink(
+            core_api_url=integration.core_api_url,
+            scan_id=scan_id,
+            core_api_key=integration.core_api_key,
+            core_events_url=integration.core_events_url,
+            screenshot_interval=integration.screenshot_interval_seconds,
+        )
+        bus.add_sink(http_sink)
+        effective_url = integration.core_events_url or integration.core_api_url
+        logger.info(
+            "HttpEventSink attached for scan %s → %s (direct=%s)",
+            scan_id,
+            effective_url,
+            bool(integration.core_events_url),
+        )
 
     background_tasks.add_task(
         _run_investigation,

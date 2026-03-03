@@ -344,6 +344,16 @@ class IntegrationSettings(BaseSettings):
     push_to_core: bool = False
     trigger_dossier: bool = False
     dataset: str = "ssi"
+    # Phase 3B: push events to core for cloud SSE relay.
+    # Set to true to attach HttpEventSink when an investigation starts.
+    push_events_to_core: bool = False
+    # Direct Cloud Run URL of core-svc (e.g. https://core-svc-xxx-uc.a.run.app).
+    # When set, HttpEventSink bypasses the IAP load-balancer and calls core
+    # directly using a Cloud Run OIDC token (sa-ssi must have roles/run.invoker
+    # on core-svc).  Falls back to core_api_url when empty.
+    core_events_url: str = ""
+    # Screenshot throttling: emit at most one screenshot every N seconds.
+    screenshot_interval_seconds: float = 3.0
 
 
 class TaskStoreSettings(BaseSettings):
@@ -419,14 +429,15 @@ class Settings(BaseSettings):
         return merged
 
     @model_validator(mode="after")
-    def _resolve_paths(self) -> "Settings":
+    def _resolve_paths(self) -> Settings:
         """Normalize relative paths against project_root."""
         root = self.project_root
         if not Path(self.evidence.output_dir).is_absolute():
             self.evidence.output_dir = str(root / self.evidence.output_dir)
-        if self.identity.db_url.startswith("sqlite:///") and not Path(
-            self.identity.db_url.replace("sqlite:///", "")
-        ).is_absolute():
+        if (
+            self.identity.db_url.startswith("sqlite:///")
+            and not Path(self.identity.db_url.replace("sqlite:///", "")).is_absolute()
+        ):
             rel = self.identity.db_url.replace("sqlite:///", "")
             self.identity.db_url = f"sqlite:///{root / rel}"
         if not Path(self.feedback.db_path).is_absolute():
