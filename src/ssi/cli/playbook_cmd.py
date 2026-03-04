@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -33,7 +32,7 @@ def _get_playbook_dir() -> Path:
 @playbook_app.command("list")
 def playbook_list(
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON."),
-    directory: Optional[Path] = typer.Option(None, "--dir", "-d", help="Override playbook directory."),
+    directory: Path | None = typer.Option(None, "--dir", "-d", help="Override playbook directory."),
 ) -> None:
     """List all available playbooks."""
     from ssi.playbook.loader import load_playbooks_from_dir
@@ -91,7 +90,7 @@ def playbook_list(
 @playbook_app.command("show")
 def playbook_show(
     playbook_id: str = typer.Argument(..., help="Playbook ID to display."),
-    directory: Optional[Path] = typer.Option(None, "--dir", "-d", help="Override playbook directory."),
+    directory: Path | None = typer.Option(None, "--dir", "-d", help="Override playbook directory."),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON."),
 ) -> None:
     """Display full details of a single playbook."""
@@ -129,7 +128,9 @@ def playbook_show(
         desc = f" — {step.description}" if step.description else ""
         value_display = f' "{step.value}"' if step.value else ""
         sel_display = f" {step.selector}" if step.selector else ""
-        console.print(f"  {i:2d}. [yellow]{step.action.value:8s}[/yellow]{sel_display}{value_display}{desc}{retry}{fallback}")
+        console.print(
+            f"  {i:2d}. [yellow]{step.action.value:8s}[/yellow]{sel_display}{value_display}{desc}{retry}{fallback}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +158,7 @@ def playbook_validate(
         console.print(f"[red]✗ Invalid JSON:[/red] {e}")
         raise typer.Exit(code=1) from None
     except ValidationError as e:
-        console.print(f"[red]✗ Validation errors:[/red]")
+        console.print("[red]✗ Validation errors:[/red]")
         for err in e.errors():
             loc = " → ".join(str(x) for x in err["loc"])
             console.print(f"  {loc}: {err['msg']}")
@@ -172,7 +173,7 @@ def playbook_validate(
 @playbook_app.command("test-match")
 def playbook_test_match(
     url: str = typer.Argument(..., help="URL to test against all registered playbooks."),
-    directory: Optional[Path] = typer.Option(None, "--dir", "-d", help="Override playbook directory."),
+    directory: Path | None = typer.Option(None, "--dir", "-d", help="Override playbook directory."),
 ) -> None:
     """Test which playbook (if any) matches a URL."""
     from ssi.playbook.loader import load_playbooks_from_dir

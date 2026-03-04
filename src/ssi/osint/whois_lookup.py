@@ -84,8 +84,7 @@ def lookup_whois(url: str) -> WHOISRecord:
     # Return a partial record instead of raising — callers should not
     # crash when WHOIS/RDAP data is unavailable.
     logger.warning(
-        "All WHOIS/RDAP lookups failed for %s; returning empty record. "
-        "Last WHOIS error: %s",
+        "All WHOIS/RDAP lookups failed for %s; returning empty record. " "Last WHOIS error: %s",
         domain,
         last_error,
     )

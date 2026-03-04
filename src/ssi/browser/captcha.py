@@ -15,10 +15,10 @@ can be enabled via ``SSI_BROWSER__CAPTCHA_SOLVER`` when budget allows.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from playwright.sync_api import Page
 
 
-class CaptchaType(str, Enum):
+class CaptchaType(StrEnum):
     """Known CAPTCHA provider types."""
 
     RECAPTCHA_V2 = "recaptcha_v2"
@@ -38,7 +38,7 @@ class CaptchaType(str, Enum):
     UNKNOWN = "unknown"
 
 
-class CaptchaStrategy(str, Enum):
+class CaptchaStrategy(StrEnum):
     """How to handle a detected CAPTCHA."""
 
     SKIP = "skip"  # Log and continue with partial results

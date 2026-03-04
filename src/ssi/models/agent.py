@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
 
-class ActionType(str, Enum):
+class ActionType(StrEnum):
     """Browser actions the agent can perform."""
 
     CLICK = "click"

@@ -11,7 +11,6 @@ from ssi.models.investigation import (
     GeoIPInfo,
     InvestigationResult,
     InvestigationStatus,
-    PageSnapshot,
     ScamClassification,
     ScanType,
     SSLInfo,

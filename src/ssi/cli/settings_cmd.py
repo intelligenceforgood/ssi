@@ -33,4 +33,4 @@ def validate_settings() -> None:
         console.print(f"  Evidence dir: {settings.evidence.output_dir}")
     except Exception as e:
         console.print(f"[red]✗[/red] Settings validation failed: {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e

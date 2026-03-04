@@ -6,14 +6,11 @@ agent_sessions, pii_exposures) using an in-memory SQLite database.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-import sqlalchemy as sa
-from sqlalchemy.orm import sessionmaker
 
 from ssi.store.scan_store import ScanStore
-from ssi.store.sql import METADATA
 
 
 @pytest.fixture()
@@ -199,21 +196,28 @@ class TestHarvestedWalletsCRUD:
 
     def test_search_wallets_dedup_aggregates(self, store: ScanStore):
         """Dedup should return max confidence, first/last seen timestamps."""
-        from datetime import timedelta
 
         scan1 = store.create_scan(url="https://scam.example.com")
         scan2 = store.create_scan(url="https://scam.example.com")
 
-        early = datetime(2025, 1, 1, tzinfo=timezone.utc)
-        late = datetime(2025, 6, 1, tzinfo=timezone.utc)
+        early = datetime(2025, 1, 1, tzinfo=UTC)
+        late = datetime(2025, 6, 1, tzinfo=UTC)
 
         store.add_wallet(
-            scan_id=scan1, token_symbol="BTC", network_short="btc",
-            wallet_address="bc1qXYZ", confidence=0.5, harvested_at=early,
+            scan_id=scan1,
+            token_symbol="BTC",
+            network_short="btc",
+            wallet_address="bc1qXYZ",
+            confidence=0.5,
+            harvested_at=early,
         )
         store.add_wallet(
-            scan_id=scan2, token_symbol="BTC", network_short="btc",
-            wallet_address="bc1qXYZ", confidence=0.9, harvested_at=late,
+            scan_id=scan2,
+            token_symbol="BTC",
+            network_short="btc",
+            wallet_address="bc1qXYZ",
+            confidence=0.9,
+            harvested_at=late,
         )
 
         results = store.search_wallets(deduplicate=True)
@@ -230,7 +234,9 @@ class TestHarvestedWalletsCRUD:
         scan2 = store.create_scan(url="https://scam-a.example.com")
         for sid in (scan1, scan2):
             store.add_wallet(
-                scan_id=sid, token_symbol="ETH", network_short="eth",
+                scan_id=sid,
+                token_symbol="ETH",
+                network_short="eth",
                 wallet_address="0xDEAD",
             )
         results = store.search_wallets(deduplicate=False)

@@ -18,7 +18,7 @@ import json
 import logging
 import time
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """All event types emitted during an investigation."""
 
     # Lifecycle
@@ -83,7 +83,7 @@ class Event(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class GuidanceAction(str, Enum):
+class GuidanceAction(StrEnum):
     """Actions a human operator can request."""
 
     CLICK = "click"

@@ -23,17 +23,19 @@ from ssi.llm.base import LLMProvider, LLMResult
 logger = logging.getLogger(__name__)
 
 # Exceptions that are safe to retry — transient network / rate-limit issues.
-_RETRYABLE_EXCEPTION_NAMES = frozenset({
-    "ConnectionError",
-    "TimeoutError",
-    "ReadTimeout",
-    "ConnectTimeout",
-    "RemoteProtocolError",
-    "HTTPStatusError",
-    "ServiceUnavailable",
-    "TooManyRequests",
-    "InternalServerError",
-})
+_RETRYABLE_EXCEPTION_NAMES = frozenset(
+    {
+        "ConnectionError",
+        "TimeoutError",
+        "ReadTimeout",
+        "ConnectTimeout",
+        "RemoteProtocolError",
+        "HTTPStatusError",
+        "ServiceUnavailable",
+        "TooManyRequests",
+        "InternalServerError",
+    }
+)
 
 
 def _is_retryable(exc: Exception) -> bool:
@@ -42,12 +44,8 @@ def _is_retryable(exc: Exception) -> bool:
     if name in _RETRYABLE_EXCEPTION_NAMES:
         return True
     # httpx status-based errors
-    status_code = getattr(exc, "status_code", None) or getattr(
-        getattr(exc, "response", None), "status_code", None
-    )
-    if status_code and status_code in (429, 500, 502, 503, 504):
-        return True
-    return False
+    status_code = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
+    return bool(status_code and status_code in (429, 500, 502, 503, 504))
 
 
 class RetryingLLMProvider(LLMProvider):

@@ -12,19 +12,8 @@ from unittest.mock import patch
 
 import pytest
 
-from ssi.browser.decision_cascade import (
-    CascadeTier,
-    PreFilterOutcome,
-    check_pre_filters,
-    resolve_tier,
-)
-from ssi.browser.dom_inspector import (
-    CheckEmailDetector,
-    DOMInspection,
-    DOMInspector,
-    FindRegisterDetector,
-    NavigateDepositDetector,
-)
+from ssi.browser.decision_cascade import CascadeTier, PreFilterOutcome, check_pre_filters, resolve_tier
+from ssi.browser.dom_inspector import DOMInspection, DOMInspector, FindRegisterDetector, NavigateDepositDetector
 from ssi.models.action import ActionType
 
 # ---------------------------------------------------------------------------

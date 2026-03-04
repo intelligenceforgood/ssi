@@ -7,18 +7,9 @@ screenshot dedup).
 
 from __future__ import annotations
 
-import pytest
-
-from ssi.browser.decision_cascade import (
-    CascadeDecision,
-    CascadeTier,
-    PreFilterOutcome,
-    check_pre_filters,
-    resolve_tier,
-)
+from ssi.browser.decision_cascade import CascadeTier, PreFilterOutcome, check_pre_filters, resolve_tier
 from ssi.browser.dom_inspector import DOMInspection, DOMSignal
 from ssi.models.action import ActionType, AgentAction
-
 
 # ---------------------------------------------------------------------------
 # Pre-filter tests
@@ -230,9 +221,7 @@ class TestResolveTier:
             confidence=80,
             outcome="direct",
             signals=[DOMSignal(source="deposit_link_found", weight=40, selector="a.deposit")],
-            direct_action=AgentAction(
-                action=ActionType.CLICK, selector="a.deposit", reasoning="Deposit link"
-            ),
+            direct_action=AgentAction(action=ActionType.CLICK, selector="a.deposit", reasoning="Deposit link"),
         )
         decision = resolve_tier(state="NAVIGATE_DEPOSIT", dom_inspection=dom)
         assert decision.tier == CascadeTier.DOM_DIRECT

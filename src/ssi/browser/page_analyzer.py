@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from ssi.llm.base import LLMProvider, LLMResult
 from ssi.models.action import ActionType, AgentAction
@@ -275,9 +275,7 @@ class PageAnalyzer:
         content_parts: list[dict] = []
 
         if include_screenshot and screenshot_b64:
-            content_parts.append(
-                {"type": "image", "media_type": "image/png", "data": screenshot_b64}
-            )
+            content_parts.append({"type": "image", "media_type": "image/png", "data": screenshot_b64})
 
         text_context = f"Current state: {state}\nCurrent URL: {page_url}\n"
         if page_text:
@@ -373,10 +371,7 @@ class PageAnalyzer:
         page_url: str = "",
     ) -> AgentAction:
         """Re-analyze after receiving human guidance for a stuck state."""
-        extra = (
-            f"HUMAN OPERATOR GUIDANCE: {human_instruction}\n"
-            "Follow the operator's instruction to proceed."
-        )
+        extra = f"HUMAN OPERATOR GUIDANCE: {human_instruction}\n" "Follow the operator's instruction to proceed."
         return await self.analyze_page(
             screenshot_b64=screenshot_b64,
             state=state,
@@ -465,11 +460,9 @@ class PageAnalyzer:
            per-call input tokens from re-sent old screenshots.
         """
         if len(self._conversation) > self._max_context_messages:
-            self._conversation = self._conversation[-self._max_context_messages:]
+            self._conversation = self._conversation[-self._max_context_messages :]
 
-        user_indices = [
-            i for i, msg in enumerate(self._conversation) if msg.get("role") == "user"
-        ]
+        user_indices = [i for i, msg in enumerate(self._conversation) if msg.get("role") == "user"]
 
         if len(user_indices) > 2:
             for idx in user_indices[:-2]:

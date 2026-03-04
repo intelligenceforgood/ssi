@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from ssi.browser.downloads import CapturedDownload, _compute_hashes
 
 
@@ -91,7 +89,7 @@ class TestDownloadInterceptor:
         assert interceptor.downloads == []
 
     def test_max_size_default(self):
-        from ssi.browser.downloads import DownloadInterceptor, _MAX_DOWNLOAD_SIZE_BYTES
+        from ssi.browser.downloads import _MAX_DOWNLOAD_SIZE_BYTES, DownloadInterceptor
 
         interceptor = DownloadInterceptor(output_dir=Path("/tmp/test"))
         assert interceptor.max_size_bytes == _MAX_DOWNLOAD_SIZE_BYTES

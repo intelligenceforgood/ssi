@@ -14,22 +14,16 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from ssi.classification.classifier import (
-    FraudTaxonomyResult,
-    ScoredLabel,
     _ACTION_WEIGHTS,
     _INTENT_WEIGHTS,
     _TECHNIQUE_WEIGHTS,
+    FraudTaxonomyResult,
+    ScoredLabel,
     _calculate_risk_score,
 )
 from ssi.classification.labels import CODE_TO_LABEL
-from ssi.classification.prompts import (
-    CLASSIFICATION_SYSTEM_PROMPT,
-    CLASSIFICATION_USER_TEMPLATE,
-)
-
+from ssi.classification.prompts import CLASSIFICATION_SYSTEM_PROMPT, CLASSIFICATION_USER_TEMPLATE
 
 # ---------------------------------------------------------------------------
 # Prompt content validation
@@ -42,52 +36,57 @@ class TestPromptCompleteness:
     def test_system_prompt_mentions_all_intent_labels(self) -> None:
         """System prompt lists every INTENT.* label."""
         for label in _INTENT_WEIGHTS:
-            assert label in CLASSIFICATION_SYSTEM_PROMPT, (
-                f"System prompt missing intent label: {label}"
-            )
+            assert label in CLASSIFICATION_SYSTEM_PROMPT, f"System prompt missing intent label: {label}"
 
     def test_system_prompt_mentions_all_action_labels(self) -> None:
         """System prompt lists every ACTION.* label."""
         for label in _ACTION_WEIGHTS:
-            assert label in CLASSIFICATION_SYSTEM_PROMPT, (
-                f"System prompt missing action label: {label}"
-            )
+            assert label in CLASSIFICATION_SYSTEM_PROMPT, f"System prompt missing action label: {label}"
 
     def test_system_prompt_mentions_all_technique_labels(self) -> None:
         """System prompt lists every SE.* technique label."""
         for label in _TECHNIQUE_WEIGHTS:
-            assert label in CLASSIFICATION_SYSTEM_PROMPT, (
-                f"System prompt missing technique label: {label}"
-            )
+            assert label in CLASSIFICATION_SYSTEM_PROMPT, f"System prompt missing technique label: {label}"
 
     def test_system_prompt_has_five_axes(self) -> None:
         """System prompt names all five taxonomy axes."""
-        for axis in ("Intent", "Delivery Channel", "Social Engineering Technique",
-                      "Requested Action", "Claimed Persona"):
-            assert axis.lower() in CLASSIFICATION_SYSTEM_PROMPT.lower(), (
-                f"System prompt missing axis: {axis}"
-            )
+        for axis in (
+            "Intent",
+            "Delivery Channel",
+            "Social Engineering Technique",
+            "Requested Action",
+            "Claimed Persona",
+        ):
+            assert axis.lower() in CLASSIFICATION_SYSTEM_PROMPT.lower(), f"System prompt missing axis: {axis}"
 
     def test_system_prompt_has_json_schema_hint(self) -> None:
         """System prompt includes JSON output schema with all five keys."""
         for key in ("intent", "channel", "techniques", "actions", "persona"):
-            assert f'"{key}"' in CLASSIFICATION_SYSTEM_PROMPT, (
-                f"System prompt missing JSON key: {key}"
-            )
+            assert f'"{key}"' in CLASSIFICATION_SYSTEM_PROMPT, f"System prompt missing JSON key: {key}"
 
     def test_user_template_has_all_placeholders(self) -> None:
         """User template contains all expected placeholders."""
         expected_placeholders = [
-            "url", "page_title", "redirect_chain", "technologies",
-            "form_fields_text", "registrar", "domain_creation_date",
-            "hosting_info", "ssl_issuer", "ssl_valid", "geoip_info",
-            "threat_indicators_text", "brand_impersonation",
-            "downloads_text", "agent_steps_text",
+            "url",
+            "page_title",
+            "redirect_chain",
+            "technologies",
+            "form_fields_text",
+            "registrar",
+            "domain_creation_date",
+            "hosting_info",
+            "ssl_issuer",
+            "ssl_valid",
+            "geoip_info",
+            "threat_indicators_text",
+            "brand_impersonation",
+            "downloads_text",
+            "agent_steps_text",
         ]
         for placeholder in expected_placeholders:
-            assert f"{{{placeholder}}}" in CLASSIFICATION_USER_TEMPLATE, (
-                f"User template missing placeholder: {{{placeholder}}}"
-            )
+            assert (
+                f"{{{placeholder}}}" in CLASSIFICATION_USER_TEMPLATE
+            ), f"User template missing placeholder: {{{placeholder}}}"
 
 
 # ---------------------------------------------------------------------------

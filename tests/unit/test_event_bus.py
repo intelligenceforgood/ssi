@@ -11,7 +11,6 @@ import pytest
 from ssi.monitoring.event_bus import (
     Event,
     EventBus,
-    EventSink,
     EventType,
     GuidanceAction,
     GuidanceCommand,
@@ -19,7 +18,6 @@ from ssi.monitoring.event_bus import (
     JsonlSink,
     LoggingSink,
 )
-
 
 # ===================================================================
 # Event model tests

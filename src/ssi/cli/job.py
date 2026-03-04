@@ -133,7 +133,7 @@ def job_batch(
         entries = load_manifest(manifest)
     except (FileNotFoundError, ValueError, ImportError) as exc:
         console.print(f"[red]Failed to load manifest: {exc}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
     console.print(f"[bold]Batch: {len(entries)} URLs, scan_type={scan_type}[/bold]")
 

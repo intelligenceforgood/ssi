@@ -83,7 +83,9 @@ harvested_wallets = sa.Table(
     sa.Column("metadata", JSON_TYPE, nullable=True),
     sa.Column("harvested_at", TIMESTAMP, nullable=True),
     sa.Column("created_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
-    sa.UniqueConstraint("scan_id", "token_symbol", "network_short", "wallet_address", name="uq_wallets_scan_token_addr"),
+    sa.UniqueConstraint(
+        "scan_id", "token_symbol", "network_short", "wallet_address", name="uq_wallets_scan_token_addr"
+    ),
 )
 sa.Index("idx_wallets_scan_id", harvested_wallets.c.scan_id)
 sa.Index("idx_wallets_case_id", harvested_wallets.c.case_id)
@@ -340,8 +342,7 @@ def _build_cloudsql_engine(settings: Any, *, echo: bool = False) -> sa.Engine:
     # This prevents silent failures where the setting defaults to False.
     if ".iam" in db_user and not enable_iam_auth:
         log.warning(
-            "CloudSQL user %r looks like an IAM user but enable_iam_auth=%s — "
-            "forcing enable_iam_auth=True",
+            "CloudSQL user %r looks like an IAM user but enable_iam_auth=%s — " "forcing enable_iam_auth=True",
             db_user,
             enable_iam_auth,
         )

@@ -102,8 +102,7 @@ class RedisTaskStore(TaskStore):
             import redis as redis_lib
         except ImportError as exc:
             raise ImportError(
-                "Redis support requires the 'redis' package. "
-                "Install it with: pip install redis"
+                "Redis support requires the 'redis' package. " "Install it with: pip install redis"
             ) from exc
 
         self._client = redis_lib.Redis.from_url(redis_url, decode_responses=True)

@@ -10,23 +10,12 @@ import json
 
 import pytest
 
-from ssi.browser.dom_inspector import (
-    CheckEmailDetector,
-    DOMInspector,
-    FindRegisterDetector,
-    NavigateDepositDetector,
-)
+from ssi.browser.dom_inspector import CheckEmailDetector, DOMInspector, FindRegisterDetector, NavigateDepositDetector
 from ssi.browser.metrics import MetricsCollector
-from ssi.identity.vault import IdentityVault, SyntheticIdentity
+from ssi.identity.vault import IdentityVault
 from ssi.models.action import ActionType, AgentAction
 from ssi.models.results import SiteResult, SiteStatus, WalletEntry
-from ssi.models.states import (
-    AgentState,
-    MILESTONE_SCREENSHOT_STATES,
-    STATE_TRANSITIONS,
-    TERMINAL_STATES,
-)
-
+from ssi.models.states import MILESTONE_SCREENSHOT_STATES, STATE_TRANSITIONS, TERMINAL_STATES, AgentState
 
 # ======================================================================
 # State machine
@@ -38,10 +27,17 @@ class TestAgentState:
 
     def test_all_states_present(self):
         expected = {
-            "INIT", "LOAD_SITE", "FIND_REGISTER", "FILL_REGISTER",
-            "SUBMIT_REGISTER", "CHECK_EMAIL_VERIFICATION",
-            "NAVIGATE_DEPOSIT", "EXTRACT_WALLETS",
-            "COMPLETE", "SKIPPED", "ERROR",
+            "INIT",
+            "LOAD_SITE",
+            "FIND_REGISTER",
+            "FILL_REGISTER",
+            "SUBMIT_REGISTER",
+            "CHECK_EMAIL_VERIFICATION",
+            "NAVIGATE_DEPOSIT",
+            "EXTRACT_WALLETS",
+            "COMPLETE",
+            "SKIPPED",
+            "ERROR",
         }
         assert {s.value for s in AgentState} == expected
 

@@ -13,16 +13,15 @@ Tests cover:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from ssi.wallet.allowlist import AllowlistFilter, DEFAULT_TOKEN_NETWORKS, load_allowlist
-from ssi.wallet.export import HEADERS, WalletExporter, export_harvest
+from ssi.wallet.allowlist import AllowlistFilter, load_allowlist
+from ssi.wallet.export import WalletExporter, export_harvest
 from ssi.wallet.models import TokenNetwork, WalletEntry, WalletHarvest
-from ssi.wallet.patterns import WALLET_PATTERNS, MatchResult, WalletPattern, WalletValidator
-
+from ssi.wallet.patterns import WALLET_PATTERNS, WalletValidator
 
 # ---------------------------------------------------------------------------
 # WalletEntry model tests
@@ -63,13 +62,13 @@ class TestWalletEntry:
         assert entry.pair == ("USDT", "trx")
 
     def test_auto_timestamp(self) -> None:
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         entry = WalletEntry(wallet_address="abc")
         assert entry.harvested_at is not None
         assert entry.harvested_at >= before
 
     def test_explicit_timestamp_preserved(self) -> None:
-        ts = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        ts = datetime(2025, 1, 1, tzinfo=UTC)
         entry = WalletEntry(wallet_address="abc", harvested_at=ts)
         assert entry.harvested_at == ts
 
@@ -308,9 +307,7 @@ class TestWalletValidator:
 
     def test_scan_text(self) -> None:
         text = (
-            f"ETH wallet: {TEST_ADDRESSES['ETH']}\n"
-            f"TRX wallet: {TEST_ADDRESSES['TRX']}\n"
-            "Some other text here\n"
+            f"ETH wallet: {TEST_ADDRESSES['ETH']}\n" f"TRX wallet: {TEST_ADDRESSES['TRX']}\n" "Some other text here\n"
         )
         results = self.validator.scan_text(text)
         assert len(results) >= 2

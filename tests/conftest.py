@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
 
+if TYPE_CHECKING:
+    from ssi.store.scan_store import ScanStore
 
 # ---------------------------------------------------------------------------
 # Paths

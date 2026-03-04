@@ -210,9 +210,7 @@ class TestPlaybookCli:
             "playbook_id": "test_v1",
             "url_pattern": ".*test\\.com.*",
             "description": "Test playbook",
-            "steps": [
-                {"action": "navigate", "value": "{url}", "description": "Go to URL"}
-            ],
+            "steps": [{"action": "navigate", "value": "{url}", "description": "Go to URL"}],
         }
         f = tmp_path / "test_v1.json"
         f.write_text(json.dumps(playbook))
@@ -269,11 +267,7 @@ class TestWsRouteRegistry:
 
     def test_list_active_investigations(self) -> None:
         """list_active_investigations returns all registered IDs."""
-        from ssi.api.ws_routes import (
-            list_active_investigations,
-            register_bus,
-            unregister_bus,
-        )
+        from ssi.api.ws_routes import list_active_investigations, register_bus, unregister_bus
         from ssi.monitoring.event_bus import EventBus
 
         bus_a = EventBus(investigation_id="a")

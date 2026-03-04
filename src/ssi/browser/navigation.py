@@ -11,7 +11,9 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from playwright.sync_api import Error as PlaywrightError, Page, Response, TimeoutError as PlaywrightTimeout
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import Page, Response
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 from ssi.exceptions import NavigationError
 

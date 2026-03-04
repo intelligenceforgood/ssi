@@ -54,9 +54,7 @@ class MetricsCollector:
         key = strategy if strategy in self._type_strategies else "failed"
         self._type_strategies[key] += 1
 
-    def record_llm_call(
-        self, state: str, input_tokens: int, output_tokens: int, action_type: str
-    ) -> None:
+    def record_llm_call(self, state: str, input_tokens: int, output_tokens: int, action_type: str) -> None:
         """Record per-call token counts and the action produced."""
         self._call_counter += 1
 

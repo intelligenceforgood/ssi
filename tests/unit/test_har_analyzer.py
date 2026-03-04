@@ -5,13 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
-from ssi.browser.har_analyzer import (
-    HarAnalysis,
-    analyze_har,
-    har_to_threat_indicators,
-)
+from ssi.browser.har_analyzer import HarAnalysis, analyze_har, har_to_threat_indicators
 
 
 def _make_har_entry(
@@ -188,11 +182,13 @@ class TestHarToThreatIndicators:
 
     def test_suspicious_content_type_indicator(self):
         a = HarAnalysis()
-        a.suspicious_content_types.append({
-            "url": "https://evil.com/malware.exe",
-            "content_type": "application/x-msdownload",
-            "domain": "evil.com",
-        })
+        a.suspicious_content_types.append(
+            {
+                "url": "https://evil.com/malware.exe",
+                "content_type": "application/x-msdownload",
+                "domain": "evil.com",
+            }
+        )
         indicators = har_to_threat_indicators(a, "https://evil.com")
         assert len(indicators) == 1
         assert indicators[0].indicator_type == "url"
@@ -200,11 +196,13 @@ class TestHarToThreatIndicators:
 
     def test_crypto_wallet_indicator(self):
         a = HarAnalysis()
-        a.crypto_addresses.append({
-            "type": "bitcoin",
-            "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
-            "source_url": "https://example.com/page",
-        })
+        a.crypto_addresses.append(
+            {
+                "type": "bitcoin",
+                "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+                "source_url": "https://example.com/page",
+            }
+        )
         indicators = har_to_threat_indicators(a, "https://example.com")
         assert len(indicators) == 1
         assert indicators[0].indicator_type == "crypto_wallet"

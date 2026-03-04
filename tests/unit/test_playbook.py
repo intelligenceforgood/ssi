@@ -22,14 +22,7 @@ from ssi.identity.vault import SyntheticIdentity
 from ssi.playbook.executor import PlaybookExecutor, resolve_template
 from ssi.playbook.loader import load_playbook_from_file, load_playbooks_from_dir
 from ssi.playbook.matcher import PlaybookMatcher
-from ssi.playbook.models import (
-    Playbook,
-    PlaybookResult,
-    PlaybookStep,
-    PlaybookStepResult,
-    PlaybookStepType,
-)
-
+from ssi.playbook.models import Playbook, PlaybookResult, PlaybookStep, PlaybookStepResult, PlaybookStepType
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -346,11 +339,24 @@ class TestTemplateResolution:
         """All standard identity fields are resolvable."""
         identity = _make_identity()
         fields = [
-            "first_name", "last_name", "full_name", "email", "phone",
-            "username", "crypto_username", "password",
-            "street_address", "city", "state", "zip_code", "country",
-            "date_of_birth", "ssn",
-            "credit_card_number", "credit_card_expiry", "credit_card_cvv",
+            "first_name",
+            "last_name",
+            "full_name",
+            "email",
+            "phone",
+            "username",
+            "crypto_username",
+            "password",
+            "street_address",
+            "city",
+            "state",
+            "zip_code",
+            "country",
+            "date_of_birth",
+            "ssn",
+            "credit_card_number",
+            "credit_card_expiry",
+            "credit_card_cvv",
         ]
         for field in fields:
             result = resolve_template(f"{{identity.{field}}}", identity)
@@ -372,11 +378,13 @@ class TestPlaybookExecutor:
         identity = _make_identity()
         executor = PlaybookExecutor(browser=browser, identity=identity)
 
-        pb = _make_playbook(steps=[
-            _make_step(action=PlaybookStepType.CLICK, selector="Sign Up"),
-            _make_step(action=PlaybookStepType.TYPE, selector="#email", value="{identity.email}"),
-            _make_step(action=PlaybookStepType.WAIT, value="1"),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(action=PlaybookStepType.CLICK, selector="Sign Up"),
+                _make_step(action=PlaybookStepType.TYPE, selector="#email", value="{identity.email}"),
+                _make_step(action=PlaybookStepType.WAIT, value="1"),
+            ]
+        )
 
         result = await executor.execute(pb, "https://example.com")
         assert result.success is True
@@ -390,9 +398,11 @@ class TestPlaybookExecutor:
         browser = _make_mock_browser()
         executor = PlaybookExecutor(browser=browser, identity=_make_identity())
 
-        pb = _make_playbook(steps=[
-            _make_step(action=PlaybookStepType.CLICK, selector="button.submit"),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(action=PlaybookStepType.CLICK, selector="button.submit"),
+            ]
+        )
         await executor.execute(pb, "https://example.com")
         browser.click.assert_called_once_with("button.submit")
 
@@ -403,9 +413,11 @@ class TestPlaybookExecutor:
         identity = _make_identity(email="test@test.dev")
         executor = PlaybookExecutor(browser=browser, identity=identity)
 
-        pb = _make_playbook(steps=[
-            _make_step(action=PlaybookStepType.TYPE, selector="#email", value="{identity.email}"),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(action=PlaybookStepType.TYPE, selector="#email", value="{identity.email}"),
+            ]
+        )
         await executor.execute(pb, "https://example.com")
         browser.type_text.assert_called_once_with("#email", "test@test.dev")
 
@@ -415,9 +427,11 @@ class TestPlaybookExecutor:
         browser = _make_mock_browser()
         executor = PlaybookExecutor(browser=browser, identity=_make_identity())
 
-        pb = _make_playbook(steps=[
-            _make_step(action=PlaybookStepType.NAVIGATE, value="https://example.com/deposit"),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(action=PlaybookStepType.NAVIGATE, value="https://example.com/deposit"),
+            ]
+        )
         await executor.execute(pb, "https://example.com")
         browser.navigate.assert_called_once_with("https://example.com/deposit")
 
@@ -427,9 +441,11 @@ class TestPlaybookExecutor:
         browser = _make_mock_browser()
         executor = PlaybookExecutor(browser=browser, identity=_make_identity())
 
-        pb = _make_playbook(steps=[
-            _make_step(action=PlaybookStepType.WAIT, value="5"),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(action=PlaybookStepType.WAIT, value="5"),
+            ]
+        )
         await executor.execute(pb, "https://example.com")
         browser.wait.assert_called_once_with(5.0)
 
@@ -439,9 +455,11 @@ class TestPlaybookExecutor:
         browser = _make_mock_browser()
         executor = PlaybookExecutor(browser=browser, identity=_make_identity())
 
-        pb = _make_playbook(steps=[
-            _make_step(action=PlaybookStepType.WAIT, value="30"),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(action=PlaybookStepType.WAIT, value="30"),
+            ]
+        )
         await executor.execute(pb, "https://example.com")
         browser.wait.assert_called_once_with(10.0)
 
@@ -451,9 +469,11 @@ class TestPlaybookExecutor:
         browser = _make_mock_browser()
         executor = PlaybookExecutor(browser=browser, identity=_make_identity())
 
-        pb = _make_playbook(steps=[
-            _make_step(action=PlaybookStepType.SCROLL, value="500"),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(action=PlaybookStepType.SCROLL, value="500"),
+            ]
+        )
         await executor.execute(pb, "https://example.com")
         browser.scroll_down.assert_called_once_with(500)
 
@@ -463,9 +483,11 @@ class TestPlaybookExecutor:
         browser = _make_mock_browser()
         executor = PlaybookExecutor(browser=browser, identity=_make_identity())
 
-        pb = _make_playbook(steps=[
-            _make_step(action=PlaybookStepType.EXTRACT),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(action=PlaybookStepType.EXTRACT),
+            ]
+        )
         await executor.execute(pb, "https://example.com")
         browser.extract_wallet_address.assert_called_once()
 
@@ -475,9 +497,11 @@ class TestPlaybookExecutor:
         browser = _make_mock_browser()
         executor = PlaybookExecutor(browser=browser, identity=_make_identity())
 
-        pb = _make_playbook(steps=[
-            _make_step(action=PlaybookStepType.SELECT, selector="#currency", value="USD"),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(action=PlaybookStepType.SELECT, selector="#currency", value="USD"),
+            ]
+        )
         await executor.execute(pb, "https://example.com")
         browser.select_option.assert_called_once_with("#currency", "USD")
 
@@ -489,13 +513,15 @@ class TestPlaybookExecutor:
         browser.click = AsyncMock(side_effect=[False, False, True])
         executor = PlaybookExecutor(browser=browser, identity=_make_identity())
 
-        pb = _make_playbook(steps=[
-            _make_step(
-                action=PlaybookStepType.CLICK,
-                selector="button",
-                retry_on_failure=2,
-            ),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(
+                    action=PlaybookStepType.CLICK,
+                    selector="button",
+                    retry_on_failure=2,
+                ),
+            ]
+        )
         result = await executor.execute(pb, "https://example.com")
         assert result.success is True
         assert result.step_results[0].attempts == 3
@@ -508,14 +534,16 @@ class TestPlaybookExecutor:
         browser.click = AsyncMock(return_value=False)
         executor = PlaybookExecutor(browser=browser, identity=_make_identity())
 
-        pb = _make_playbook(steps=[
-            _make_step(
-                action=PlaybookStepType.CLICK,
-                selector="button",
-                retry_on_failure=1,
-                fallback_to_llm=True,
-            ),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(
+                    action=PlaybookStepType.CLICK,
+                    selector="button",
+                    retry_on_failure=1,
+                    fallback_to_llm=True,
+                ),
+            ]
+        )
         result = await executor.execute(pb, "https://example.com")
         assert result.success is False
         assert result.fell_back_to_llm is True
@@ -528,14 +556,16 @@ class TestPlaybookExecutor:
         browser.click = AsyncMock(return_value=False)
         executor = PlaybookExecutor(browser=browser, identity=_make_identity())
 
-        pb = _make_playbook(steps=[
-            _make_step(
-                action=PlaybookStepType.CLICK,
-                selector="button",
-                retry_on_failure=0,
-                fallback_to_llm=False,
-            ),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(
+                    action=PlaybookStepType.CLICK,
+                    selector="button",
+                    retry_on_failure=0,
+                    fallback_to_llm=False,
+                ),
+            ]
+        )
         result = await executor.execute(pb, "https://example.com")
         assert result.success is False
         assert result.fell_back_to_llm is False
@@ -548,11 +578,13 @@ class TestPlaybookExecutor:
         browser.click = AsyncMock(side_effect=[True, False])
         executor = PlaybookExecutor(browser=browser, identity=_make_identity())
 
-        pb = _make_playbook(steps=[
-            _make_step(action=PlaybookStepType.CLICK, selector="a", fallback_to_llm=False),
-            _make_step(action=PlaybookStepType.CLICK, selector="b", fallback_to_llm=False),
-            _make_step(action=PlaybookStepType.CLICK, selector="c", fallback_to_llm=False),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(action=PlaybookStepType.CLICK, selector="a", fallback_to_llm=False),
+                _make_step(action=PlaybookStepType.CLICK, selector="b", fallback_to_llm=False),
+                _make_step(action=PlaybookStepType.CLICK, selector="c", fallback_to_llm=False),
+            ]
+        )
         result = await executor.execute(pb, "https://example.com")
         assert result.success is False
         assert result.completed_steps == 1
@@ -564,10 +596,12 @@ class TestPlaybookExecutor:
         browser = _make_mock_browser()
         executor = PlaybookExecutor(browser=browser, identity=_make_identity())
 
-        pb = _make_playbook(steps=[
-            _make_step(action=PlaybookStepType.CLICK, selector="a"),
-            _make_step(action=PlaybookStepType.WAIT, value="1"),
-        ])
+        pb = _make_playbook(
+            steps=[
+                _make_step(action=PlaybookStepType.CLICK, selector="a"),
+                _make_step(action=PlaybookStepType.WAIT, value="1"),
+            ]
+        )
         result = await executor.execute(pb, "https://example.com")
         assert len(result.step_results) == 2
         assert result.step_results[0].action == PlaybookStepType.CLICK

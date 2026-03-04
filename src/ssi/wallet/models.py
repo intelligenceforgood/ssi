@@ -8,11 +8,10 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
-
 
 # ---------------------------------------------------------------------------
 # TokenNetwork — allowlist pair
@@ -107,7 +106,7 @@ class WalletEntry(BaseModel):
     def model_post_init(self, __context: Any) -> None:
         """Default ``harvested_at`` to UTC now when not explicitly provided."""
         if not self.harvested_at:
-            self.harvested_at = datetime.now(timezone.utc)
+            self.harvested_at = datetime.now(UTC)
 
     @property
     def pair(self) -> tuple[str, str]:
@@ -153,11 +152,11 @@ class WalletHarvest(BaseModel):
     site_id: str = ""
     run_id: str = ""
     entries: list[WalletEntry] = Field(default_factory=list)
-    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
 
     @model_validator(mode="after")
-    def _propagate_run_id(self) -> "WalletHarvest":
+    def _propagate_run_id(self) -> WalletHarvest:
         """Ensure all entries inherit the harvest run_id if not already set."""
         if self.run_id:
             for entry in self.entries:
@@ -229,7 +228,7 @@ class WalletHarvest(BaseModel):
 
     def complete(self) -> None:
         """Mark the harvest as completed."""
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
 
     # -- Serialization ----------------------------------------------------
 

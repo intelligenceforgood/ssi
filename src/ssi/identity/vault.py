@@ -131,7 +131,11 @@ class IdentityVault:
             country="US",
             date_of_birth=self.fake.date_of_birth(minimum_age=21, maximum_age=70).isoformat(),
             # Invalid SSN range (900-999) — cannot match a real person
-            ssn=f"9{self.fake.random_int(min=10, max=99)}-{self.fake.random_int(min=10, max=99)}-{self.fake.random_int(min=1000, max=9999)}",
+            ssn=(
+                f"9{self.fake.random_int(min=10, max=99)}"
+                f"-{self.fake.random_int(min=10, max=99)}"
+                f"-{self.fake.random_int(min=1000, max=9999)}"
+            ),
             # Stripe test BIN — universally recognized as non-real
             credit_card_number="4242424242424242",
             credit_card_expiry=self.fake.credit_card_expire(start="now", end="+3y"),

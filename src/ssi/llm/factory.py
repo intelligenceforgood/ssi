@@ -76,10 +76,7 @@ def create_llm_provider(
         )
 
     else:
-        raise ValueError(
-            f"Unknown LLM provider: {provider_name!r}. "
-            f"Supported: ollama, gemini"
-        )
+        raise ValueError(f"Unknown LLM provider: {provider_name!r}. " f"Supported: ollama, gemini")
 
     logger.info("Created LLM provider: provider=%s model=%s role=%s", provider_name, model, role)
 
@@ -89,7 +86,7 @@ def create_llm_provider(
     return RetryingLLMProvider(base, max_retries=3, base_delay=1.0)
 
 
-def _resolve_model(llm_settings: "LLMSettings", role: str) -> str:  # noqa: F821
+def _resolve_model(llm_settings: LLMSettings, role: str) -> str:  # noqa: F821
     """Resolve the concrete model name for the given role.
 
     Falls back to the primary model when the role-specific setting is empty.

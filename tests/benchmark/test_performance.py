@@ -14,20 +14,19 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 from unittest.mock import patch
 
 import pytest
 
 from ssi.investigator.orchestrator import run_investigation
-from ssi.models.investigation import InvestigationStatus
 from ssi.monitoring import CostTracker
 from ssi.osint.dns_lookup import DNSRecords
 from ssi.osint.geoip_lookup import GeoIPInfo
 from ssi.osint.ssl_inspect import SSLInfo
 from ssi.osint.whois_lookup import WHOISRecord
-
 
 # ---------------------------------------------------------------------------
 # OSINT stubs (deterministic, zero-latency)
@@ -112,9 +111,9 @@ class TestPassiveBenchmark:
         assert metrics["success"] is True
 
         # Passive-only pipeline should complete in < 30s (generous for CI)
-        assert metrics["wall_clock_s"] < 30.0, (
-            f"Passive pipeline took {metrics['wall_clock_s']:.1f}s — exceeds 30s budget"
-        )
+        assert (
+            metrics["wall_clock_s"] < 30.0
+        ), f"Passive pipeline took {metrics['wall_clock_s']:.1f}s — exceeds 30s budget"
 
     def test_evidence_zip_size_reasonable(self, mock_osint, tmp_path: Path) -> None:
         """Evidence ZIP weighs less than 50 MB (our upload threshold)."""

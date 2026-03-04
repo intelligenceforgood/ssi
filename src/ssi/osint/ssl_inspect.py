@@ -38,33 +38,35 @@ def inspect_ssl(url: str) -> SSLInfo:
     info = SSLInfo()
 
     try:
-        with socket.create_connection((host, port), timeout=10) as sock:
-            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
-                cert = ssock.getpeercert()
-                der_cert = ssock.getpeercert(binary_form=True)
+        with (
+            socket.create_connection((host, port), timeout=10) as sock,
+            ctx.wrap_socket(sock, server_hostname=host) as ssock,
+        ):
+            cert = ssock.getpeercert()
+            der_cert = ssock.getpeercert(binary_form=True)
 
-                if cert:
-                    info.subject = _format_dn(cert.get("subject", ()))
-                    info.issuer = _format_dn(cert.get("issuer", ()))
-                    info.serial_number = str(cert.get("serialNumber", ""))
-                    info.not_before = cert.get("notBefore", "")
-                    info.not_after = cert.get("notAfter", "")
-                    info.san = [v for _, v in cert.get("subjectAltName", ())]
-                    info.is_valid = True
+            if cert:
+                info.subject = _format_dn(cert.get("subject", ()))
+                info.issuer = _format_dn(cert.get("issuer", ()))
+                info.serial_number = str(cert.get("serialNumber", ""))
+                info.not_before = cert.get("notBefore", "")
+                info.not_after = cert.get("notAfter", "")
+                info.san = [v for _, v in cert.get("subjectAltName", ())]
+                info.is_valid = True
 
-                if der_cert:
-                    info.fingerprint_sha256 = hashlib.sha256(der_cert).hexdigest()
+            if der_cert:
+                info.fingerprint_sha256 = hashlib.sha256(der_cert).hexdigest()
 
-                # Check self-signed: issuer == subject
-                if info.issuer and info.subject and info.issuer == info.subject:
-                    info.is_self_signed = True
+            # Check self-signed: issuer == subject
+            if info.issuer and info.subject and info.issuer == info.subject:
+                info.is_self_signed = True
 
     except ssl.SSLCertVerificationError as e:
         logger.warning("SSL verification failed for %s: %s", host, e)
         info.is_valid = False
     except socket.gaierror as e:
         logger.warning("SSL inspection skipped for %s — DNS resolution failed: %s", host, e)
-    except (socket.timeout, ConnectionRefusedError, ConnectionResetError) as e:
+    except (TimeoutError, ConnectionRefusedError, ConnectionResetError) as e:
         logger.warning("SSL connection failed for %s: %s", host, e)
     except Exception as e:
         logger.warning("SSL connection failed for %s: %s", host, e)

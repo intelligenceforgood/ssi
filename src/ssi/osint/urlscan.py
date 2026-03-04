@@ -52,10 +52,10 @@ def scan_url(url: str) -> dict[str, Any]:
 
     # Guard against placeholder values injected by Secret Manager before the
     # real key is stored.  A valid urlscan.io API key is a UUID (36 chars).
-    _PLACEHOLDER_VALUES = {"changeme", "replace_me", "todo", "none", "placeholder", ""}
-    if api_key and api_key.lower() not in _PLACEHOLDER_VALUES and len(api_key) >= 32:
+    placeholder_values = {"changeme", "replace_me", "todo", "none", "placeholder", ""}
+    if api_key and api_key.lower() not in placeholder_values and len(api_key) >= 32:
         return _submit_and_poll(url, api_key)
-    elif api_key and api_key.lower() not in _PLACEHOLDER_VALUES:
+    elif api_key and api_key.lower() not in placeholder_values:
         logger.warning(
             "urlscan.io API key looks invalid (length=%d, expected ≥32) — falling back to search.",
             len(api_key),

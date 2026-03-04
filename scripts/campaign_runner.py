@@ -33,7 +33,7 @@ import json
 import logging
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -205,40 +205,40 @@ def run_campaign(
                     report_format="both",
                 )
 
-                results.append({
-                    "url": url,
-                    "category": category,
-                    "description": url_entry.get("description", ""),
-                    "status": result.status.value,
-                    "success": result.success,
-                    "duration_s": round(result.duration_seconds, 1),
-                    "threat_indicators": len(result.threat_indicators),
-                    "downloads": len(result.downloads),
-                    "form_fields": (
-                        len(result.page_snapshot.form_fields) if result.page_snapshot else 0
-                    ),
-                    "redirect_hops": (
-                        len(result.page_snapshot.redirect_chain) if result.page_snapshot else 0
-                    ),
-                    "investigation_id": str(result.investigation_id),
-                    "error": result.error,
-                })
+                results.append(
+                    {
+                        "url": url,
+                        "category": category,
+                        "description": url_entry.get("description", ""),
+                        "status": result.status.value,
+                        "success": result.success,
+                        "duration_s": round(result.duration_seconds, 1),
+                        "threat_indicators": len(result.threat_indicators),
+                        "downloads": len(result.downloads),
+                        "form_fields": (len(result.page_snapshot.form_fields) if result.page_snapshot else 0),
+                        "redirect_hops": (len(result.page_snapshot.redirect_chain) if result.page_snapshot else 0),
+                        "investigation_id": str(result.investigation_id),
+                        "error": result.error,
+                    }
+                )
 
             except Exception as e:
-                results.append({
-                    "url": url,
-                    "category": category,
-                    "description": url_entry.get("description", ""),
-                    "status": "error",
-                    "success": False,
-                    "duration_s": 0,
-                    "threat_indicators": 0,
-                    "downloads": 0,
-                    "form_fields": 0,
-                    "redirect_hops": 0,
-                    "investigation_id": "",
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "url": url,
+                        "category": category,
+                        "description": url_entry.get("description", ""),
+                        "status": "error",
+                        "success": False,
+                        "duration_s": 0,
+                        "threat_indicators": 0,
+                        "downloads": 0,
+                        "form_fields": 0,
+                        "redirect_hops": 0,
+                        "investigation_id": "",
+                        "error": str(e),
+                    }
+                )
 
             progress.update(task, completed=True)
 
@@ -247,7 +247,7 @@ def run_campaign(
     # Build summary
     summary = {
         "campaign_id": campaign_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "total_urls": len(urls),
         "successful": sum(1 for r in results if r["success"]),
         "failed": sum(1 for r in results if not r["success"]),
@@ -349,8 +349,10 @@ def main() -> None:
         console.print("[yellow]No URLs to investigate.[/yellow]")
         sys.exit(0)
 
-    console.print(f"[bold]{len(urls)} URLs[/bold] across categories: "
-                   f"{', '.join(sorted({u.get('category', '?') for u in urls}))}")
+    console.print(
+        f"[bold]{len(urls)} URLs[/bold] across categories: "
+        f"{', '.join(sorted({u.get('category', '?') for u in urls}))}"
+    )
 
     run_campaign(
         urls=urls,

@@ -77,6 +77,4 @@ def _resolve_template_dir() -> Path:
     if _TEMPLATE_DIR.is_dir():
         return _TEMPLATE_DIR
 
-    raise FileNotFoundError(
-        f"Templates directory not found. Checked: {project_templates}, {_TEMPLATE_DIR}"
-    )
+    raise FileNotFoundError(f"Templates directory not found. Checked: {project_templates}, {_TEMPLATE_DIR}")

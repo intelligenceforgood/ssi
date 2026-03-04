@@ -117,7 +117,10 @@ class TestParseLLMResponse:
         assert result.risk_score > 0
 
     def test_strips_markdown_fences(self):
-        raw = '```json\n{"intent": [], "channel": [], "techniques": [], "actions": [], "persona": [], "explanation": "test"}\n```'
+        raw = (
+            '```json\n{"intent": [], "channel": [], "techniques": [],'
+            ' "actions": [], "persona": [], "explanation": "test"}\n```'
+        )
         result = _parse_llm_response(raw)
         assert result.explanation == "test"
 

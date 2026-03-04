@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC
 from typing import Any
 
 from ssi.classification.prompts import CLASSIFICATION_SYSTEM_PROMPT, CLASSIFICATION_USER_TEMPLATE
@@ -72,11 +73,11 @@ class FraudTaxonomyResult:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "intent": [l.to_dict() for l in self.intent],
-            "channel": [l.to_dict() for l in self.channel],
-            "techniques": [l.to_dict() for l in self.techniques],
-            "actions": [l.to_dict() for l in self.actions],
-            "persona": [l.to_dict() for l in self.persona],
+            "intent": [item.to_dict() for item in self.intent],
+            "channel": [item.to_dict() for item in self.channel],
+            "techniques": [item.to_dict() for item in self.techniques],
+            "actions": [item.to_dict() for item in self.actions],
+            "persona": [item.to_dict() for item in self.persona],
             "explanation": self.explanation,
             "risk_score": self.risk_score,
             "taxonomy_version": self.taxonomy_version,
@@ -158,7 +159,7 @@ def _calculate_risk_score(taxonomy: FraudTaxonomyResult) -> float:
 
 def _apply_infrastructure_boost(
     base_score: float,
-    result: "InvestigationResult",
+    result: InvestigationResult,
 ) -> float:
     """Add risk points for suspicious infrastructure signals the LLM may overlook.
 
@@ -169,7 +170,7 @@ def _apply_infrastructure_boost(
     # --- Domain age ---
     if result.whois and result.whois.creation_date:
         try:
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             created = result.whois.creation_date
             if isinstance(created, str):
@@ -179,14 +180,14 @@ def _apply_infrastructure_boost(
             else:
                 dt = created  # type: ignore[assignment]
             if not dt.tzinfo:
-                dt = dt.replace(tzinfo=timezone.utc)
-            age_days = (datetime.now(timezone.utc) - dt).days
+                dt = dt.replace(tzinfo=UTC)
+            age_days = (datetime.now(UTC) - dt).days
             if age_days < 30:
                 boost += 15  # Created in the last month
             elif age_days < 90:
                 boost += 10  # Created in the last 3 months
             elif age_days < 365:
-                boost += 5   # Created in the last year
+                boost += 5  # Created in the last year
         except Exception:
             pass
 
@@ -201,26 +202,63 @@ def _apply_infrastructure_boost(
     from urllib.parse import urlparse
 
     host = urlparse(result.url).hostname or ""
-    _SUSPICIOUS_TLDS = {
-        ".cc", ".tk", ".ml", ".ga", ".cf", ".gq", ".buzz", ".top",
-        ".xyz", ".icu", ".club", ".wang", ".work", ".live", ".click",
-        ".surf", ".rest", ".monster",
+    suspicious_tlds = {
+        ".cc",
+        ".tk",
+        ".ml",
+        ".ga",
+        ".cf",
+        ".gq",
+        ".buzz",
+        ".top",
+        ".xyz",
+        ".icu",
+        ".club",
+        ".wang",
+        ".work",
+        ".live",
+        ".click",
+        ".surf",
+        ".rest",
+        ".monster",
     }
-    for tld in _SUSPICIOUS_TLDS:
+    for tld in suspicious_tlds:
         if host.endswith(tld):
             boost += 5
             break
 
     # --- Brand name in subdomain (impersonation signal) ---
-    _COMMON_BRANDS = {
-        "paypal", "apple", "amazon", "microsoft", "google", "netflix",
-        "chase", "wells-fargo", "wellsfargo", "bank-of-america",
-        "t-mobile", "tmobile", "verizon", "att", "usps", "fedex",
-        "dhl", "ups", "irs", "costco", "walmart", "target", "etsy",
-        "facebook", "instagram", "whatsapp", "linkedin",
+    common_brands = {
+        "paypal",
+        "apple",
+        "amazon",
+        "microsoft",
+        "google",
+        "netflix",
+        "chase",
+        "wells-fargo",
+        "wellsfargo",
+        "bank-of-america",
+        "t-mobile",
+        "tmobile",
+        "verizon",
+        "att",
+        "usps",
+        "fedex",
+        "dhl",
+        "ups",
+        "irs",
+        "costco",
+        "walmart",
+        "target",
+        "etsy",
+        "facebook",
+        "instagram",
+        "whatsapp",
+        "linkedin",
     }
     host_lower = host.lower()
-    for brand in _COMMON_BRANDS:
+    for brand in common_brands:
         if brand in host_lower:
             # Only count if the brand is NOT the registrable domain itself
             parts = host_lower.rsplit(".", 2)
@@ -262,7 +300,8 @@ def _build_evidence_text(result: InvestigationResult) -> str:
 
     # Downloads
     dl_lines = [
-        f"- {d.filename} (SHA-256: {d.sha256[:16]}…) malicious={d.is_malicious} VT={d.vt_detections}/{d.vt_total_engines}"
+        f"- {d.filename} (SHA-256: {d.sha256[:16]}…) "  # noqa: E501
+        f"malicious={d.is_malicious} VT={d.vt_detections}/{d.vt_total_engines}"
         for d in result.downloads
     ]
     downloads_text = "\n".join(dl_lines) if dl_lines else "None."
@@ -385,7 +424,7 @@ def classify_investigation(
         logger.info(
             "Classification complete: risk_score=%.1f intent=%s",
             taxonomy.risk_score,
-            [l.label for l in taxonomy.intent],
+            [item.label for item in taxonomy.intent],
         )
         return taxonomy
 

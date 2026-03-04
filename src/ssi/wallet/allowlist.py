@@ -111,12 +111,12 @@ class AllowlistFilter:
             self._by_symbol.setdefault(tn.token_symbol, []).append(tn)
 
     @classmethod
-    def from_json(cls, path: str | Path) -> "AllowlistFilter":
+    def from_json(cls, path: str | Path) -> AllowlistFilter:
         """Create a filter from a JSON allowlist file."""
         return cls(load_allowlist(path))
 
     @classmethod
-    def default(cls) -> "AllowlistFilter":
+    def default(cls) -> AllowlistFilter:
         """Create a filter using the built-in default allowlist."""
         return cls(DEFAULT_TOKEN_NETWORKS)
 

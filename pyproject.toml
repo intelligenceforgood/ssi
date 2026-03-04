@@ -90,7 +90,15 @@ line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+ignore = [
+  "B008", # typer.Option()/Argument() in function defaults is the standard Typer pattern
+]
+select = ["E", "F", "N", "W", "UP", "B", "SIM"] # "I" omitted: isort is authoritative for import ordering
+
+[tool.ruff.lint.per-file-ignores]
+"src/ssi/browser/stealth.py" = ["E501"] # user-agent strings are opaque constants
+"src/ssi/browser/zen_manager.py" = ["E501"] # embedded JavaScript strings exceed 120 chars
+"tests/**" = ["N806", "N803", "N817", "B017"] # PascalCase assignments + broad exception asserts in validation tests
 
 [tool.mypy]
 python_version = "3.11"

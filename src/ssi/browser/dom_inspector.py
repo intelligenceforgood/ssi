@@ -347,9 +347,7 @@ class DOMInspector:
             "CHECK_EMAIL_VERIFICATION": CheckEmailDetector(),
         }
 
-    def inspect(
-        self, state: str, scan_data: dict, scan_duration_ms: float = 0.0
-    ) -> DOMInspection:
+    def inspect(self, state: str, scan_data: dict, scan_duration_ms: float = 0.0) -> DOMInspection:
         """Analyze raw scan data and return a ``DOMInspection`` result."""
         detector = self._detectors.get(state)
         if detector is None:

@@ -14,19 +14,12 @@ from __future__ import annotations
 
 import json
 import zipfile
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
-from uuid import uuid4
 
 import pytest
 
-from ssi.evidence.stix import (
-    _create_wallet_indicator_sdo,
-    _indicator_to_pattern,
-    investigation_to_stix_bundle,
-)
+from ssi.evidence.stix import _create_wallet_indicator_sdo, _indicator_to_pattern, investigation_to_stix_bundle
 from ssi.investigator.orchestrator import _create_evidence_zip, _write_wallet_manifest
 from ssi.models.investigation import (
     InvestigationResult,
@@ -38,7 +31,6 @@ from ssi.models.investigation import (
 )
 from ssi.reports import render_markdown_report
 from ssi.wallet.models import WalletEntry
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -191,9 +183,7 @@ class TestWalletManifest:
         manifest = json.loads(manifest_path.read_text())
         assert manifest["wallet_count"] == 0
 
-    def test_manifest_has_description_in_zip(
-        self, inv_dir_with_wallets: tuple[InvestigationResult, Path]
-    ) -> None:
+    def test_manifest_has_description_in_zip(self, inv_dir_with_wallets: tuple[InvestigationResult, Path]) -> None:
         """Evidence ZIP manifest.json should have a description for wallet_manifest.json."""
         result, inv_dir = inv_dir_with_wallets
         _write_wallet_manifest(result, inv_dir)
@@ -808,12 +798,14 @@ class TestPdfEmbeddedEvidence:
             url="https://scam.example.com",
             status=InvestigationStatus.COMPLETED,
             wallets=[_make_wallet()],
-            threat_indicators=[ThreatIndicator(
-                indicator_type="crypto_wallet",
-                value="T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
-                context="wallet",
-                source="js",
-            )],
+            threat_indicators=[
+                ThreatIndicator(
+                    indicator_type="crypto_wallet",
+                    value="T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+                    context="wallet",
+                    source="js",
+                )
+            ],
         )
         md = render_markdown_report(result)
         assert "[wallet_manifest.json](#appendix-wallet-manifest)" in md
@@ -823,12 +815,14 @@ class TestPdfEmbeddedEvidence:
         result = InvestigationResult(
             url="https://scam.example.com",
             status=InvestigationStatus.COMPLETED,
-            threat_indicators=[ThreatIndicator(
-                indicator_type="domain",
-                value="scam.example.com",
-                context="target",
-                source="dns",
-            )],
+            threat_indicators=[
+                ThreatIndicator(
+                    indicator_type="domain",
+                    value="scam.example.com",
+                    context="target",
+                    source="dns",
+                )
+            ],
         )
         md = render_markdown_report(result)
         assert "[stix_bundle.json](#appendix-stix-bundle)" in md
@@ -866,11 +860,10 @@ class TestWalletExportEndpoint:
 
     @patch("ssi.api.investigation_routes.build_scan_store")
     def test_export_wallets_xlsx_not_found(self, mock_build: MagicMock) -> None:
+        from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
         from ssi.api.investigation_routes import investigation_router
-
-        from fastapi import FastAPI
 
         app = FastAPI()
         app.include_router(investigation_router)
@@ -885,11 +878,10 @@ class TestWalletExportEndpoint:
 
     @patch("ssi.api.investigation_routes.build_scan_store")
     def test_export_wallets_xlsx_no_wallets(self, mock_build: MagicMock) -> None:
+        from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
         from ssi.api.investigation_routes import investigation_router
-
-        from fastapi import FastAPI
 
         app = FastAPI()
         app.include_router(investigation_router)
@@ -905,11 +897,10 @@ class TestWalletExportEndpoint:
 
     @patch("ssi.api.investigation_routes.build_scan_store")
     def test_export_wallets_xlsx_success(self, mock_build: MagicMock) -> None:
+        from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
         from ssi.api.investigation_routes import investigation_router
-
-        from fastapi import FastAPI
 
         app = FastAPI()
         app.include_router(investigation_router)
@@ -935,11 +926,10 @@ class TestWalletExportEndpoint:
 
     @patch("ssi.api.investigation_routes.build_scan_store")
     def test_export_wallets_csv_success(self, mock_build: MagicMock) -> None:
+        from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
         from ssi.api.investigation_routes import investigation_router
-
-        from fastapi import FastAPI
 
         app = FastAPI()
         app.include_router(investigation_router)

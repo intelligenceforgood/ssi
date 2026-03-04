@@ -18,7 +18,7 @@ Falls back to a no-op when ``scan_id`` is absent (standalone mode).
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ class TaskStatusReporter:
         if status == "failed":
             fields["error_message"] = message
         if status == "completed":
-            fields["completed_at"] = datetime.now(timezone.utc)
+            fields["completed_at"] = datetime.now(UTC)
 
         # Map recognised extra kwargs to site_scans columns.
         for col in _EXTRA_COLUMN_KEYS:

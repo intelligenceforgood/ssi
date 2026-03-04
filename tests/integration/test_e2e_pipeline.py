@@ -8,7 +8,6 @@ through the full pipeline.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -16,7 +15,6 @@ import pytest
 
 from ssi.investigator.orchestrator import run_investigation
 from ssi.models.investigation import DNSRecords, GeoIPInfo, SSLInfo, WHOISRecord
-
 
 # ---------------------------------------------------------------------------
 # Deterministic OSINT stubs

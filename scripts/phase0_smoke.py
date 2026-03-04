@@ -153,10 +153,7 @@ def run_agent_test(url: str, output_dir: Path, max_steps: int = 10) -> dict:
         result["duration_ms"] = round(session.metrics.total_duration_ms, 1)
         result["termination"] = session.metrics.termination_reason
         result["pii_submitted"] = session.pii_fields_submitted
-        result["actions"] = [
-            f"{s.action.action_type.value}({s.action.element_index or ''})"
-            for s in session.steps
-        ]
+        result["actions"] = [f"{s.action.action_type.value}({s.action.element_index or ''})" for s in session.steps]
         result["pages_visited"] = session.pages_visited
 
     except Exception as e:

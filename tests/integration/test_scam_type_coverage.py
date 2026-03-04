@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import json
 import zipfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -42,7 +43,6 @@ from ssi.models.investigation import (
 )
 from ssi.wallet.models import WalletEntry
 
-
 # ---------------------------------------------------------------------------
 # Scam-type registry — maps fixture filename to expected scam characteristics
 # ---------------------------------------------------------------------------
@@ -50,7 +50,12 @@ from ssi.wallet.models import WalletEntry
 SCAM_TYPE_REGISTRY: list[dict[str, Any]] = [
     # Original fixtures
     {"fixture": "phishing.html", "label": "phishing", "expect_pii_fields": True, "expect_wallets": False},
-    {"fixture": "register.html", "label": "crypto_exchange_register", "expect_pii_fields": True, "expect_wallets": False},
+    {
+        "fixture": "register.html",
+        "label": "crypto_exchange_register",
+        "expect_pii_fields": True,
+        "expect_wallets": False,
+    },
     {"fixture": "deposit.html", "label": "crypto_exchange_deposit", "expect_pii_fields": False, "expect_wallets": True},
     # New Phase 1 fixtures
     {"fixture": "tech_support.html", "label": "tech_support", "expect_pii_fields": False, "expect_wallets": False},
@@ -59,19 +64,44 @@ SCAM_TYPE_REGISTRY: list[dict[str, Any]] = [
     {"fixture": "crypto_mining.html", "label": "crypto_mining", "expect_pii_fields": False, "expect_wallets": True},
     {"fixture": "employment_scam.html", "label": "employment", "expect_pii_fields": True, "expect_wallets": False},
     {"fixture": "prize_lottery.html", "label": "prize_lottery", "expect_pii_fields": True, "expect_wallets": False},
-    {"fixture": "gov_impersonation.html", "label": "gov_impersonation", "expect_pii_fields": True, "expect_wallets": False},
+    {
+        "fixture": "gov_impersonation.html",
+        "label": "gov_impersonation",
+        "expect_pii_fields": True,
+        "expect_wallets": False,
+    },
     {"fixture": "bank_phishing.html", "label": "bank_phishing", "expect_pii_fields": True, "expect_wallets": False},
     {"fixture": "charity_scam.html", "label": "charity", "expect_pii_fields": True, "expect_wallets": True},
     {"fixture": "extortion.html", "label": "extortion", "expect_pii_fields": False, "expect_wallets": True},
     {"fixture": "investment_platform.html", "label": "investment", "expect_pii_fields": True, "expect_wallets": False},
-    {"fixture": "malware_download.html", "label": "malware_download", "expect_pii_fields": False, "expect_wallets": False},
+    {
+        "fixture": "malware_download.html",
+        "label": "malware_download",
+        "expect_pii_fields": False,
+        "expect_wallets": False,
+    },
     {"fixture": "social_phishing.html", "label": "social_phishing", "expect_pii_fields": True, "expect_wallets": False},
     {"fixture": "crypto_airdrop.html", "label": "crypto_airdrop", "expect_pii_fields": True, "expect_wallets": False},
-    {"fixture": "subscription_trap.html", "label": "subscription_trap", "expect_pii_fields": True, "expect_wallets": False},
-    {"fixture": "tech_company_phishing.html", "label": "tech_company_phishing", "expect_pii_fields": True, "expect_wallets": False},
+    {
+        "fixture": "subscription_trap.html",
+        "label": "subscription_trap",
+        "expect_pii_fields": True,
+        "expect_wallets": False,
+    },
+    {
+        "fixture": "tech_company_phishing.html",
+        "label": "tech_company_phishing",
+        "expect_pii_fields": True,
+        "expect_wallets": False,
+    },
     {"fixture": "sms_delivery_phish.html", "label": "sms_phishing", "expect_pii_fields": True, "expect_wallets": False},
     {"fixture": "survey_reward.html", "label": "survey_reward", "expect_pii_fields": True, "expect_wallets": False},
-    {"fixture": "marketplace_escrow.html", "label": "marketplace_escrow", "expect_pii_fields": True, "expect_wallets": False},
+    {
+        "fixture": "marketplace_escrow.html",
+        "label": "marketplace_escrow",
+        "expect_pii_fields": True,
+        "expect_wallets": False,
+    },
     {"fixture": "pig_butchering.html", "label": "pig_butchering", "expect_pii_fields": True, "expect_wallets": True},
 ]
 
@@ -114,6 +144,7 @@ _FAKE_GEOIP = GeoIPInfo(
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _osint_patches() -> list:
     """Return a list of patch decorators for all OSINT calls."""
     return [
@@ -140,6 +171,7 @@ def mock_osint() -> Generator[list[Any], None, None]:
 # Task 1.1 — Scam-type fixture coverage
 # ---------------------------------------------------------------------------
 
+
 class TestScamTypeFixturesExist:
     """Verify that all 20+ scam-type fixture HTML files exist."""
 
@@ -157,14 +189,13 @@ class TestScamTypeFixturesExist:
 
     def test_minimum_20_scam_types(self) -> None:
         """Phase 1 target: at least 20 distinct scam type fixtures."""
-        assert len(SCAM_TYPE_REGISTRY) >= 20, (
-            f"Expected ≥20 scam types, got {len(SCAM_TYPE_REGISTRY)}"
-        )
+        assert len(SCAM_TYPE_REGISTRY) >= 20, f"Expected ≥20 scam types, got {len(SCAM_TYPE_REGISTRY)}"
 
 
 # ---------------------------------------------------------------------------
 # Task 1.1 — Pipeline runs for each scam type (passive mode)
 # ---------------------------------------------------------------------------
+
 
 class TestPassivePipelinePerScamType:
     """Run the passive pipeline against each scam-type URL."""
@@ -200,6 +231,7 @@ class TestPassivePipelinePerScamType:
 # ---------------------------------------------------------------------------
 # Task 1.2 — Evidence package validation
 # ---------------------------------------------------------------------------
+
 
 class TestEvidencePackageValidation:
     """Validate evidence ZIP, manifest, STIX bundles, and chain-of-custody."""
@@ -332,8 +364,7 @@ class TestEvidencePackageValidation:
         bundle = investigation_to_stix_bundle(result)
 
         crypto_indicators = [
-            o for o in bundle["objects"]
-            if o["type"] == "indicator" and "cryptocurrency-wallet" in o.get("pattern", "")
+            o for o in bundle["objects"] if o["type"] == "indicator" and "cryptocurrency-wallet" in o.get("pattern", "")
         ]
         assert len(crypto_indicators) >= 1
 
@@ -360,6 +391,7 @@ class TestEvidencePackageValidation:
 # ---------------------------------------------------------------------------
 # Task 1.3 — Agent reliability tracking
 # ---------------------------------------------------------------------------
+
 
 class TestAgentReliabilityMetrics:
     """Track and validate reliability metrics across scam types.
@@ -394,14 +426,16 @@ class TestAgentReliabilityMetrics:
         """Reliability report captures success/failure per scam type."""
         results: list[dict[str, Any]] = []
         for entry in SCAM_TYPE_REGISTRY:
-            results.append({
-                "scam_type": entry["label"],
-                "fixture": entry["fixture"],
-                "pipeline_success": True,  # In real runs, this would be dynamic
-                "evidence_complete": True,
-                "wallets_expected": entry["expect_wallets"],
-                "pii_expected": entry["expect_pii_fields"],
-            })
+            results.append(
+                {
+                    "scam_type": entry["label"],
+                    "fixture": entry["fixture"],
+                    "pipeline_success": True,  # In real runs, this would be dynamic
+                    "evidence_complete": True,
+                    "wallets_expected": entry["expect_wallets"],
+                    "pii_expected": entry["expect_pii_fields"],
+                }
+            )
 
         report_path = tmp_path / "reliability_report.json"
         report_path.write_text(json.dumps(results, indent=2))

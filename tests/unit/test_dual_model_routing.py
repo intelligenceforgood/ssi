@@ -6,13 +6,9 @@ via ``create_llm_provider``), and ``PageAnalyzer`` model selection.
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from ssi.llm.base import LLMProvider, LLMResult
-
 
 # ---------------------------------------------------------------------------
 # C3: Ollama vision support

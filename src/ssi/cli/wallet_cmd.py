@@ -7,9 +7,7 @@ scanning text for wallets, and exporting wallet data.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -39,7 +37,7 @@ def validate_address(
         console.print(f"  Pattern: {result.pattern.name}")
         console.print(f"  Address: {result.address}")
     else:
-        console.print(f"[red]✗[/red] No known pattern matches this address")
+        console.print("[red]✗[/red] No known pattern matches this address")
         raise typer.Exit(code=1)
 
 
@@ -96,9 +94,9 @@ def scan_text(
 
 @wallet_app.command("allowlist")
 def show_allowlist(
-    path: Optional[Path] = typer.Option(None, "--path", "-p", help="Path to custom allowlist JSON file."),
+    path: Path | None = typer.Option(None, "--path", "-p", help="Path to custom allowlist JSON file."),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON."),
-    symbol: Optional[str] = typer.Option(None, "--symbol", "-s", help="Filter to a specific token symbol."),
+    symbol: str | None = typer.Option(None, "--symbol", "-s", help="Filter to a specific token symbol."),
 ) -> None:
     """Display the token-network allowlist."""
     from ssi.wallet.allowlist import AllowlistFilter, load_allowlist
@@ -113,7 +111,15 @@ def show_allowlist(
             raise typer.Exit(code=1)
 
     if json_output:
-        data = [{"token_name": p.token_name, "token_symbol": p.token_symbol, "network": p.network, "network_short": p.network_short} for p in pairs]
+        data = [
+            {
+                "token_name": p.token_name,
+                "token_symbol": p.token_symbol,
+                "network": p.network,
+                "network_short": p.network_short,
+            }
+            for p in pairs
+        ]
         console.print_json(json.dumps(data, indent=2))
         return
 
@@ -140,7 +146,7 @@ def export_wallets(
     output_dir: Path = typer.Option(Path("."), "--output", "-o", help="Output directory."),
     format: str = typer.Option("xlsx", "--format", "-f", help="Export format: xlsx, csv, json, or all."),
     filter_allowlist: bool = typer.Option(True, "--filter/--no-filter", help="Apply allowlist filtering."),
-    allowlist_path: Optional[Path] = typer.Option(None, "--allowlist", help="Custom allowlist JSON file."),
+    allowlist_path: Path | None = typer.Option(None, "--allowlist", help="Custom allowlist JSON file."),
 ) -> None:
     """Export wallet entries from a JSON file to XLSX, CSV, or JSON.
 
@@ -160,7 +166,7 @@ def export_wallets(
         raw = json.loads(input_file.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         console.print(f"[red]Invalid JSON:[/red] {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     raw_entries = raw.get("entries", raw) if isinstance(raw, dict) else raw
     if not isinstance(raw_entries, list):

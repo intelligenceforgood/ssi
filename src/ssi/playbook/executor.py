@@ -22,17 +22,11 @@ import asyncio
 import logging
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ssi.browser.zen_manager import ZenBrowserManager
 from ssi.identity.vault import SyntheticIdentity
-from ssi.playbook.models import (
-    Playbook,
-    PlaybookResult,
-    PlaybookStep,
-    PlaybookStepResult,
-    PlaybookStepType,
-)
+from ssi.playbook.models import Playbook, PlaybookResult, PlaybookStep, PlaybookStepResult, PlaybookStepType
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +65,7 @@ def resolve_template(
 
         # {identity.email} → identity_dict["email"]
         if key.startswith("identity."):
-            field = key[len("identity."):]
+            field = key[len("identity.") :]
             value = identity_dict.get(field)
             if value is not None:
                 return str(value)
@@ -80,7 +74,7 @@ def resolve_template(
 
         # {password_variants.digits_8} → password_variants["digits_8"]
         if key.startswith("password_variants."):
-            variant = key[len("password_variants."):]
+            variant = key[len("password_variants.") :]
             value = password_variants.get(variant)
             if value is not None:
                 return str(value)
@@ -129,7 +123,7 @@ class PlaybookExecutor:
             url=url,
             success=False,
             total_steps=len(playbook.steps),
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
 
         start_time = time.monotonic()
@@ -155,7 +149,10 @@ class PlaybookExecutor:
 
             # --- Execute step with retries ---
             step_result = await self._execute_step(
-                idx, step, resolved_selector, resolved_value,
+                idx,
+                step,
+                resolved_selector,
+                resolved_value,
             )
             result.step_results.append(step_result)
 
@@ -177,8 +174,7 @@ class PlaybookExecutor:
             if step.fallback_to_llm:
                 result.fell_back_to_llm = True
                 result.fallback_reason = (
-                    f"Step {idx + 1} ({step.action.value} "
-                    f"{resolved_selector[:40]}) failed: {step_result.error}"
+                    f"Step {idx + 1} ({step.action.value} " f"{resolved_selector[:40]}) failed: {step_result.error}"
                 )
                 logger.info(
                     "Playbook %s: falling back to LLM from step %d",
@@ -188,17 +184,14 @@ class PlaybookExecutor:
                 break
 
             # Step failed, no fallback — abort the playbook
-            result.error = (
-                f"Step {idx + 1} failed without fallback: "
-                f"{step.action.value} {resolved_selector[:40]}"
-            )
+            result.error = f"Step {idx + 1} failed without fallback: " f"{step.action.value} {resolved_selector[:40]}"
             break
         else:
             # All steps completed successfully
             result.success = True
 
         result.duration_sec = time.monotonic() - start_time
-        result.completed_at = datetime.now(timezone.utc)
+        result.completed_at = datetime.now(UTC)
 
         logger.info(
             "Playbook %s: %s (%d/%d steps in %.1fs)%s",
@@ -255,7 +248,10 @@ class PlaybookExecutor:
                 last_error = str(exc)
                 logger.debug(
                     "Step %d attempt %d/%d error: %s",
-                    index + 1, attempt, max_attempts, exc,
+                    index + 1,
+                    attempt,
+                    max_attempts,
+                    exc,
                 )
 
             # Wait before retry (progressive backoff: 1s, 2s, 3s, …)

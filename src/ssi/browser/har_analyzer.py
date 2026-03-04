@@ -108,16 +108,12 @@ def analyze_har(har_path: Path, target_domain: str = "") -> HarAnalysis:
         # Check for suspicious content types in responses
         resp_content_type = _get_content_type(response)
         if resp_content_type in _SUSPICIOUS_CONTENT_TYPES:
-            analysis.suspicious_content_types.append(
-                {"url": url, "content_type": resp_content_type, "domain": domain}
-            )
+            analysis.suspicious_content_types.append({"url": url, "content_type": resp_content_type, "domain": domain})
 
         # Check for phishing-kit patterns in URLs
         for pattern in _PHISHING_KIT_PATTERNS:
             if re.search(pattern, url, re.IGNORECASE):
-                analysis.phishing_kit_indicators.append(
-                    {"url": url, "pattern": pattern, "domain": domain}
-                )
+                analysis.phishing_kit_indicators.append({"url": url, "pattern": pattern, "domain": domain})
                 break  # One match per URL is enough
 
         # Check POST bodies for credential exfiltration patterns
@@ -126,9 +122,7 @@ def analyze_har(har_path: Path, target_domain: str = "") -> HarAnalysis:
             if post_data:
                 for pattern in _EXFIL_PATTERNS:
                     if re.search(pattern, post_data, re.IGNORECASE):
-                        analysis.exfil_indicators.append(
-                            {"url": url, "pattern": pattern, "domain": domain}
-                        )
+                        analysis.exfil_indicators.append({"url": url, "pattern": pattern, "domain": domain})
                         break
 
         # Scan response body text for cryptocurrency addresses
@@ -137,15 +131,13 @@ def analyze_har(har_path: Path, target_domain: str = "") -> HarAnalysis:
             for crypto_name, crypto_pattern in _CRYPTO_PATTERNS.items():
                 matches = re.findall(crypto_pattern, resp_text)
                 for match in matches[:3]:  # Limit per type per entry
-                    analysis.crypto_addresses.append(
-                        {"type": crypto_name, "address": match, "source_url": url}
-                    )
+                    analysis.crypto_addresses.append({"type": crypto_name, "address": match, "source_url": url})
 
     analysis.total_requests = len(entries)
     return analysis
 
 
-def har_to_threat_indicators(analysis: "HarAnalysis", source_url: str) -> list[ThreatIndicator]:
+def har_to_threat_indicators(analysis: HarAnalysis, source_url: str) -> list[ThreatIndicator]:
     """Convert HAR analysis findings into ThreatIndicator models.
 
     Args:

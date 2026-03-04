@@ -18,9 +18,7 @@ class BudgetExceededError(SSIError):
     def __init__(self, spent_usd: float, budget_usd: float) -> None:
         self.spent_usd = spent_usd
         self.budget_usd = budget_usd
-        super().__init__(
-            f"Investigation cost ${spent_usd:.4f} exceeded budget ${budget_usd:.4f}"
-        )
+        super().__init__(f"Investigation cost ${spent_usd:.4f} exceeded budget ${budget_usd:.4f}")
 
 
 class ConcurrentLimitError(SSIError):
@@ -28,9 +26,7 @@ class ConcurrentLimitError(SSIError):
 
     def __init__(self, limit: int) -> None:
         self.limit = limit
-        super().__init__(
-            f"Concurrent investigation limit ({limit}) reached. Try again later."
-        )
+        super().__init__(f"Concurrent investigation limit ({limit}) reached. Try again later.")
 
 
 class NavigationError(SSIError):

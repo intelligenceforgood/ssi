@@ -14,12 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ssi.worker.batch import (
-    _load_from_gcs,
-    load_manifest,
-    validate_manifest,
-)
-
+from ssi.worker.batch import _load_from_gcs, load_manifest, validate_manifest
 
 # ---------------------------------------------------------------------------
 # Manifest validation
@@ -90,10 +85,14 @@ class TestLoadManifest:
     def test_load_local_file(self, tmp_path: Path) -> None:
         """Load a valid manifest from a local JSON file."""
         manifest_file = tmp_path / "manifest.json"
-        manifest_file.write_text(json.dumps([
-            {"url": "https://scam1.example.com"},
-            {"url": "https://scam2.example.com", "scan_type": "passive"},
-        ]))
+        manifest_file.write_text(
+            json.dumps(
+                [
+                    {"url": "https://scam1.example.com"},
+                    {"url": "https://scam2.example.com", "scan_type": "passive"},
+                ]
+            )
+        )
 
         result = load_manifest(str(manifest_file))
         assert len(result) == 2
@@ -140,16 +139,20 @@ class TestGCSLoading:
 
     def test_gcs_import_error(self) -> None:
         """ImportError if google-cloud-storage is missing."""
-        with patch.dict("sys.modules", {"google.cloud": None, "google": None}):
-            with pytest.raises(ImportError, match="google-cloud-storage"):
-                _load_from_gcs("gs://bucket/path.json")
+        with (
+            patch.dict("sys.modules", {"google.cloud": None, "google": None}),
+            pytest.raises(ImportError, match="google-cloud-storage"),
+        ):
+            _load_from_gcs("gs://bucket/path.json")
 
     def test_gcs_invalid_uri(self) -> None:
         """Invalid GCS URI (no path component) raises ValueError."""
         mock_gcs_mod = MagicMock()
-        with patch.dict("sys.modules", {"google.cloud": mock_gcs_mod, "google.cloud.storage": mock_gcs_mod}):
-            with pytest.raises(ValueError, match="Invalid GCS URI"):
-                _load_from_gcs("gs://bucket-only")
+        with (
+            patch.dict("sys.modules", {"google.cloud": mock_gcs_mod, "google.cloud.storage": mock_gcs_mod}),
+            pytest.raises(ValueError, match="Invalid GCS URI"),
+        ):
+            _load_from_gcs("gs://bucket-only")
 
     @patch("ssi.worker.batch._load_from_gcs")
     def test_gcs_not_found_raises(self, mock_gcs: MagicMock) -> None:

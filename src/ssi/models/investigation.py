@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from ssi.wallet.models import WalletEntry
 
 
-class ScanType(str, Enum):
+class ScanType(StrEnum):
     """Investigation scan modes.
 
     - ``passive``: OSINT only (WHOIS, DNS, SSL, screenshot) — no AI agent.
@@ -25,7 +25,7 @@ class ScanType(str, Enum):
     FULL = "full"
 
 
-class InvestigationStatus(str, Enum):
+class InvestigationStatus(StrEnum):
     """Investigation lifecycle states."""
 
     PENDING = "pending"
@@ -249,7 +249,7 @@ class InvestigationResult(BaseModel):
 
     investigation_id: UUID = Field(default_factory=uuid4)
     url: str
-    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     status: InvestigationStatus = InvestigationStatus.PENDING
     success: bool = False

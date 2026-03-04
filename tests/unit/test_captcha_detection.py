@@ -15,11 +15,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ssi.browser.captcha import (
+    _CAPTCHA_SIGNATURES,
     CaptchaDetection,
     CaptchaResult,
     CaptchaStrategy,
     CaptchaType,
-    _CAPTCHA_SIGNATURES,
     detect_captcha,
     handle_captcha,
 )
@@ -178,12 +178,10 @@ class TestCaptchaHandling:
         assert result.solved is False
         assert result.error == ""
 
-    def test_skip_captures_screenshot(
-        self, detected_recaptcha: CaptchaDetection, tmp_path: Path
-    ) -> None:
+    def test_skip_captures_screenshot(self, detected_recaptcha: CaptchaDetection, tmp_path: Path) -> None:
         """SKIP strategy still captures evidence screenshot."""
         page = MagicMock()
-        result = handle_captcha(
+        handle_captcha(
             page,
             detected_recaptcha,
             strategy=CaptchaStrategy.SKIP,
@@ -270,7 +268,15 @@ class TestCaptchaModels:
 
     def test_captcha_type_values(self) -> None:
         """All expected CaptchaType values exist."""
-        expected = {"recaptcha_v2", "recaptcha_v3", "hcaptcha", "cloudflare_turnstile", "funcaptcha", "text_captcha", "unknown"}
+        expected = {
+            "recaptcha_v2",
+            "recaptcha_v3",
+            "hcaptcha",
+            "cloudflare_turnstile",
+            "funcaptcha",
+            "text_captcha",
+            "unknown",
+        }
         actual = {ct.value for ct in CaptchaType}
         assert expected == actual
 

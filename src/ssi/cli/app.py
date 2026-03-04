@@ -1,6 +1,7 @@
 """Unified CLI entry point for Scam Site Investigator.
 
-Config precedence: settings.default.toml -> settings.local.toml -> env vars (SSI_* with double underscores) -> CLI flags.
+Config precedence: settings.default.toml -> settings.local.toml
+-> env vars (SSI_* with double underscores) -> CLI flags.
 """
 
 from __future__ import annotations

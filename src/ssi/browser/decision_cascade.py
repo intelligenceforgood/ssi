@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class CascadeTier(str, enum.Enum):
+class CascadeTier(enum.StrEnum):
     """Named tiers in the decision cascade, ordered by cost/complexity."""
 
     PLAYBOOK = "playbook"
@@ -67,7 +67,7 @@ class CascadeTier(str, enum.Enum):
 # ---------------------------------------------------------------------------
 
 
-class PreFilterOutcome(str, enum.Enum):
+class PreFilterOutcome(enum.StrEnum):
     """Outcomes from pre-filter checks that bypass the cascade entirely."""
 
     BLANK_PAGE = "blank_page"
@@ -96,16 +96,20 @@ class CascadeDecision:
 # ---------------------------------------------------------------------------
 
 # States where the DOM inspector is tried before the LLM.
-DOM_INSPECTABLE_STATES: frozenset[str] = frozenset({
-    "FIND_REGISTER",
-    "NAVIGATE_DEPOSIT",
-    "CHECK_EMAIL_VERIFICATION",
-})
+DOM_INSPECTABLE_STATES: frozenset[str] = frozenset(
+    {
+        "FIND_REGISTER",
+        "NAVIGATE_DEPOSIT",
+        "CHECK_EMAIL_VERIFICATION",
+    }
+)
 
 # States where screenshots are omitted (text-only mode).
-TEXT_ONLY_STATES: frozenset[str] = frozenset({
-    "CHECK_EMAIL_VERIFICATION",
-})
+TEXT_ONLY_STATES: frozenset[str] = frozenset(
+    {
+        "CHECK_EMAIL_VERIFICATION",
+    }
+)
 
 
 def check_pre_filters(
@@ -144,7 +148,7 @@ def check_pre_filters(
 def resolve_tier(
     *,
     state: str,
-    dom_inspection: "DOMInspection | None" = None,
+    dom_inspection: DOMInspection | None = None,
     dom_inspection_enabled: bool = True,
     actions_in_state: int = 0,
     js_wallets_found: bool = False,
@@ -175,11 +179,7 @@ def resolve_tier(
         )
 
     # Tier 1: DOM Inspection
-    if (
-        dom_inspection_enabled
-        and state in DOM_INSPECTABLE_STATES
-        and dom_inspection is not None
-    ):
+    if dom_inspection_enabled and state in DOM_INSPECTABLE_STATES and dom_inspection is not None:
         if dom_inspection.outcome == "direct" and dom_inspection.direct_action is not None:
             return CascadeDecision(
                 tier=CascadeTier.DOM_DIRECT,

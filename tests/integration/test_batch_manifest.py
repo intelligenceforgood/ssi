@@ -9,8 +9,9 @@ Validates:
 from __future__ import annotations
 
 import json
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -88,15 +89,14 @@ class TestBatchManifestStructure:
     def test_labels_are_unique(self, manifest: dict[str, Any]) -> None:
         """All labels in the manifest are unique."""
         labels = [e["label"] for e in manifest["urls"]]
-        assert len(labels) == len(set(labels)), f"Duplicate labels: {[l for l in labels if labels.count(l) > 1]}"
+        dupes = [x for x in labels if labels.count(x) > 1]
+        assert len(labels) == len(set(labels)), f"Duplicate labels: {dupes}"
 
     def test_expected_categories_valid(self, manifest: dict[str, Any]) -> None:
         """Expected categories use the INTENT.* taxonomy format."""
         for entry in manifest["urls"]:
             cat = entry["expected_category"]
-            assert cat.startswith("INTENT."), (
-                f"Category '{cat}' for '{entry['label']}' does not match INTENT.* format"
-            )
+            assert cat.startswith("INTENT."), f"Category '{cat}' for '{entry['label']}' does not match INTENT.* format"
 
 
 # ---------------------------------------------------------------------------
@@ -145,11 +145,13 @@ class TestBatchPipelineSmoke:
                 scan_type="passive",
                 skip_screenshot=True,
             )
-            results.append({
-                "label": entry["label"],
-                "success": result.success,
-                "status": result.status.value,
-            })
+            results.append(
+                {
+                    "label": entry["label"],
+                    "success": result.success,
+                    "status": result.status.value,
+                }
+            )
 
         # All 3 should complete
         for r in results:

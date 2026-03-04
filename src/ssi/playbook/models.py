@@ -12,13 +12,13 @@ Ported from AWH's ``src/models/playbook.py`` with SSI-specific enhancements:
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, Field, field_validator
 
 
-class PlaybookStepType(str, Enum):
+class PlaybookStepType(StrEnum):
     """Action types a playbook step can perform."""
 
     CLICK = "click"
@@ -153,5 +153,5 @@ class PlaybookResult(BaseModel):
     fallback_reason: str = ""
     error: str = ""
     duration_sec: float = 0.0
-    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None

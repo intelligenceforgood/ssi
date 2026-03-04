@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ssi.browser.downloads import DownloadInterceptor
 from ssi.models.investigation import FormField, PageSnapshot
 
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
-    from playwright.sync_api import Page, Response as PWResponse
+    from playwright.sync_api import Page
+    from playwright.sync_api import Response as PWResponse
 
 logger = logging.getLogger(__name__)
 
@@ -218,8 +218,4 @@ def _extract_external_resources(page: Page, base_url: str) -> list[str]:
     }"""
     )
 
-    return [
-        r
-        for r in resources
-        if r and not r.startswith("data:") and urlparse(r).hostname != base_domain
-    ]
+    return [r for r in resources if r and not r.startswith("data:") and urlparse(r).hostname != base_domain]

@@ -298,7 +298,7 @@ def _inline_local_images(html_body: str, result: InvestigationResult) -> str:
             ext = path.suffix.lstrip(".")
             mime = f"image/{ext}" if ext in ("png", "jpeg", "jpg", "webp", "gif") else "image/png"
             logger.debug("Inlined local image %s (%d KB)", path.name, path.stat().st_size // 1024)
-            return f'{prefix}data:{mime};base64,{b64}{suffix}'
+            return f"{prefix}data:{mime};base64,{b64}{suffix}"
         except Exception as exc:
             logger.warning("Failed to inline image %s: %s", src, exc)
             return match.group(0)
@@ -342,9 +342,7 @@ def _build_evidence_appendices_html(result: InvestigationResult) -> str:
     return "\n".join(sections)
 
 
-def _append_screenshot_appendix(
-    sections: list[str], result: InvestigationResult
-) -> None:
+def _append_screenshot_appendix(sections: list[str], result: InvestigationResult) -> None:
     """Appendix A: Full-page screenshot of the target site."""
     screenshot_path = _resolve_evidence_path(result, "screenshot_path")
     if not screenshot_path or not screenshot_path.exists():
@@ -363,9 +361,7 @@ def _append_screenshot_appendix(
     logger.debug("Added screenshot appendix (%s KB)", f"{size_kb:.0f}")
 
 
-def _append_dom_appendix(
-    sections: list[str], result: InvestigationResult
-) -> None:
+def _append_dom_appendix(sections: list[str], result: InvestigationResult) -> None:
     """Appendix B: DOM snapshot (HTML source at time of capture)."""
     dom_path = _resolve_evidence_path(result, "dom_snapshot_path")
     if not dom_path or not dom_path.exists():
@@ -376,10 +372,7 @@ def _append_dom_appendix(
         truncated = len(dom_lines) > 500
         if truncated:
             dom_lines = dom_lines[:500]
-            dom_text = (
-                "\n".join(dom_lines)
-                + "\n\n… (truncated — see dom_snapshot.html in evidence ZIP)"
-            )
+            dom_text = "\n".join(dom_lines) + "\n\n… (truncated — see dom_snapshot.html in evidence ZIP)"
         else:
             dom_text = "\n".join(dom_lines)
 
@@ -392,7 +385,7 @@ def _append_dom_appendix(
             f'{" (first 500 lines)" if truncated else ""}'
             "</em></p>"
             '<pre style="font-size:7pt; line-height:1.3; white-space:pre-wrap; '
-            'word-break:break-all; border:1px solid #ddd; padding:8pt; '
+            "word-break:break-all; border:1px solid #ddd; padding:8pt; "
             f'background:#fafafa;">{dom_escaped}</pre>'
             "</div>"
         )
@@ -401,9 +394,7 @@ def _append_dom_appendix(
         logger.warning("Failed to embed DOM snapshot in PDF: %s", exc)
 
 
-def _append_investigation_json_appendix(
-    sections: list[str], result: InvestigationResult
-) -> None:
+def _append_investigation_json_appendix(sections: list[str], result: InvestigationResult) -> None:
     """Appendix C: Investigation result serialized as JSON.
 
     Renders the full ``InvestigationResult`` model as pretty-printed JSON,
@@ -418,10 +409,7 @@ def _append_investigation_json_appendix(
         json_lines = json_str.splitlines()
         truncated = len(json_lines) > 300
         if truncated:
-            json_str = (
-                "\n".join(json_lines[:300])
-                + "\n\n… (truncated at 300 lines — full file in evidence ZIP)"
-            )
+            json_str = "\n".join(json_lines[:300]) + "\n\n… (truncated at 300 lines — full file in evidence ZIP)"
         json_escaped = html_mod.escape(json_str)
         sections.append(
             '<div style="page-break-before: always;" id="appendix-investigation-json">'
@@ -431,7 +419,7 @@ def _append_investigation_json_appendix(
             f'{" (first 300 lines)" if truncated else ""}'
             "</em></p>"
             '<pre style="font-size:7pt; line-height:1.3; white-space:pre-wrap; '
-            'word-break:break-all; border:1px solid #ddd; padding:8pt; '
+            "word-break:break-all; border:1px solid #ddd; padding:8pt; "
             f'background:#fafafa;">{json_escaped}</pre>'
             "</div>"
         )
@@ -440,9 +428,7 @@ def _append_investigation_json_appendix(
         logger.warning("Failed to build investigation JSON appendix: %s", exc)
 
 
-def _append_har_summary_appendix(
-    sections: list[str], result: InvestigationResult
-) -> None:
+def _append_har_summary_appendix(sections: list[str], result: InvestigationResult) -> None:
     """Appendix D: Network activity summary from HAR capture.
 
     Parses the HAR file and renders a summary table of HTTP requests
@@ -472,7 +458,7 @@ def _append_har_summary_appendix(
                 domain = "unknown"
             domains[domain] = domains.get(domain, 0) + 1
             size = resp.get("content", {}).get("size", 0)
-            if isinstance(size, (int, float)) and size > 0:
+            if isinstance(size, int | float) and size > 0:
                 total_size += int(size)
             status = resp.get("status", 0)
             if 200 <= status < 300:
@@ -491,7 +477,7 @@ def _append_har_summary_appendix(
             f"<tr><td><strong>Total Requests</strong></td><td>{len(entries)}</td></tr>"
             f"<tr><td><strong>Unique Domains</strong></td><td>{len(domains)}</td></tr>"
             f"<tr><td><strong>Total Response Size</strong></td><td>{total_size:,} bytes</td></tr>"
-            f'<tr><td><strong>Status Codes</strong></td><td>'
+            f"<tr><td><strong>Status Codes</strong></td><td>"
             f'{status_groups["2xx"]} ok, {status_groups["3xx"]} redirect, '
             f'{status_groups["4xx"]} client err, {status_groups["5xx"]} server err'
             f"</td></tr>"
@@ -500,13 +486,10 @@ def _append_har_summary_appendix(
         # Domain breakdown
         sorted_domains = sorted(domains.items(), key=lambda x: x[1], reverse=True)[:15]
         domain_rows = "".join(
-            f"<tr><td><code>{html_mod.escape(d)}</code></td><td>{c}</td></tr>"
-            for d, c in sorted_domains
+            f"<tr><td><code>{html_mod.escape(d)}</code></td><td>{c}</td></tr>" for d, c in sorted_domains
         )
         if len(domains) > 15:
-            domain_rows += (
-                f'<tr><td colspan="2"><em>… and {len(domains) - 15} more domains</em></td></tr>'
-            )
+            domain_rows += f'<tr><td colspan="2"><em>… and {len(domains) - 15} more domains</em></td></tr>'
 
         # First 30 request entries
         entry_rows = ""
@@ -518,7 +501,7 @@ def _append_har_summary_appendix(
             url_display = html_mod.escape(url_raw[:80] + ("…" if len(url_raw) > 80 else ""))
             status = resp.get("status", 0)
             size = resp.get("content", {}).get("size", 0)
-            size_display = f"{size:,}" if isinstance(size, (int, float)) and size > 0 else "—"
+            size_display = f"{size:,}" if isinstance(size, int | float) and size > 0 else "—"
             entry_rows += (
                 f"<tr><td>{i + 1}</td><td>{method}</td><td><code>{url_display}</code></td>"
                 f"<td>{status}</td><td>{size_display}</td></tr>"
@@ -534,11 +517,11 @@ def _append_har_summary_appendix(
             '<a class="back-link" href="#evidence-artifacts">↑ Back to Evidence Artifacts</a>'
             "<h2>Appendix D: Network Activity</h2>"
             "<p><em>Summary of HTTP traffic captured during investigation</em></p>"
-            f'<table><tr><th>Metric</th><th>Value</th></tr>{summary_rows}</table>'
+            f"<table><tr><th>Metric</th><th>Value</th></tr>{summary_rows}</table>"
             "<h3>Domains Contacted</h3>"
-            f'<table><tr><th>Domain</th><th>Requests</th></tr>{domain_rows}</table>'
+            f"<table><tr><th>Domain</th><th>Requests</th></tr>{domain_rows}</table>"
             "<h3>Request Log</h3>"
-            f'<table><tr><th>#</th><th>Method</th><th>URL</th><th>Status</th><th>Size</th></tr>'
+            f"<table><tr><th>#</th><th>Method</th><th>URL</th><th>Status</th><th>Size</th></tr>"
             f"{entry_rows}</table>"
             "</div>"
         )
@@ -547,9 +530,7 @@ def _append_har_summary_appendix(
         logger.warning("Failed to build HAR summary appendix: %s", exc)
 
 
-def _append_wallet_manifest_appendix(
-    sections: list[str], result: InvestigationResult
-) -> None:
+def _append_wallet_manifest_appendix(sections: list[str], result: InvestigationResult) -> None:
     """Appendix E: Wallet manifest (structured JSON of extracted wallets).
 
     Constructs the same manifest data that the orchestrator writes to
@@ -563,17 +544,19 @@ def _append_wallet_manifest_appendix(
         tokens: set[str] = set()
         wallets_data: list[dict[str, Any]] = []
         for w in result.wallets:
-            wallets_data.append({
-                "token_symbol": w.token_symbol,
-                "token_label": w.token_label,
-                "network_short": w.network_short,
-                "network_label": w.network_label,
-                "wallet_address": w.wallet_address,
-                "source": w.source,
-                "confidence": w.confidence,
-                "harvested_at": w.harvested_at.isoformat() if w.harvested_at else None,
-                "site_url": w.site_url,
-            })
+            wallets_data.append(
+                {
+                    "token_symbol": w.token_symbol,
+                    "token_label": w.token_label,
+                    "network_short": w.network_short,
+                    "network_label": w.network_label,
+                    "wallet_address": w.wallet_address,
+                    "source": w.source,
+                    "confidence": w.confidence,
+                    "harvested_at": w.harvested_at.isoformat() if w.harvested_at else None,
+                    "site_url": w.site_url,
+                }
+            )
             if w.network_short:
                 networks.add(w.network_short)
             if w.token_symbol:
@@ -596,7 +579,7 @@ def _append_wallet_manifest_appendix(
             f"<p><em>Machine-readable manifest of {len(wallets_data)} cryptocurrency wallet(s) "
             "extracted during investigation</em></p>"
             '<pre style="font-size:7pt; line-height:1.3; white-space:pre-wrap; '
-            'word-break:break-all; border:1px solid #ddd; padding:8pt; '
+            "word-break:break-all; border:1px solid #ddd; padding:8pt; "
             f'background:#fafafa;">{json_escaped}</pre>'
             "</div>"
         )
@@ -605,9 +588,7 @@ def _append_wallet_manifest_appendix(
         logger.warning("Failed to build wallet manifest appendix: %s", exc)
 
 
-def _append_stix_bundle_appendix(
-    sections: list[str], result: InvestigationResult
-) -> None:
+def _append_stix_bundle_appendix(sections: list[str], result: InvestigationResult) -> None:
     """Appendix F: STIX 2.1 IOC bundle for threat intelligence sharing.
 
     Generates the STIX bundle from the investigation result (same data
@@ -624,10 +605,7 @@ def _append_stix_bundle_appendix(
         json_lines = json_str.splitlines()
         truncated = len(json_lines) > 300
         if truncated:
-            json_str = (
-                "\n".join(json_lines[:300])
-                + "\n\n… (truncated at 300 lines — full file in evidence ZIP)"
-            )
+            json_str = "\n".join(json_lines[:300]) + "\n\n… (truncated at 300 lines — full file in evidence ZIP)"
         json_escaped = html_mod.escape(json_str)
         obj_count = len(bundle.get("objects", []))
         sections.append(
@@ -638,7 +616,7 @@ def _append_stix_bundle_appendix(
             f'{" (first 300 lines)" if truncated else ""}'
             "</em></p>"
             '<pre style="font-size:7pt; line-height:1.3; white-space:pre-wrap; '
-            'word-break:break-all; border:1px solid #ddd; padding:8pt; '
+            "word-break:break-all; border:1px solid #ddd; padding:8pt; "
             f'background:#fafafa;">{json_escaped}</pre>'
             "</div>"
         )

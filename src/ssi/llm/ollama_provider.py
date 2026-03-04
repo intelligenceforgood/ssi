@@ -264,11 +264,7 @@ class OllamaProvider(LLMProvider):
                 text_messages.append({"role": role, "content": content})
                 continue
 
-            text_parts = [
-                part["text"]
-                for part in content
-                if isinstance(part, dict) and part.get("type") == "text"
-            ]
+            text_parts = [part["text"] for part in content if isinstance(part, dict) and part.get("type") == "text"]
             text_messages.append({"role": role, "content": "\n".join(text_parts)})
 
         return text_messages

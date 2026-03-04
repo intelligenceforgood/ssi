@@ -13,7 +13,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -102,10 +102,8 @@ class WalletExporter:
         try:
             from openpyxl import Workbook
             from openpyxl.styles import Alignment, Font, PatternFill
-        except ImportError:
-            raise ImportError(
-                "openpyxl is required for XLSX export. Install with: pip install openpyxl"
-            )
+        except ImportError as exc:
+            raise ImportError("openpyxl is required for XLSX export. Install with: pip install openpyxl") from exc
 
         to_export, discarded = self._apply_filter(entries) if apply_filter else (entries, [])
 
@@ -213,7 +211,7 @@ class WalletExporter:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         data = {
-            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
             "count": len(to_export),
             "discarded_count": len(discarded),
             "entries": [e.to_dict() for e in to_export],

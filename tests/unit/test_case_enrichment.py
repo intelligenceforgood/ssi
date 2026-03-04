@@ -8,12 +8,10 @@ tables alongside the standard ``cases`` / ``scam_records`` /
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from uuid import uuid4
+from datetime import UTC, datetime
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy.orm import sessionmaker
 
 from ssi.models.investigation import (
     ChainOfCustody,
@@ -24,8 +22,7 @@ from ssi.models.investigation import (
     ThreatIndicator,
 )
 from ssi.store.scan_store import ScanStore
-from ssi.store.sql import CORE_METADATA, METADATA
-
+from ssi.store.sql import CORE_METADATA
 
 # ------------------------------------------------------------------
 # Fixtures
@@ -55,7 +52,7 @@ def _make_result(
     risk_score: float = 85.0,
 ) -> InvestigationResult:
     """Build a minimal ``InvestigationResult`` for testing."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     r = InvestigationResult(
         url=url,
         started_at=now,
@@ -110,8 +107,7 @@ class TestTimelineEvents:
             from ssi.store import sql as sql_schema
 
             rows = session.execute(
-                sa.select(sql_schema.review_actions)
-                .order_by(sql_schema.review_actions.c.created_at)
+                sa.select(sql_schema.review_actions).order_by(sql_schema.review_actions.c.created_at)
             ).fetchall()
 
         actions = [r._mapping["action"] for r in rows]
@@ -230,8 +226,7 @@ class TestEvidenceDocuments:
             from ssi.store import sql as sql_schema
 
             rows = session.execute(
-                sa.select(sql_schema.source_documents)
-                .where(sql_schema.source_documents.c.case_id == case_id)
+                sa.select(sql_schema.source_documents).where(sql_schema.source_documents.c.case_id == case_id)
             ).fetchall()
 
         assert len(rows) == 3
@@ -255,8 +250,7 @@ class TestEvidenceDocuments:
             from ssi.store import sql as sql_schema
 
             rows = session.execute(
-                sa.select(sql_schema.source_documents)
-                .where(sql_schema.source_documents.c.case_id == case_id)
+                sa.select(sql_schema.source_documents).where(sql_schema.source_documents.c.case_id == case_id)
             ).fetchall()
 
         assert len(rows) == 1
@@ -281,8 +275,7 @@ class TestEvidenceDocuments:
             from ssi.store import sql as sql_schema
 
             rows = session.execute(
-                sa.select(sql_schema.source_documents)
-                .where(sql_schema.source_documents.c.case_id == case_id)
+                sa.select(sql_schema.source_documents).where(sql_schema.source_documents.c.case_id == case_id)
             ).fetchall()
 
         mime_by_title = {r._mapping["title"]: r._mapping["mime_type"] for r in rows}
@@ -305,8 +298,7 @@ class TestEvidenceDocuments:
             from ssi.store import sql as sql_schema
 
             rows = session.execute(
-                sa.select(sql_schema.source_documents)
-                .where(sql_schema.source_documents.c.case_id == case_id)
+                sa.select(sql_schema.source_documents).where(sql_schema.source_documents.c.case_id == case_id)
             ).fetchall()
 
         titles = {r._mapping["title"] for r in rows}
@@ -325,8 +317,7 @@ class TestEvidenceDocuments:
             from ssi.store import sql as sql_schema
 
             rows = session.execute(
-                sa.select(sql_schema.source_documents)
-                .where(sql_schema.source_documents.c.case_id == case_id)
+                sa.select(sql_schema.source_documents).where(sql_schema.source_documents.c.case_id == case_id)
             ).fetchall()
 
         assert len(rows) == 0
@@ -344,8 +335,7 @@ class TestEvidenceDocuments:
             from ssi.store import sql as sql_schema
 
             rows = session.execute(
-                sa.select(sql_schema.source_documents)
-                .where(sql_schema.source_documents.c.case_id == case_id)
+                sa.select(sql_schema.source_documents).where(sql_schema.source_documents.c.case_id == case_id)
             ).fetchall()
 
         assert len(rows) == 1

@@ -10,14 +10,12 @@ Covers:
 
 from __future__ import annotations
 
-import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from ssi.exceptions import BudgetExceededError, ConcurrentLimitError
 from ssi.monitoring import CostTracker
-
 
 # ---------------------------------------------------------------------------
 # CostTracker.check_budget()
@@ -205,8 +203,8 @@ class TestConcurrentLimit:
         """Server returns 429 when max_concurrent_investigations is reached."""
         from fastapi.testclient import TestClient
 
-        from ssi.api.app import create_app
         from ssi.api import routes
+        from ssi.api.app import create_app
 
         # Save originals
         orig_active = routes._ACTIVE_INVESTIGATIONS

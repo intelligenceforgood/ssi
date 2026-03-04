@@ -18,8 +18,8 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
-class OutcomeType(str, Enum):
+class OutcomeType(StrEnum):
     """Possible outcomes of an investigation."""
 
     PENDING = "pending"
@@ -53,7 +53,7 @@ class FeedbackRecord(BaseModel):
     lea_partner: str = ""
     case_reference: str = ""
     submitted_by: str = ""
-    submitted_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    submitted_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -240,15 +240,11 @@ class FeedbackStore:
             conn.row_factory = sqlite3.Row
 
             # Count outcomes
-            rows = conn.execute(
-                "SELECT outcome, COUNT(*) as cnt FROM feedback GROUP BY outcome"
-            ).fetchall()
+            rows = conn.execute("SELECT outcome, COUNT(*) as cnt FROM feedback GROUP BY outcome").fetchall()
             outcomes = {row["outcome"]: row["cnt"] for row in rows}
 
             # Total unique investigations with feedback
-            total_inv = conn.execute(
-                "SELECT COUNT(DISTINCT investigation_id) as cnt FROM feedback"
-            ).fetchone()["cnt"]
+            total_inv = conn.execute("SELECT COUNT(DISTINCT investigation_id) as cnt FROM feedback").fetchone()["cnt"]
 
             # Total feedback records
             total_fb = conn.execute("SELECT COUNT(*) as cnt FROM feedback").fetchone()["cnt"]

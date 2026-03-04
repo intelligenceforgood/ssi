@@ -46,8 +46,10 @@ def _load_from_gcs(uri: str) -> list[dict[str, Any]]:
     """Load manifest from a GCS object (``gs://bucket/path.json``)."""
     try:
         from google.cloud import storage as gcs
-    except ImportError:
-        raise ImportError("google-cloud-storage is required for GCS manifests: pip install google-cloud-storage")
+    except ImportError as exc:
+        raise ImportError(
+            "google-cloud-storage is required for GCS manifests: pip install google-cloud-storage"
+        ) from exc
 
     parts = uri.replace("gs://", "").split("/", 1)
     if len(parts) != 2:

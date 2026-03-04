@@ -13,11 +13,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-import pytest
-
-from ssi.models.investigation import InvestigationResult, InvestigationStatus, ScanType
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -84,7 +79,7 @@ class TestScanCreationBranch:
         ):
             from ssi.investigator.orchestrator import run_investigation
 
-            result = run_investigation(
+            run_investigation(
                 url="https://scam.example.com",
                 output_dir=tmp_path,
                 scan_type="passive",

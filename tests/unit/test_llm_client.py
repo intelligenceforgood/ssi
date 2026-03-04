@@ -39,7 +39,12 @@ def sample_observation():
             InteractiveElement(index=1, tag="input", element_type="password", name="password", label="Password"),
             InteractiveElement(index=2, tag="button", element_type="submit", text="Sign In"),
         ],
-        dom_summary="Page: Login Page\nURL: https://example.com/login\n\n[0] <input> type=text name=username\n[1] <input> type=password name=password\n[2] <button> text=Sign In",
+        dom_summary=(
+            "Page: Login Page\nURL: https://example.com/login\n\n"
+            "[0] <input> type=text name=username\n"
+            "[1] <input> type=password name=password\n"
+            "[2] <button> text=Sign In"
+        ),
     )
 
 

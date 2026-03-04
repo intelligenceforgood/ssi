@@ -3,10 +3,10 @@
 Ported from AWH's state machine with SSI-specific extensions.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class AgentState(str, Enum):
+class AgentState(StrEnum):
     """High-level states in the scam site investigation workflow."""
 
     INIT = "INIT"

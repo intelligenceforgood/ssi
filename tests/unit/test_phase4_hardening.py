@@ -9,35 +9,15 @@ Covers:
 
 from __future__ import annotations
 
-import sqlite3
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from ssi.browser.captcha import (
-    CaptchaDetection,
-    CaptchaResult,
-    CaptchaStrategy,
-    CaptchaType,
-    detect_captcha,
-    handle_captcha,
-)
-from ssi.browser.stealth import (
-    BrowserProfile,
-    ProxyPool,
-    apply_stealth_scripts,
-    build_browser_profile,
-)
-from ssi.feedback import (
-    FeedbackRecord,
-    FeedbackStats,
-    FeedbackStore,
-    OutcomeType,
-)
-from ssi.monitoring import CostLineItem, CostSummary, CostTracker
-
+from ssi.browser.captcha import CaptchaDetection, CaptchaStrategy, CaptchaType, detect_captcha, handle_captcha
+from ssi.browser.stealth import ProxyPool, apply_stealth_scripts, build_browser_profile
+from ssi.feedback import FeedbackRecord, FeedbackStore, OutcomeType
+from ssi.monitoring import CostSummary, CostTracker
 
 # ===========================================================================
 # Stealth tests
@@ -136,7 +116,8 @@ class TestApplyStealthScripts:
         assert mock_page.add_init_script.call_count >= 1
         # The injected script should contain webdriver override
         script = mock_page.add_init_script.call_args_list[0][1].get(
-            "script", mock_page.add_init_script.call_args_list[0][0][0] if mock_page.add_init_script.call_args_list[0][0] else ""
+            "script",
+            mock_page.add_init_script.call_args_list[0][0][0] if mock_page.add_init_script.call_args_list[0][0] else "",
         )
         assert "webdriver" in script
 
@@ -216,9 +197,7 @@ class TestCaptchaHandling:
         mock_locator.count.return_value = 1
         mock_page.locator.return_value = mock_locator
         mock_page.inner_text.return_value = ""
-        result = handle_captcha(
-            mock_page, detection, strategy=CaptchaStrategy.WAIT, wait_seconds=0.1
-        )
+        result = handle_captcha(mock_page, detection, strategy=CaptchaStrategy.WAIT, wait_seconds=0.1)
         assert result.strategy_used == CaptchaStrategy.WAIT
 
     def test_not_detected_skips_handling(self):

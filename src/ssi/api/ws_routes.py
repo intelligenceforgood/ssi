@@ -17,12 +17,7 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
-from ssi.monitoring.event_bus import (
-    Event,
-    EventBus,
-    EventSink,
-    GuidanceCommand,
-)
+from ssi.monitoring.event_bus import Event, EventBus, EventSink, GuidanceCommand
 
 logger = logging.getLogger(__name__)
 
@@ -102,9 +97,7 @@ async def ws_monitor(websocket: WebSocket, investigation_id: str) -> None:
 
     bus = get_bus(investigation_id)
     if bus is None:
-        await websocket.send_json(
-            {"error": "investigation_not_found", "investigation_id": investigation_id}
-        )
+        await websocket.send_json({"error": "investigation_not_found", "investigation_id": investigation_id})
         await websocket.close(code=4004, reason="Investigation not found or not running")
         return
 
@@ -125,7 +118,7 @@ async def ws_monitor(websocket: WebSocket, investigation_id: str) -> None:
                 # Client may send pings; ignore anything that isn't a close
                 if msg == "ping":
                     await websocket.send_text("pong")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Send keepalive
                 try:
                     await websocket.send_json({"type": "keepalive"})
@@ -164,9 +157,7 @@ async def ws_guidance(websocket: WebSocket, investigation_id: str) -> None:
 
     bus = get_bus(investigation_id)
     if bus is None:
-        await websocket.send_json(
-            {"error": "investigation_not_found", "investigation_id": investigation_id}
-        )
+        await websocket.send_json({"error": "investigation_not_found", "investigation_id": investigation_id})
         await websocket.close(code=4004, reason="Investigation not found or not running")
         return
 
@@ -208,5 +199,3 @@ async def ws_guidance(websocket: WebSocket, investigation_id: str) -> None:
     finally:
         bus.remove_sink(sink)
         logger.debug("Guidance client disconnected from %s", investigation_id)
-
-

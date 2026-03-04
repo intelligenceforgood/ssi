@@ -12,9 +12,9 @@ References:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-from uuid import uuid5, NAMESPACE_URL
+from uuid import NAMESPACE_URL, uuid5
 
 from ssi.models.investigation import InvestigationResult, ThreatIndicator
 from ssi.wallet.models import WalletEntry
@@ -73,7 +73,7 @@ def _indicator_to_pattern(indicator: ThreatIndicator) -> str:
 
 def _create_indicator_sdo(indicator: ThreatIndicator, investigation_url: str) -> dict[str, Any]:
     """Create a STIX Indicator SDO from an SSI ThreatIndicator."""
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     pattern = _indicator_to_pattern(indicator)
     stix_id = _make_stix_id("indicator", f"{indicator.indicator_type}:{indicator.value}")
 
@@ -105,7 +105,7 @@ def _create_infrastructure_sdo(result: InvestigationResult) -> dict[str, Any] | 
     if not result.url:
         return None
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     stix_id = _make_stix_id("infrastructure", result.url)
 
     description_parts = [f"Scam site at {result.url}."]
@@ -143,7 +143,7 @@ def _create_wallet_indicator_sdo(wallet: WalletEntry, investigation_url: str) ->
     Returns:
         A STIX Indicator SDO dictionary.
     """
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     pattern = f"[cryptocurrency-wallet:address = '{wallet.wallet_address}']"
     stix_id = _make_stix_id("indicator", f"crypto_wallet:{wallet.wallet_address}")
 
@@ -185,7 +185,7 @@ def investigation_to_stix_bundle(result: InvestigationResult) -> dict[str, Any]:
     Returns:
         A STIX 2.1 bundle dictionary ready for JSON serialisation.
     """
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     objects: list[dict[str, Any]] = []
 
     # Identity for SSI as the source

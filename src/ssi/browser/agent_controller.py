@@ -21,7 +21,7 @@ import hashlib
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -32,12 +32,7 @@ from ssi.browser.zen_manager import ZenBrowserManager
 from ssi.identity.vault import IdentityVault
 from ssi.models.action import ActionType, AgentAction
 from ssi.models.results import SiteResult, SiteStatus, WalletEntry
-from ssi.models.states import (
-    AgentState,
-    MILESTONE_SCREENSHOT_STATES,
-    STATE_TRANSITIONS,
-    TERMINAL_STATES,
-)
+from ssi.models.states import MILESTONE_SCREENSHOT_STATES, STATE_TRANSITIONS, TERMINAL_STATES, AgentState
 from ssi.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -89,8 +84,7 @@ class EventCallback(Protocol):
     Implementations receive events as the agent progresses through states.
     """
 
-    async def on_event(self, event_type: str, data: dict[str, Any]) -> None:
-        ...
+    async def on_event(self, event_type: str, data: dict[str, Any]) -> None: ...
 
 
 class GuidanceResponse:
@@ -178,9 +172,7 @@ _STATE_SCAN_TYPE: dict[AgentState, str] = {
 }
 
 
-def _should_include_screenshot(
-    state: AgentState, actions_in_state: int, js_wallets_found: bool
-) -> bool:
+def _should_include_screenshot(state: AgentState, actions_in_state: int, js_wallets_found: bool) -> bool:
     """Decide whether to send a screenshot with the current LLM call.
 
     Text-only mode skips the image block for states where page text + extra_context
@@ -190,9 +182,7 @@ def _should_include_screenshot(
         return False
     if state == AgentState.SUBMIT_REGISTER and actions_in_state > 0:
         return False
-    if state == AgentState.EXTRACT_WALLETS and js_wallets_found:
-        return False
-    return True
+    return not (state == AgentState.EXTRACT_WALLETS and js_wallets_found)
 
 
 # ---------------------------------------------------------------------------
@@ -408,7 +398,7 @@ class AgentController:
             site_id=site_id,
             run_id=self._run_id,
             status=SiteStatus.IN_PROGRESS,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
 
         screenshots = ScreenshotStore(self._output_dir, site_id, self._run_id)
@@ -479,7 +469,7 @@ class AgentController:
             if result.status == SiteStatus.IN_PROGRESS:
                 logger.warning("Site %s ended IN_PROGRESS — marking NEEDS_MANUAL_REVIEW", url)
                 result.status = SiteStatus.NEEDS_MANUAL_REVIEW
-            result.completed_at = datetime.now(timezone.utc)
+            result.completed_at = datetime.now(UTC)
 
             # Populate token usage from the analyzer
             usage = self._analyzer.usage
@@ -525,9 +515,7 @@ class AgentController:
         agent_cfg = self._settings.agent
 
         # --- Check for stuck state ---
-        threshold = agent_cfg.stuck_thresholds.get(
-            self._state.value, agent_cfg.stuck_thresholds.get("DEFAULT", 15)
-        )
+        threshold = agent_cfg.stuck_thresholds.get(self._state.value, agent_cfg.stuck_thresholds.get("DEFAULT", 15))
         if self._actions_in_state >= threshold:
             guidance = await self._handle_stuck(url, result, screenshots)
             if guidance is None:
@@ -567,11 +555,14 @@ class AgentController:
             self._blank_page_retries += 1
             logger.info(
                 "Blank page in %s (attempt %d, text=%d, img=%d bytes)",
-                self._state.value, self._blank_page_retries,
-                len(page_text.strip()), screenshot_bytes,
+                self._state.value,
+                self._blank_page_retries,
+                len(page_text.strip()),
+                screenshot_bytes,
             )
             self._metrics.record_wasted_action(
-                self._state.value, "blank_page",
+                self._state.value,
+                "blank_page",
                 f"text={len(page_text.strip())} img={screenshot_bytes}",
             )
 
@@ -601,10 +592,14 @@ class AgentController:
             self._consecutive_dupes += 1
             logger.info(
                 "Duplicate screenshot in %s (hash=%s, streak=%d)",
-                self._state.value, screenshot_hash[:8], self._consecutive_dupes,
+                self._state.value,
+                screenshot_hash[:8],
+                self._consecutive_dupes,
             )
             self._metrics.record_wasted_action(
-                self._state.value, "duplicate_screenshot", f"hash={screenshot_hash[:12]}",
+                self._state.value,
+                "duplicate_screenshot",
+                f"hash={screenshot_hash[:12]}",
             )
             if self._consecutive_dupes >= 5:
                 self._actions_in_state = threshold  # Force stuck
@@ -683,11 +678,8 @@ class AgentController:
                 action_sig = f"{dom_action.action}:{dom_action.selector}:{dom_action.value}"
                 self._last_actions.append(action_sig)
                 if len(self._last_actions) > agent_cfg.max_repeated_actions:
-                    self._last_actions = self._last_actions[-agent_cfg.max_repeated_actions:]
-                if (
-                    len(self._last_actions) >= agent_cfg.max_repeated_actions
-                    and len(set(self._last_actions)) == 1
-                ):
+                    self._last_actions = self._last_actions[-agent_cfg.max_repeated_actions :]
+                if len(self._last_actions) >= agent_cfg.max_repeated_actions and len(set(self._last_actions)) == 1:
                     logger.warning("DOM direct: %d repeated actions — triggering stuck", agent_cfg.max_repeated_actions)
                     self._actions_in_state = threshold
                 await self._emit(
@@ -708,9 +700,7 @@ class AgentController:
             js_wallets = await self._try_js_wallet_extraction(url, result)
             if js_wallets:
                 self._js_wallets_found = True
-                wallet_summary = ", ".join(
-                    f"{w.token_symbol} ({w.wallet_address[:12]}...)" for w in js_wallets
-                )
+                wallet_summary = ", ".join(f"{w.token_symbol} ({w.wallet_address[:12]}...)" for w in js_wallets)
                 extra_context += (
                     f"\n\nJS PRE-EXTRACTION found {len(js_wallets)} wallet addresses: "
                     f"{wallet_summary}. "
@@ -722,13 +712,20 @@ class AgentController:
         # --- Batch path for FILL_REGISTER (first entry only) ---
         if self._state == AgentState.FILL_REGISTER and self._actions_in_state == 0:
             return await self._step_fill_register_batch(
-                url, result, screenshots,
-                screenshot_b64, page_text, page_url, extra_context,
+                url,
+                result,
+                screenshots,
+                screenshot_b64,
+                page_text,
+                page_url,
+                extra_context,
             )
 
         # --- Text-only mode for select states ---
         include_screenshot = _should_include_screenshot(
-            self._state, self._actions_in_state, self._js_wallets_found,
+            self._state,
+            self._actions_in_state,
+            self._js_wallets_found,
         )
 
         action = await self._analyzer.analyze_page(
@@ -754,7 +751,9 @@ class AgentController:
         )
         if action.action in (ActionType.WAIT, ActionType.STUCK):
             self._metrics.record_wasted_action(
-                self._state.value, action.action.value, action.reasoning[:100],
+                self._state.value,
+                action.action.value,
+                action.reasoning[:100],
             )
 
         self._actions_in_state += 1
@@ -774,11 +773,8 @@ class AgentController:
         action_sig = f"{action.action}:{action.selector}:{action.value}"
         self._last_actions.append(action_sig)
         if len(self._last_actions) > agent_cfg.max_repeated_actions:
-            self._last_actions = self._last_actions[-agent_cfg.max_repeated_actions:]
-        if (
-            len(self._last_actions) >= agent_cfg.max_repeated_actions
-            and len(set(self._last_actions)) == 1
-        ):
+            self._last_actions = self._last_actions[-agent_cfg.max_repeated_actions :]
+        if len(self._last_actions) >= agent_cfg.max_repeated_actions and len(set(self._last_actions)) == 1:
             logger.warning("Detected %d repeated actions — triggering stuck", agent_cfg.max_repeated_actions)
             self._actions_in_state = threshold
             return action
@@ -819,7 +815,9 @@ class AgentController:
                 if not success:
                     logger.warning("Click failed: %s", action.selector)
                     self._metrics.record_wasted_action(
-                        self._state.value, "failed_click", f"selector: {action.selector[:80]}",
+                        self._state.value,
+                        "failed_click",
+                        f"selector: {action.selector[:80]}",
                     )
                     self._last_screenshot_hash = ""
                     log_entry["success"] = False
@@ -851,10 +849,7 @@ class AgentController:
                     self._type_mismatches.append(mismatch_msg)
                     logger.warning("Type mismatch: %s", mismatch_msg)
                 else:
-                    self._type_mismatches = [
-                        m for m in self._type_mismatches
-                        if f'Field "{action.selector}"' not in m
-                    ]
+                    self._type_mismatches = [m for m in self._type_mismatches if f'Field "{action.selector}"' not in m]
 
             elif action.action == ActionType.SELECT:
                 success = await self._browser.select_option(action.selector, action.value)
@@ -961,7 +956,8 @@ class AgentController:
                                 result.wallets.append(entry)
                                 logger.info(
                                     "Wallet: %s %s — %s...",
-                                    entry.token_symbol, entry.network_short,
+                                    entry.token_symbol,
+                                    entry.network_short,
                                     entry.wallet_address[:20],
                                 )
                             except Exception as e:
@@ -1080,9 +1076,7 @@ class AgentController:
     ) -> str | None:
         """Handle stuck detection (threshold-based) — request human guidance."""
         agent_cfg = self._settings.agent
-        threshold = agent_cfg.stuck_thresholds.get(
-            self._state.value, agent_cfg.stuck_thresholds.get("DEFAULT", 15)
-        )
+        threshold = agent_cfg.stuck_thresholds.get(self._state.value, agent_cfg.stuck_thresholds.get("DEFAULT", 15))
 
         ss = ""
         try:
@@ -1223,7 +1217,13 @@ class AgentController:
         # Execute all batch fill actions
         logger.info("FILL_REGISTER batch: executing %d actions", len(batch_actions))
         for i, batch_action in enumerate(batch_actions):
-            logger.info("Batch %d/%d: %s → '%s'", i + 1, len(batch_actions), batch_action.selector[:50], (batch_action.value or "")[:40])
+            logger.info(
+                "Batch %d/%d: %s → '%s'",
+                i + 1,
+                len(batch_actions),
+                batch_action.selector[:50],
+                (batch_action.value or "")[:40],
+            )
             await self._execute_action(batch_action, url, result, screenshots)
             self._actions_in_state += 1
             self._total_actions += 1
@@ -1236,9 +1236,7 @@ class AgentController:
         verify_url = await self._browser.get_page_url()
 
         filled_summary = "; ".join(
-            f"{a.selector[:30]}='{(a.value or '')[:20]}'"
-            for a in batch_actions
-            if a.action == ActionType.TYPE
+            f"{a.selector[:30]}='{(a.value or '')[:20]}'" for a in batch_actions if a.action == ActionType.TYPE
         )
         verify_context = extra_context
         if filled_summary:
@@ -1304,17 +1302,21 @@ class AgentController:
         if inspection.outcome == "direct" and inspection.direct_action is not None:
             logger.info(
                 "DOM direct [%s] conf=%d: %s → '%s' (%.0fms)",
-                self._state.value, inspection.confidence,
+                self._state.value,
+                inspection.confidence,
                 inspection.direct_action.action.value,
-                inspection.direct_action.selector[:60], scan_ms,
+                inspection.direct_action.selector[:60],
+                scan_ms,
             )
             return inspection.direct_action, extra_context
 
         if inspection.outcome == "assisted" and inspection.context_summary:
             logger.info(
                 "DOM assisted [%s] conf=%d — injecting %d chars (%.0fms)",
-                self._state.value, inspection.confidence,
-                len(inspection.context_summary), scan_ms,
+                self._state.value,
+                inspection.confidence,
+                len(inspection.context_summary),
+                scan_ms,
             )
             extra_context += f"\n\n{inspection.context_summary}"
             return None, extra_context
@@ -1333,8 +1335,10 @@ class AgentController:
             if address and address not in {w.wallet_address for w in result.wallets}:
                 entry = WalletEntry(
                     site_url=url,
-                    token_label="", token_symbol="",
-                    network_label="", network_short="",
+                    token_label="",
+                    token_symbol="",
+                    network_label="",
+                    network_short="",
                     wallet_address=address,
                     run_id=self._run_id,
                     source="opportunistic",
@@ -1353,10 +1357,15 @@ class AgentController:
         current_address = await self._browser.extract_wallet_address()
         if current_address and current_address not in {w.wallet_address for w in result.wallets}:
             entry = WalletEntry(
-                site_url=url, token_label="", token_symbol="",
-                network_label="", network_short="",
-                wallet_address=current_address, run_id=self._run_id,
-                source="js", confidence=0.5,
+                site_url=url,
+                token_label="",
+                token_symbol="",
+                network_label="",
+                network_short="",
+                wallet_address=current_address,
+                run_id=self._run_id,
+                source="js",
+                confidence=0.5,
             )
             wallets_found.append(entry)
             result.wallets.append(entry)
@@ -1386,9 +1395,12 @@ class AgentController:
                     site_url=url,
                     token_label=option.get("label", ""),
                     token_symbol=option.get("symbol", ""),
-                    network_label="", network_short="",
-                    wallet_address=address, run_id=self._run_id,
-                    source="js", confidence=0.5,
+                    network_label="",
+                    network_short="",
+                    wallet_address=address,
+                    run_id=self._run_id,
+                    source="js",
+                    confidence=0.5,
                 )
                 wallets_found.append(entry)
                 result.wallets.append(entry)
@@ -1413,9 +1425,7 @@ class AgentController:
             if self._identity:
                 # In SUBMIT_REGISTER with a tracked password, omit password_variants
                 if self._state == AgentState.SUBMIT_REGISTER and self._last_password_used:
-                    identity_display = {
-                        k: v for k, v in self._identity.items() if k != "password_variants"
-                    }
+                    identity_display = {k: v for k, v in self._identity.items() if k != "password_variants"}
                 else:
                     identity_display = self._identity
                 parts.append(
@@ -1522,39 +1532,136 @@ class AgentController:
         is_blank = self._blank_page_retries > 0
 
         if is_blank:
-            suggestions.append({
-                "label": "Wait longer", "action": "continue", "value": "",
-                "description": "Page may still be loading",
-            })
+            suggestions.append(
+                {
+                    "label": "Wait longer",
+                    "action": "continue",
+                    "value": "",
+                    "description": "Page may still be loading",
+                }
+            )
 
         if self._state == AgentState.FIND_REGISTER:
             if is_blank:
-                suggestions.append({"label": "Reload page", "action": "goto", "value": "__current_url__", "description": "Reload the current page"})
+                suggestions.append(
+                    {
+                        "label": "Reload page",
+                        "action": "goto",
+                        "value": "__current_url__",
+                        "description": "Reload the current page",
+                    }
+                )
             else:
-                suggestions.append({"label": "Click Register/Sign Up", "action": "click", "value": "Register", "description": "Click a visible register link"})
-                suggestions.append({"label": "Go to /register", "action": "goto", "value": "/register", "description": "Navigate to /register"})
+                suggestions.append(
+                    {
+                        "label": "Click Register/Sign Up",
+                        "action": "click",
+                        "value": "Register",
+                        "description": "Click a visible register link",
+                    }
+                )
+                suggestions.append(
+                    {
+                        "label": "Go to /register",
+                        "action": "goto",
+                        "value": "/register",
+                        "description": "Navigate to /register",
+                    }
+                )
 
         elif self._state == AgentState.FILL_REGISTER:
             if self._type_mismatches:
-                suggestions.append({"label": "Retry form fill", "action": "continue", "value": "", "description": "Clear mismatched fields and retry"})
-            suggestions.append({"label": "Change password", "action": "continue", "value": "", "description": "Password may not meet requirements"})
-            suggestions.append({"label": "Skip optional fields", "action": "continue", "value": "", "description": "Submit with only required fields"})
+                suggestions.append(
+                    {
+                        "label": "Retry form fill",
+                        "action": "continue",
+                        "value": "",
+                        "description": "Clear mismatched fields and retry",
+                    }
+                )
+            suggestions.append(
+                {
+                    "label": "Change password",
+                    "action": "continue",
+                    "value": "",
+                    "description": "Password may not meet requirements",
+                }
+            )
+            suggestions.append(
+                {
+                    "label": "Skip optional fields",
+                    "action": "continue",
+                    "value": "",
+                    "description": "Submit with only required fields",
+                }
+            )
 
         elif self._state == AgentState.SUBMIT_REGISTER:
-            suggestions.append({"label": "Fix password", "action": "continue", "value": "", "description": "Password format may be wrong"})
-            suggestions.append({"label": "Fix email/username", "action": "continue", "value": "", "description": "Email or username may be invalid"})
-            suggestions.append({"label": "Click submit", "action": "click", "value": "Submit", "description": "Try clicking submit button"})
+            suggestions.append(
+                {
+                    "label": "Fix password",
+                    "action": "continue",
+                    "value": "",
+                    "description": "Password format may be wrong",
+                }
+            )
+            suggestions.append(
+                {
+                    "label": "Fix email/username",
+                    "action": "continue",
+                    "value": "",
+                    "description": "Email or username may be invalid",
+                }
+            )
+            suggestions.append(
+                {
+                    "label": "Click submit",
+                    "action": "click",
+                    "value": "Submit",
+                    "description": "Try clicking submit button",
+                }
+            )
 
         elif self._state == AgentState.NAVIGATE_DEPOSIT:
-            suggestions.append({"label": "Click Deposit", "action": "click", "value": "Deposit", "description": "Click a visible deposit button"})
-            suggestions.append({"label": "Go to /deposit", "action": "goto", "value": "/deposit", "description": "Navigate to /deposit"})
+            suggestions.append(
+                {
+                    "label": "Click Deposit",
+                    "action": "click",
+                    "value": "Deposit",
+                    "description": "Click a visible deposit button",
+                }
+            )
+            suggestions.append(
+                {
+                    "label": "Go to /deposit",
+                    "action": "goto",
+                    "value": "/deposit",
+                    "description": "Navigate to /deposit",
+                }
+            )
 
         elif self._state == AgentState.EXTRACT_WALLETS:
-            suggestions.append({"label": "Click next crypto tab", "action": "continue", "value": "", "description": "More crypto tabs may be available"})
-            suggestions.append({"label": "All wallets found", "action": "continue", "value": "", "description": "No more wallets — proceed"})
+            suggestions.append(
+                {
+                    "label": "Click next crypto tab",
+                    "action": "continue",
+                    "value": "",
+                    "description": "More crypto tabs may be available",
+                }
+            )
+            suggestions.append(
+                {
+                    "label": "All wallets found",
+                    "action": "continue",
+                    "value": "",
+                    "description": "No more wallets — proceed",
+                }
+            )
 
         if not any(s["label"] == "Wait longer" for s in suggestions):
-            suggestions.insert(0, {"label": "Continue", "action": "continue", "value": "", "description": "Let agent retry"})
+            suggestions.insert(
+                0, {"label": "Continue", "action": "continue", "value": "", "description": "Let agent retry"}
+            )
 
         return suggestions
 
@@ -1570,7 +1677,9 @@ class AgentController:
         if allowed and new_state not in allowed and new_state not in TERMINAL_STATES:
             logger.warning(
                 "Non-standard transition: %s → %s (allowed: %s)",
-                self._state.value, new_state.value, [s.value for s in allowed],
+                self._state.value,
+                new_state.value,
+                [s.value for s in allowed],
             )
         old_state = self._state.value
 

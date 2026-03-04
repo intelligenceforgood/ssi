@@ -2,21 +2,17 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock
 
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from ssi.browser.navigation import (
-    _build_fallback_chain,
-    resilient_goto,
-    resilient_reload,
-)
-
+from ssi.browser.navigation import _build_fallback_chain, resilient_goto, resilient_reload
 
 # ---------------------------------------------------------------------------
 # _build_fallback_chain
 # ---------------------------------------------------------------------------
+
 
 class TestBuildFallbackChain:
     """Tests for the internal fallback-chain builder."""
@@ -44,6 +40,7 @@ class TestBuildFallbackChain:
 # resilient_goto
 # ---------------------------------------------------------------------------
 
+
 class TestResilientGoto:
     """Tests for resilient_goto."""
 
@@ -56,9 +53,7 @@ class TestResilientGoto:
         result = resilient_goto(page, "https://example.com", timeout_ms=5000)
 
         assert result is sentinel
-        page.goto.assert_called_once_with(
-            "https://example.com", wait_until="networkidle", timeout=5000
-        )
+        page.goto.assert_called_once_with("https://example.com", wait_until="networkidle", timeout=5000)
 
     def test_fallback_to_load_on_timeout(self) -> None:
         """Falls back to 'load' when 'networkidle' times out."""
@@ -73,12 +68,8 @@ class TestResilientGoto:
 
         assert result is sentinel
         assert page.goto.call_count == 2
-        page.goto.assert_any_call(
-            "https://example.com", wait_until="networkidle", timeout=5000
-        )
-        page.goto.assert_any_call(
-            "https://example.com", wait_until="load", timeout=5000
-        )
+        page.goto.assert_any_call("https://example.com", wait_until="networkidle", timeout=5000)
+        page.goto.assert_any_call("https://example.com", wait_until="load", timeout=5000)
 
     def test_fallback_to_domcontentloaded(self) -> None:
         """Falls through networkidle → load → domcontentloaded."""
@@ -113,14 +104,13 @@ class TestResilientGoto:
 
         resilient_goto(page, "https://example.com", wait_until="load")
 
-        page.goto.assert_called_once_with(
-            "https://example.com", wait_until="load", timeout=30_000
-        )
+        page.goto.assert_called_once_with("https://example.com", wait_until="load", timeout=30_000)
 
 
 # ---------------------------------------------------------------------------
 # resilient_reload
 # ---------------------------------------------------------------------------
+
 
 class TestResilientReload:
     """Tests for resilient_reload."""
@@ -133,9 +123,7 @@ class TestResilientReload:
         result = resilient_reload(page, timeout_ms=10_000)
 
         assert result is sentinel
-        page.reload.assert_called_once_with(
-            wait_until="networkidle", timeout=10_000
-        )
+        page.reload.assert_called_once_with(wait_until="networkidle", timeout=10_000)
 
     def test_fallback_on_timeout(self) -> None:
         page = MagicMock()

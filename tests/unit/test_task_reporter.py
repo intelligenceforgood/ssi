@@ -9,10 +9,8 @@ Tests verify:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from ssi.worker.task_reporter import TaskStatusReporter
 
@@ -87,7 +85,7 @@ class TestTaskStatusReporterUpdate:
         call_kwargs = mock_store.update_scan.call_args
         assert call_kwargs.kwargs["status"] == "completed"
         assert isinstance(call_kwargs.kwargs["completed_at"], datetime)
-        assert call_kwargs.kwargs["completed_at"].tzinfo == timezone.utc
+        assert call_kwargs.kwargs["completed_at"].tzinfo == UTC
 
     @patch("ssi.worker.task_reporter.TaskStatusReporter._get_store")
     def test_maps_extra_fields_to_columns(self, mock_get_store: MagicMock) -> None:

@@ -96,7 +96,7 @@ class AgentLLMClient:
         self._system_prompt = _SYSTEM_PROMPT.format(max_steps=max_steps)
 
     @classmethod
-    def from_settings(cls) -> "AgentLLMClient":
+    def from_settings(cls) -> AgentLLMClient:
         """Create client from SSI settings."""
         from ssi.llm.factory import create_llm_provider
 

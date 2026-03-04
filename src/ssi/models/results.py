@@ -11,14 +11,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 from ssi.wallet.models import WalletEntry  # noqa: F401 — re-export
 
 
-class SiteStatus(str, Enum):
+class SiteStatus(StrEnum):
     """Outcome status for a processed site."""
 
     IN_PROGRESS = "in_progress"
@@ -55,7 +55,7 @@ class SiteResult:
     # Metrics summary from MetricsCollector
     metrics: dict[str, Any] = field(default_factory=dict)
 
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
 
     def to_dict(self) -> dict[str, Any]:

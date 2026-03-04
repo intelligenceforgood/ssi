@@ -11,10 +11,10 @@ import logging
 import mimetypes
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from google.cloud.storage import Blob, Bucket, Client
+    from google.cloud.storage import Bucket, Client
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +161,7 @@ class EvidenceStorageClient:
     # GCS internals
     # ------------------------------------------------------------------
 
-    def _get_gcs_client(self) -> "Client":
+    def _get_gcs_client(self) -> Client:
         """Lazily initialise the GCS client."""
         if self._gcs_client is None:
             from google.cloud.storage import Client
@@ -169,7 +169,7 @@ class EvidenceStorageClient:
             self._gcs_client = Client()
         return self._gcs_client
 
-    def _get_gcs_bucket(self) -> "Bucket":
+    def _get_gcs_bucket(self) -> Bucket:
         """Return the configured GCS bucket object."""
         if self._gcs_bucket is None:
             self._gcs_bucket = self._get_gcs_client().bucket(self.gcs_bucket_name)

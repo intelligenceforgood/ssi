@@ -7,6 +7,7 @@ reduce anti-bot detection risk.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import random
 import time
@@ -57,11 +58,8 @@ def execute_action(
 
     # Post-action delay + wait for network settle
     _human_delay(*_POST_ACTION_DELAY)
-    try:
+    with contextlib.suppress(Exception):
         page.wait_for_load_state("networkidle", timeout=10_000)
-    except Exception:
-        # Network may not fully settle — that's OK
-        pass
 
     return result
 
@@ -90,9 +88,7 @@ def _dispatch_action(
     return handler(page, action, elements)
 
 
-def _resolve_element(
-    elements: list[InteractiveElement], index: int | None
-) -> InteractiveElement | None:
+def _resolve_element(elements: list[InteractiveElement], index: int | None) -> InteractiveElement | None:
     """Find the element matching the given index."""
     if index is None:
         return None

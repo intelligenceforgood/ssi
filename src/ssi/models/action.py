@@ -4,12 +4,12 @@ Defines the structured action types returned by the LLM (or DOM inspector)
 and executed by the browser manager.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, field_validator
 
 
-class ActionType(str, Enum):
+class ActionType(StrEnum):
     """Browser actions the active agent can perform."""
 
     CLICK = "click"

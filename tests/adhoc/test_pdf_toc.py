@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 from ssi.models.investigation import InvestigationResult, PageSnapshot, ThreatIndicator
-from ssi.reports.pdf import render_pdf_report, _build_evidence_appendices_html
+from ssi.reports.pdf import _build_evidence_appendices_html, render_pdf_report
 from ssi.wallet.models import WalletEntry
 
 
@@ -19,20 +19,24 @@ def main() -> None:
     dom = Path(tmpdir) / "dom.html"
     dom.write_text("<html><body>Scam test page</body></html>")
     har = Path(tmpdir) / "network.har"
-    har.write_text(json.dumps({
-        "log": {
-            "entries": [
-                {
-                    "request": {"method": "GET", "url": "https://scam-test.example.com/"},
-                    "response": {"status": 200, "content": {"size": 4000, "mimeType": "text/html"}},
-                },
-                {
-                    "request": {"method": "GET", "url": "https://cdn.example.com/style.css"},
-                    "response": {"status": 200, "content": {"size": 1200, "mimeType": "text/css"}},
-                },
-            ]
-        }
-    }))
+    har.write_text(
+        json.dumps(
+            {
+                "log": {
+                    "entries": [
+                        {
+                            "request": {"method": "GET", "url": "https://scam-test.example.com/"},
+                            "response": {"status": 200, "content": {"size": 4000, "mimeType": "text/html"}},
+                        },
+                        {
+                            "request": {"method": "GET", "url": "https://cdn.example.com/style.css"},
+                            "response": {"status": 200, "content": {"size": 1200, "mimeType": "text/css"}},
+                        },
+                    ]
+                }
+            }
+        )
+    )
 
     result = InvestigationResult(
         url="https://scam-test.example.com",
@@ -85,6 +89,7 @@ def main() -> None:
 
     # Verify markdown template
     import markdown
+
     from ssi.reports import render_markdown_report
 
     md_content = render_markdown_report(result)
