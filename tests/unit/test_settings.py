@@ -45,7 +45,7 @@ class TestSettings:
         s = Settings()
         assert s.env == "dev"
         assert s.llm.provider == "gemini"
-        assert s.llm.model == "gemini-2.0-flash"
+        assert s.llm.model == "gemini-2.5-flash"
         assert s.llm.gcp_project == "i4g-dev"
 
     def test_dev_profile_gcs_evidence(self, monkeypatch):

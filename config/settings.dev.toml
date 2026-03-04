@@ -5,15 +5,15 @@
 gcp_location = "us-central1"
 gcp_project = "i4g-dev"
 max_tokens = 4096
-model = "gemini-2.0-flash"
+model = "gemini-2.5-flash"
 provider = "gemini"
 temperature = 0.1
 token_budget_per_session = 100000
 
 [browser]
-headless = true 
-record_har = true 
-record_video = false 
+headless = true
+record_har = true
+record_video = false
 sandbox = false # Cloud Run runs as root; Chromium needs --no-sandbox
 
 [zen_browser]

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 # Build the safety-settings list once — used by both chat() and chat_with_images().
-def _safety_off() -> list["types.SafetySetting"]:
+def _safety_off() -> list[types.SafetySetting]:
     """Return safety settings that disable all content filters.
 
     SSI is a fraud-analysis tool whose prompts inherently discuss scams,
@@ -37,10 +37,7 @@ def _safety_off() -> list["types.SafetySetting"]:
         types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
         types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
     ]
-    return [
-        types.SafetySetting(category=cat, threshold=types.HarmBlockThreshold.OFF)
-        for cat in categories
-    ]
+    return [types.SafetySetting(category=cat, threshold=types.HarmBlockThreshold.OFF) for cat in categories]
 
 
 class GeminiProvider(LLMProvider):
@@ -50,7 +47,7 @@ class GeminiProvider(LLMProvider):
     Google AI Studio with an API key for local development.
 
     Args:
-        model: Gemini model name (e.g. ``gemini-2.0-flash``).
+        model: Gemini model name (e.g. ``gemini-2.5-flash``).
         project: GCP project ID (Vertex AI only).
         location: GCP region (Vertex AI only, default ``us-central1``).
         temperature: Default sampling temperature.
@@ -59,7 +56,7 @@ class GeminiProvider(LLMProvider):
 
     def __init__(
         self,
-        model: str = "gemini-2.0-flash",
+        model: str = "gemini-2.5-flash",
         project: str = "",
         location: str = "us-central1",
         temperature: float = 0.1,
@@ -240,9 +237,7 @@ class GeminiProvider(LLMProvider):
             gemini_role = "model" if role == "assistant" else "user"
 
             if isinstance(raw_content, str):
-                contents.append(
-                    types.Content(role=gemini_role, parts=[types.Part.from_text(text=raw_content)])
-                )
+                contents.append(types.Content(role=gemini_role, parts=[types.Part.from_text(text=raw_content)]))
                 continue
 
             # Structured content parts (text + images)
@@ -282,7 +277,7 @@ class GeminiProvider(LLMProvider):
     # Shared response parsing
     # ------------------------------------------------------------------
 
-    def _parse_response(self, response: "types.GenerateContentResponse", elapsed_s: float) -> LLMResult:
+    def _parse_response(self, response: types.GenerateContentResponse, elapsed_s: float) -> LLMResult:
         """Extract text and usage from a ``GenerateContentResponse``."""
         latency_ms = elapsed_s * 1000
 
