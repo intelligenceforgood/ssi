@@ -15,14 +15,14 @@ if TYPE_CHECKING:
     from ssi.store.scan_store import ScanStore
 
 
-def build_scan_store(db_path: str | Path | None = None) -> "ScanStore":
+def build_scan_store(db_path: str | Path | None = None) -> ScanStore:
     """Factory: return a ``ScanStore`` honouring SSI settings.
 
     When *db_path* is ``None``, the store resolves its database from
     ``get_settings().storage.sqlite_path``. If the ``storage.backend``
-    is ``"core_api"`` (results pushed exclusively via ``CoreBridge``),
-    persistence is disabled and this still returns a working store
-    backed by the local SQLite path for caching.
+    is ``"core_api"``, persistence is disabled and this still
+    returns a working store backed by the local SQLite path for
+    caching.
 
     Args:
         db_path: Optional override for the SQLite file path.

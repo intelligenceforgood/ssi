@@ -7,7 +7,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -22,20 +22,24 @@ console = Console()
 @investigate_app.command("url")
 def investigate_url(
     url: str = typer.Argument(..., help="The suspicious URL to investigate."),
-    output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Directory for evidence output."),
-    scan_type: str = typer.Option(
+    output_dir: Path | None = typer.Option(None, "--output", "-o", help="Directory for evidence output."),  # noqa: B008
+    scan_type: str = typer.Option(  # noqa: B008
         "full",
         "--scan-type",
         "-t",
         help="Investigation mode: passive, active, or full.",
     ),
-    passive_only: bool = typer.Option(False, "--passive", help="Shorthand for --scan-type passive."),
-    skip_whois: bool = typer.Option(False, "--skip-whois", help="Skip WHOIS/RDAP lookup."),
-    skip_screenshot: bool = typer.Option(False, "--skip-screenshot", help="Skip screenshot capture."),
-    skip_virustotal: bool = typer.Option(False, "--skip-virustotal", help="Skip VirusTotal check."),
-    skip_urlscan: bool = typer.Option(False, "--skip-urlscan", help="Skip urlscan.io check."),
-    format: str = typer.Option("json", "--format", "-f", help="Output format: json, markdown, or both."),    push_to_core: bool = typer.Option(False, "--push-to-core", help="Push results to i4g core platform."),
-    trigger_dossier: bool = typer.Option(False, "--trigger-dossier", help="Queue dossier generation after push."),) -> None:
+    passive_only: bool = typer.Option(False, "--passive", help="Shorthand for --scan-type passive."),  # noqa: B008
+    skip_whois: bool = typer.Option(False, "--skip-whois", help="Skip WHOIS/RDAP lookup."),  # noqa: B008
+    skip_screenshot: bool = typer.Option(False, "--skip-screenshot", help="Skip screenshot capture."),  # noqa: B008
+    skip_virustotal: bool = typer.Option(False, "--skip-virustotal", help="Skip VirusTotal check."),  # noqa: B008
+    skip_urlscan: bool = typer.Option(False, "--skip-urlscan", help="Skip urlscan.io check."),  # noqa: B008
+    format: str = typer.Option("json", "--format", "-f", help="Output format: json, markdown, or both."),  # noqa: B008
+    push_to_core: bool = typer.Option(False, "--push-to-core", help="Push results to i4g core platform."),  # noqa: B008
+    trigger_dossier: bool = typer.Option(
+        False, "--trigger-dossier", help="Queue dossier generation after push."
+    ),  # noqa: B008
+) -> None:
     """Run a full investigation against a suspicious URL.
 
     Performs passive reconnaissance (WHOIS, DNS, SSL, GeoIP, technology fingerprinting,
@@ -81,7 +85,7 @@ def investigate_url(
                 from ssi.classification.labels import get_display_label
 
                 intents = ", ".join(
-                    f"{get_display_label(l.label)} ({l.confidence:.0%})" for l in result.taxonomy_result.intent
+                    f"{get_display_label(item.label)} ({item.confidence:.0%})" for item in result.taxonomy_result.intent
                 )
                 console.print(f"  Intent: {intents}")
         elif result.classification:
@@ -101,21 +105,27 @@ def investigate_url(
 
 @investigate_app.command("batch")
 def investigate_batch(
-    file: Path = typer.Argument(..., help="File with URLs (plain text) or JSON batch manifest."),
-    output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Directory for evidence output."),
-    scan_type: str = typer.Option(
+    file: Path = typer.Argument(..., help="File with URLs (plain text) or JSON batch manifest."),  # noqa: B008
+    output_dir: Path | None = typer.Option(None, "--output", "-o", help="Directory for evidence output."),  # noqa: B008
+    scan_type: str = typer.Option(  # noqa: B008
         "full",
         "--scan-type",
         "-t",
         help="Default investigation mode: passive, active, or full.",
     ),
-    passive_only: bool = typer.Option(False, "--passive", help="Shorthand for --scan-type passive."),
-    format: str = typer.Option("text", "--format", "-f", help="Input format: text (one URL per line) or json."),
-    concurrency: int = typer.Option(1, "--concurrency", "-c", min=1, max=10, help="Max concurrent investigations."),
-    events: bool = typer.Option(False, "--events", help="Emit JSONL events to stderr."),
-    resume: bool = typer.Option(False, "--resume", help="Skip URLs whose output dirs already exist."),
-    push_to_core: bool = typer.Option(False, "--push-to-core", help="Push results to i4g core platform."),
-    trigger_dossier: bool = typer.Option(False, "--trigger-dossier", help="Queue dossier generation after push."),
+    passive_only: bool = typer.Option(False, "--passive", help="Shorthand for --scan-type passive."),  # noqa: B008
+    format: str = typer.Option(
+        "text", "--format", "-f", help="Input format: text (one URL per line) or json."
+    ),  # noqa: B008
+    concurrency: int = typer.Option(
+        1, "--concurrency", "-c", min=1, max=10, help="Max concurrent investigations."
+    ),  # noqa: B008
+    events: bool = typer.Option(False, "--events", help="Emit JSONL events to stderr."),  # noqa: B008
+    resume: bool = typer.Option(False, "--resume", help="Skip URLs whose output dirs already exist."),  # noqa: B008
+    push_to_core: bool = typer.Option(False, "--push-to-core", help="Push results to i4g core platform."),  # noqa: B008
+    trigger_dossier: bool = typer.Option(
+        False, "--trigger-dossier", help="Queue dossier generation after push."
+    ),  # noqa: B008
 ) -> None:
     """Investigate multiple URLs from a file.
 
@@ -182,8 +192,8 @@ def investigate_batch(
 
 @investigate_app.command("list")
 def investigate_list(
-    domain: Optional[str] = typer.Option(None, "--domain", "-d", help="Filter by domain."),
-    status: Optional[str] = typer.Option(None, "--status", "-s", help="Filter by status (running, completed, failed)."),
+    domain: str | None = typer.Option(None, "--domain", "-d", help="Filter by domain."),
+    status: str | None = typer.Option(None, "--status", "-s", help="Filter by status (running, completed, failed)."),
     limit: int = typer.Option(20, "--limit", "-n", help="Max results to return."),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON."),
 ) -> None:
@@ -308,20 +318,22 @@ def investigate_show(
 
 
 def _push_to_core_cli(result: Any, *, trigger_dossier: bool = False) -> None:
-    """Push investigation results to the i4g core platform from the CLI."""
-    from ssi.integration.core_bridge import CoreBridge
+    """Create a case record in the shared database from a CLI investigation.
 
-    console.print("\n  Pushing to i4g core...", end="")
+    Uses ``ScanStore.create_case_record()`` for direct DB writes instead
+    of the removed HTTP bridge.
+    """
+    from ssi.store import build_scan_store
+
+    console.print("\n  Creating case record...", end="")
     try:
-        bridge = CoreBridge()
-        if not bridge.health_check():
-            console.print(" [yellow]core API not reachable — skipped[/yellow]")
-            bridge.close()
-            return
-
-        case_id = bridge.push_investigation(result, trigger_dossier=trigger_dossier)
-        bridge.close()
-        console.print(f" [green]✓[/green] case_id={case_id}")
+        scan_store = build_scan_store()
+        scan_id = str(getattr(result, "investigation_id", "") or "")
+        case_id = scan_store.create_case_record(scan_id=scan_id, result=result)
+        if case_id:
+            console.print(f" [green]✓[/green] case_id={case_id}")
+        else:
+            console.print(" [yellow]no case created[/yellow]")
     except Exception as e:
         console.print(f" [red]✗[/red] {e}")
 
@@ -380,11 +392,10 @@ def _run_single_investigation(
     effective_output.mkdir(parents=True, exist_ok=True)
 
     # Set up JSONL event sink if requested
-    event_sink = None
     if events:
         from ssi.monitoring.event_bus import JsonlSink
 
-        event_sink = JsonlSink(sys.stderr)
+        JsonlSink(sys.stderr)
 
     start = time.monotonic()
     try:
@@ -527,9 +538,8 @@ async def _run_batch_async(
 
 def _output_exists(url: str, output_dir: Path) -> bool:
     """Check if an output directory already exists for this URL (for --resume)."""
-    from urllib.parse import urlparse
-
     import re
+    from urllib.parse import urlparse
 
     domain = urlparse(url).netloc
     slug = re.sub(r"[^a-z0-9]+", "-", domain.lower()).strip("-")[:60]

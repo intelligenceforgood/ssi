@@ -96,7 +96,7 @@ def submit_investigation(req: InvestigateRequest, background_tasks: BackgroundTa
 
     global _ACTIVE_INVESTIGATIONS  # noqa: PLW0603
     with _ACTIVE_LOCK:
-        if _ACTIVE_INVESTIGATIONS >= max_concurrent:
+        if max_concurrent <= _ACTIVE_INVESTIGATIONS:
             raise HTTPException(
                 status_code=429,
                 detail=f"Server is at capacity ({max_concurrent} concurrent investigations). Try again later.",
@@ -161,7 +161,7 @@ def _run_investigation_task(task_id: str, req: InvestigateRequest) -> None:
         if req.push_to_core and result.success:
             _push_to_core(task_id, result, dataset=req.dataset, trigger_dossier=req.trigger_dossier)
 
-    except Exception as e:
+    except Exception:
         import logging
 
         logging.getLogger(__name__).exception("Investigation task %s failed", task_id)
@@ -179,8 +179,8 @@ def _push_to_core(task_id: str, result: Any, *, dataset: str, trigger_dossier: b
     """Create a case record directly in the shared DB and update the task store.
 
     Uses ``ScanStore.create_case_record()`` for a direct DB write so that
-    Cloud Run Services — which cannot authenticate through IAP — bypass the
-    deprecated ``CoreBridge`` HTTP path that used to fail silently with 403s.
+    Cloud Run Services share data with the analyst console without HTTP
+    round-trips.
 
     On success the ``case_id`` is stored in the task store so
     ``GET /investigate/{id}`` can return it immediately.

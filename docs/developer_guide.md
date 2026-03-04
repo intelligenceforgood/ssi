@@ -184,8 +184,8 @@ ssi/
 │   ├── feedback/                # Investigation outcome tracking
 │   ├── identity/                # Synthetic PII generation
 │   │   └── vault.py             # Faker-based identity vault
-│   ├── integration/             # i4g core platform bridge
-│   │   └── core_bridge.py       # HTTP push to core API
+│   ├── integration/             # i4g core platform integration
+│   │   └── __init__.py          # Package docstring (direct DB writes)
 │   ├── investigator/            # Investigation orchestration
 │   │   └── orchestrator.py      # Main pipeline (passive → agent → package)
 │   ├── llm/                     # LLM provider abstraction layer

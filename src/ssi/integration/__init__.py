@@ -1,9 +1,6 @@
 """Integration bridge between SSI and i4g core platform.
 
-Provides functions to push SSI investigation results into the core
-platform's case management, evidence storage, and dossier pipeline.
+SSI writes investigation results directly to the shared database via
+``ScanStore.create_case_record()``.  The legacy HTTP bridge was removed
+in March 2026 — all persistence now uses direct SQL writes.
 """
-
-from ssi.integration.core_bridge import CoreBridge
-
-__all__ = ["CoreBridge"]

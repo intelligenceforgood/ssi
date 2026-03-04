@@ -717,9 +717,8 @@ class ScanStore:
         so the analyst console can display the case.  Also links the
         scan row's ``case_id`` foreign key.
 
-        This is the direct-DB replacement for the HTTP-based
-        ``CoreBridge.push_investigation()`` path, which requires
-        IAP auth that Cloud Run Jobs don't have.
+        Writes directly to the shared database so both SSI and
+        the analyst console see the same data without HTTP round-trips.
 
         Args:
             scan_id: The investigation's scan_id (links ``site_scans``).
@@ -902,9 +901,8 @@ class ScanStore:
     ) -> int:
         """Insert ``review_actions`` rows for SSI investigation milestones.
 
-        Mirrors the events produced by
-        ``CoreBridge._create_timeline_events`` but writes directly to
-        the database instead of calling the core HTTP API.
+        Writes investigation milestone events directly to the
+        database as ``review_actions`` rows.
 
         Args:
             session: Active SQLAlchemy session.
