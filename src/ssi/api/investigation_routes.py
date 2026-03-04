@@ -200,6 +200,11 @@ def _run_investigation(
             bus.emit_sync("error", {"message": "Investigation failed with an exception"})
         reporter.update(status="failed", message="Investigation failed with an exception")
     finally:
+        # Stop the guidance poll relay (if attached).
+        guidance_relay = getattr(bus, "_guidance_relay", None)
+        if guidance_relay is not None:
+            guidance_relay.stop()
+
         # Flush any buffered HTTP events before unregistering the bus.
         if bus is not None:
             from contextlib import suppress
@@ -394,6 +399,26 @@ async def trigger_investigate(
             effective_url,
             bool(integration.core_events_url),
         )
+
+    # Phase 3C: attach guidance poll relay when cloud guidance is enabled.
+    # The relay polls core for analyst guidance commands and feeds them
+    # into the EventBus guidance/interject queues.
+    if integration.guidance_poll_enabled and integration.core_api_url:
+        from ssi.monitoring.guidance_poll_handler import GuidancePollRelay
+
+        guidance_relay = GuidancePollRelay(
+            bus=bus,
+            core_api_url=integration.core_api_url,
+            scan_id=scan_id,
+            core_api_key=integration.core_api_key,
+            core_events_url=integration.core_events_url,
+            poll_interval=integration.guidance_poll_interval,
+        )
+        bus._guidance_relay = guidance_relay  # type: ignore[attr-defined]
+        # Start polling on the current event loop. The relay will stop
+        # automatically once the EventBus is unregistered.
+        guidance_relay.start()
+        logger.info("GuidancePollRelay attached for scan %s", scan_id)
 
     background_tasks.add_task(
         _run_investigation,

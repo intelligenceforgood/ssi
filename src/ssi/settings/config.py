@@ -354,6 +354,12 @@ class IntegrationSettings(BaseSettings):
     core_events_url: str = ""
     # Screenshot throttling: emit at most one screenshot every N seconds.
     screenshot_interval_seconds: float = 3.0
+    # Phase 3C: poll core for analyst guidance commands during cloud investigations.
+    # When true, a background relay polls GET /events/ssi/{scan_id}/guidance/pending
+    # and feeds received commands into the EventBus guidance/interject queues.
+    guidance_poll_enabled: bool = False
+    # Polling interval (seconds) for the guidance relay.
+    guidance_poll_interval: float = 2.0
 
 
 class TaskStoreSettings(BaseSettings):
