@@ -362,6 +362,30 @@ class IntegrationSettings(BaseSettings):
     guidance_poll_interval: float = 2.0
 
 
+class ECXSettings(BaseSettings):
+    """eCrimeX (eCX) integration configuration.
+
+    Controls API access to the APWG eCrimeX data clearinghouse for enrichment
+    (Phase 1), submission (Phase 2), and polling (Phase 3).
+
+    The default ``base_url`` points to the eCX sandbox environment.  Set
+    ``SSI_ECX__BASE_URL`` to ``https://ecrimex.net/api/v1`` for production.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="SSI_ECX__")
+
+    enabled: bool = False
+    api_key: str = ""
+    base_url: str = "https://sandbox.ecx2.ecrimex.net/api/v1"
+    attribution: str = "IntelligenceForGood"
+    timeout: int = 15
+    enrichment_enabled: bool = True
+    submission_enabled: bool = False
+    auto_submit_threshold: int = 80
+    cache_ttl_hours: int = 24
+    currency_map_path: str = "config/ecx_currency_map.json"
+
+
 class TaskStoreSettings(BaseSettings):
     """Task status store configuration.
 
@@ -414,6 +438,7 @@ class Settings(BaseSettings):
     playbook: PlaybookSettings = Field(default_factory=PlaybookSettings)
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
     task_store: TaskStoreSettings = Field(default_factory=TaskStoreSettings)
+    ecx: ECXSettings = Field(default_factory=ECXSettings)
 
     @model_validator(mode="before")
     @classmethod
@@ -456,6 +481,8 @@ class Settings(BaseSettings):
                 self.storage.db_url = f"sqlite:///{root / rel}"
         if not Path(self.playbook.playbook_dir).is_absolute():
             self.playbook.playbook_dir = str(root / self.playbook.playbook_dir)
+        if not Path(self.ecx.currency_map_path).is_absolute():
+            self.ecx.currency_map_path = str(root / self.ecx.currency_map_path)
         return self
 
 

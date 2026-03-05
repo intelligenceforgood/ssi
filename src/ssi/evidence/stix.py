@@ -293,5 +293,90 @@ def investigation_to_stix_bundle(result: InvestigationResult) -> dict[str, Any]:
         "objects": objects,
     }
 
+    # Add eCX external references as STIX Indicator SDOs
+    _add_ecx_indicators(result, objects, infra, seen_values, now)
+
     logger.info("STIX bundle: %d objects for investigation %s", len(objects), result.investigation_id)
     return bundle
+
+
+def _add_ecx_indicators(
+    result: InvestigationResult,
+    objects: list[dict[str, Any]],
+    infra: dict[str, Any] | None,
+    seen_values: set[str],
+    now: str,
+) -> None:
+    """Append eCX-sourced indicator SDOs with external references to *objects*.
+
+    Args:
+        result: Investigation result with eCX enrichment.
+        objects: STIX bundle objects list (mutated in place).
+        infra: Infrastructure SDO for relationship targets.
+        seen_values: Already-emitted indicator keys.
+        now: ISO timestamp for STIX objects.
+    """
+    ecx = result.ecx_enrichment
+    if not ecx or not ecx.has_hits:
+        return
+
+    for phish in ecx.phish_hits:
+        key = f"url:{phish.url}"
+        if key in seen_values:
+            continue
+        seen_values.add(key)
+        stix_id = _make_stix_id("indicator", f"ecx_phish:{phish.id}")
+        sdo: dict[str, Any] = {
+            "type": "indicator",
+            "spec_version": "2.1",
+            "id": stix_id,
+            "created": now,
+            "modified": now,
+            "name": f"Phishing URL (eCX #{phish.id}): {phish.url[:80]}",
+            "description": f"eCX phish record — brand: {phish.brand}, confidence: {phish.confidence}.",
+            "indicator_types": ["malicious-activity"],
+            "pattern": f"[url:value = '{phish.url}']",
+            "pattern_type": "stix",
+            "valid_from": now,
+            "labels": ["phishing", "ecrimex"],
+            "external_references": [
+                {
+                    "source_name": "eCrimeX (APWG)",
+                    "external_id": str(phish.id),
+                    "description": f"eCX phish record, confidence={phish.confidence}",
+                }
+            ],
+        }
+        objects.append(sdo)
+
+    for crypto in ecx.crypto_hits:
+        key = f"crypto_wallet:{crypto.address}"
+        if key in seen_values:
+            continue
+        seen_values.add(key)
+        stix_id = _make_stix_id("indicator", f"ecx_crypto:{crypto.id}")
+        sdo = {
+            "type": "indicator",
+            "spec_version": "2.1",
+            "id": stix_id,
+            "created": now,
+            "modified": now,
+            "name": f"Criminal wallet (eCX #{crypto.id}): {crypto.address[:20]}…",
+            "description": (
+                f"eCX cryptocurrency record — currency: {crypto.currency}, "
+                f"crime category: {crypto.crime_category}, confidence: {crypto.confidence}."
+            ),
+            "indicator_types": ["malicious-activity"],
+            "pattern": f"[cryptocurrency-wallet:address = '{crypto.address}']",
+            "pattern_type": "stix",
+            "valid_from": now,
+            "labels": ["cryptocurrency", "ecrimex"],
+            "external_references": [
+                {
+                    "source_name": "eCrimeX (APWG)",
+                    "external_id": str(crypto.id),
+                    "description": f"eCX crypto record, crime_category={crypto.crime_category}",
+                }
+            ],
+        }
+        objects.append(sdo)

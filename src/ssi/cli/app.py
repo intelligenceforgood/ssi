@@ -11,6 +11,7 @@ from pathlib import Path
 
 import typer
 
+from ssi.cli.ecx_cmd import ecx_app
 from ssi.cli.investigate import investigate_app
 from ssi.cli.job import job_app
 from ssi.cli.playbook_cmd import playbook_app
@@ -36,6 +37,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 app = typer.Typer(add_completion=True, help=APP_HELP)
 
+app.add_typer(ecx_app, name="ecx")
 app.add_typer(investigate_app, name="investigate")
 app.add_typer(job_app, name="job")
 app.add_typer(playbook_app, name="playbook")

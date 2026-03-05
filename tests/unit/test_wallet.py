@@ -222,6 +222,10 @@ TEST_ADDRESSES = {
     "XRP": "rN7n3473SaZBCG4dFL83w7p1W9cgZw6ihn",
     "ADA": "addr1qxy2k5c2n5qfr9z7a3ggvpfqfkpt78eczgmd26qjqkmpv6lr2g7v5sc3wg0nfgfsdvlaq5g82dkyn5wsydmhqgemhd6kxegraeel",
     "SOL": "7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2",
+    "XLM": "GBCFAMVYPJTXHVWRFP7VO6F4QRHJORQER43ODMFSPBWMGRPCN3MCXLKL",
+    "XMR": "48cKkVXqQVSEXmuB4N1ynKe3cWCCEfJyNU3Uv9GodVo2SkhmnhdeYCPNCXoS8wh9HiEVqJCkMRzqLCAMkR3y5jx1NVQikYA",
+    "ZEC": "t1Rv4exT7bqhZogi2UrQN9MR2fmeNABF8FG",
+    "XZC": "aEr3vBGowDF8k6ATCP1xTAiidPnKbEbH77",
 }
 
 
@@ -253,12 +257,40 @@ class TestWalletPatterns:
         assert result == TEST_ADDRESSES["ADA"]
 
     def test_sol_address(self) -> None:
-        result = WALLET_PATTERNS[6].match(TEST_ADDRESSES["SOL"])
+        result = WALLET_PATTERNS[8].match(TEST_ADDRESSES["SOL"])
         assert result == TEST_ADDRESSES["SOL"]
 
     def test_no_match_for_garbage(self) -> None:
         for pat in WALLET_PATTERNS:
             assert pat.match("hello world") is None
+
+    def test_xlm_address(self) -> None:
+        """Stellar Lumens address should match the XLM pattern."""
+        validator = WalletValidator()
+        result = validator.validate(TEST_ADDRESSES["XLM"])
+        assert result is not None
+        assert result.symbol == "XLM"
+
+    def test_xmr_address(self) -> None:
+        """Monero address should match the XMR pattern."""
+        validator = WalletValidator()
+        result = validator.validate(TEST_ADDRESSES["XMR"])
+        assert result is not None
+        assert result.symbol == "XMR"
+
+    def test_zec_address(self) -> None:
+        """Zcash transparent address should match the ZEC pattern."""
+        validator = WalletValidator()
+        result = validator.validate(TEST_ADDRESSES["ZEC"])
+        assert result is not None
+        assert result.symbol == "ZEC"
+
+    def test_xzc_address(self) -> None:
+        """Firo (Zcoin) address should match the XZC pattern."""
+        validator = WalletValidator()
+        result = validator.validate(TEST_ADDRESSES["XZC"])
+        assert result is not None
+        assert result.symbol == "XZC"
 
     def test_find_all_multiple_eth(self) -> None:
         text = "Send to 0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe or 0x1234567890123456789012345678901234567890"
@@ -345,8 +377,8 @@ class TestAllowlistFilter:
     def setup_method(self) -> None:
         self.filt = AllowlistFilter.default()
 
-    def test_default_has_26_pairs(self) -> None:
-        assert self.filt.count == 26
+    def test_default_has_30_pairs(self) -> None:
+        assert self.filt.count == 30
 
     def test_allowed_symbols(self) -> None:
         symbols = self.filt.allowed_symbols
@@ -403,7 +435,7 @@ class TestAllowlistFilter:
 
     def test_summary(self) -> None:
         s = self.filt.summary()
-        assert s["total_pairs"] == 26
+        assert s["total_pairs"] == 30
         assert len(s["symbols"]) > 0
 
     def test_from_json(self, tmp_path: Path) -> None:
@@ -424,11 +456,11 @@ class TestLoadAllowlist:
 
     def test_none_returns_defaults(self) -> None:
         pairs = load_allowlist(None)
-        assert len(pairs) == 26
+        assert len(pairs) == 30
 
     def test_missing_file_returns_defaults(self) -> None:
         pairs = load_allowlist("/nonexistent/path.json")
-        assert len(pairs) == 26
+        assert len(pairs) == 30
 
     def test_valid_json(self, tmp_path: Path) -> None:
         data = {
@@ -446,7 +478,7 @@ class TestLoadAllowlist:
         p = tmp_path / "bad.json"
         p.write_text("{invalid json")
         pairs = load_allowlist(p)
-        assert len(pairs) == 26
+        assert len(pairs) == 30
 
 
 # ---------------------------------------------------------------------------

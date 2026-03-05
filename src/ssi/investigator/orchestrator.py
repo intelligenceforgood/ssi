@@ -235,6 +235,12 @@ def run_investigation(
         elif run_passive and not skip_urlscan and not domain_resolves:
             logger.info("Skipping urlscan.io — domain does not resolve")
 
+        # eCrimeX enrichment (Phase 1: passive recon)
+        if run_passive:
+            _run_ecx_enrichment(url, domain_slug, result)
+            if cost_tracker:
+                cost_tracker.record_api_call("ecrimex")
+
         # Budget gate: abort before expensive active phase if already over budget.
         if cost_tracker:
             cost_tracker.check_budget()
@@ -304,6 +310,10 @@ def run_investigation(
                 )
             _emit("log", {"message": f"Found {wallet_count} wallet address(es)"})
 
+        # eCX wallet enrichment (post-extraction, cross-reference with community)
+        if result.wallets:
+            _run_ecx_wallet_enrichment(result)
+
         # --- Phase 3: Classification & Evidence Packaging -------------------
         logger.info("Phase 3: Classification & evidence packaging")
         _emit("state_changed", {"new_state": "CLASSIFICATION", "message": "Classifying fraud type"})
@@ -358,6 +368,16 @@ def run_investigation(
             scan_store.persist_investigation(scan_id, result, site_result=site_result)
         except Exception:
             logger.warning("Failed to persist scan %s to store", scan_id, exc_info=True)
+        # Cache eCX enrichment results
+        if result.ecx_enrichment and result.ecx_enrichment.query_count > 0:
+            try:
+                from ssi.settings import get_settings
+
+                ttl = get_settings().ecx.cache_ttl_hours
+                cached = scan_store.cache_ecx_enrichments(scan_id, result.ecx_enrichment, cache_ttl_hours=ttl)
+                logger.info("Cached %d eCX enrichment rows for scan %s", cached, scan_id)
+            except Exception:
+                logger.warning("Failed to cache eCX enrichments for scan %s", scan_id, exc_info=True)
 
     return result
 
@@ -958,6 +978,67 @@ def _to_download_artifacts(raw_downloads: list[dict]) -> list[DownloadArtifact]:
             )
         )
     return artifacts
+
+
+def _run_ecx_enrichment(url: str, domain: str, result: InvestigationResult) -> None:
+    """Run eCrimeX enrichment during passive recon.
+
+    Queries phish, malicious-domain, malicious-ip, and report-phishing
+    modules.  Results are stored on ``result.ecx_enrichment``.
+    """
+    from ssi.osint.ecrimex import enrich_from_ecx
+
+    try:
+        # Extract primary IP from DNS A records if available
+        primary_ip: str | None = None
+        if result.dns and result.dns.a:
+            primary_ip = result.dns.a[0]
+
+        ecx_result = enrich_from_ecx(url, domain, ip=primary_ip)
+        if ecx_result.has_hits:
+            result.ecx_enrichment = ecx_result
+            logger.info(
+                "eCX enrichment: %d total hits (%d phish, %d domain, %d IP, %d report-phishing)",
+                ecx_result.total_hits,
+                len(ecx_result.phish_hits),
+                len(ecx_result.domain_hits),
+                len(ecx_result.ip_hits),
+                len(ecx_result.report_phishing_hits),
+            )
+        elif ecx_result.query_count > 0:
+            # Store even empty results so the report shows the section was queried
+            result.ecx_enrichment = ecx_result
+    except Exception as e:
+        logger.warning("eCX enrichment failed: %s", e)
+
+
+def _run_ecx_wallet_enrichment(result: InvestigationResult) -> None:
+    """Cross-reference extracted wallets against eCX cryptocurrency-addresses.
+
+    Appends crypto hits to the existing ``ecx_enrichment`` on the result.
+    """
+    from ssi.osint.ecrimex import enrich_wallets_from_ecx
+
+    try:
+        wallet_hits = enrich_wallets_from_ecx(result.wallets)
+        if wallet_hits:
+            from ssi.models.ecx import ECXEnrichmentResult
+
+            if result.ecx_enrichment is None:
+                result.ecx_enrichment = ECXEnrichmentResult()
+
+            # Merge crypto hits into the enrichment result
+            for records in wallet_hits.values():
+                result.ecx_enrichment.crypto_hits.extend(records)
+            result.ecx_enrichment.total_hits += sum(len(r) for r in wallet_hits.values())
+            result.ecx_enrichment.query_count += len(result.wallets)
+            logger.info(
+                "eCX wallet enrichment: %d/%d addresses had community hits",
+                len(wallet_hits),
+                len(result.wallets),
+            )
+    except Exception as e:
+        logger.warning("eCX wallet enrichment failed: %s", e)
 
 
 def _domain_slug(url: str, max_length: int = 60) -> str:

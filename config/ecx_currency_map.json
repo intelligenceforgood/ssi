@@ -1,0 +1,24 @@
+{
+  "_comment": "Maps SSI token_symbol to eCrimeX currency codes. eCX uses a closed enum of currency values.",
+  "_version": "1.0.0",
+  "mappings": {
+    "BTC": "bitcoin",
+    "ETH": "ethereum",
+    "LTC": "litecoin",
+    "BCH": "bitcoin-cash",
+    "XRP": "ripple",
+    "DOGE": "dogecoin",
+    "DASH": "dash",
+    "TRX": "tron",
+    "SOL": "solana",
+    "ADA": "cardano",
+    "USDT": "tether",
+    "USDC": "usd-coin",
+    "BNB": "binance-coin",
+    "MATIC": "polygon",
+    "XLM": "stellar",
+    "XMR": "monero",
+    "ZEC": "zcash",
+    "XZC": "firo"
+  }
+}

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from ssi.api.ecx_routes import ecx_router
 from ssi.api.investigation_routes import investigation_router
 from ssi.api.playbook_routes import playbook_router
 from ssi.api.routes import router
@@ -39,6 +40,7 @@ def create_app() -> FastAPI:
     )
 
     application.include_router(router)
+    application.include_router(ecx_router)
     application.include_router(investigation_router)
     application.include_router(playbook_router)
     application.include_router(ws_router)

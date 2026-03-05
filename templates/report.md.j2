@@ -240,6 +240,75 @@ This is the PII the site attempts to collect:
 {% endif %}
 
 ---
+{% if result.ecx_enrichment and result.ecx_enrichment.query_count > 0 %}
+
+## Community Intelligence (eCrimeX)
+
+> Queried {{ result.ecx_enrichment.query_count }} eCX module(s) in {{ "%.0f" | format(result.ecx_enrichment.query_duration_ms) }}ms — {{ result.ecx_enrichment.total_hits }} total hit(s).
+{% if result.ecx_enrichment.phish_hits %}
+
+### Phishing Records ({{ result.ecx_enrichment.phish_hits | length }})
+
+| eCX ID | URL | Brand | Confidence | Status | First Seen |
+|--------|-----|-------|------------|--------|------------|
+{% for p in result.ecx_enrichment.phish_hits %}
+| {{ p.id }} | `{{ p.url[:80] }}` | {{ p.brand or "—" }} | {{ p.confidence }} | {{ p.status or "—" }} | {{ p.discovered_at or "—" }} |
+{% endfor %}
+{% endif %}
+{% if result.ecx_enrichment.domain_hits %}
+
+### Malicious Domain Records ({{ result.ecx_enrichment.domain_hits | length }})
+
+| eCX ID | Domain | Classification | Confidence | Status |
+|--------|--------|----------------|------------|--------|
+{% for d in result.ecx_enrichment.domain_hits %}
+| {{ d.id }} | {{ d.domain }} | {{ d.classification or "—" }} | {{ d.confidence }} | {{ d.status or "—" }} |
+{% endfor %}
+{% endif %}
+{% if result.ecx_enrichment.ip_hits %}
+
+### Malicious IP Records ({{ result.ecx_enrichment.ip_hits | length }})
+
+| eCX ID | IP | Brand | Description | Confidence | ASN |
+|--------|----|-------|-------------|------------|-----|
+{% for i in result.ecx_enrichment.ip_hits %}
+| {{ i.id }} | {{ i.ip }} | {{ i.brand or "—" }} | {{ i.description[:60] if i.description else "—" }} | {{ i.confidence }} | {{ i.asn | join(', ') if i.asn else "—" }} |
+{% endfor %}
+{% endif %}
+{% if result.ecx_enrichment.crypto_hits %}
+
+### Cryptocurrency Address Records ({{ result.ecx_enrichment.crypto_hits | length }})
+
+| eCX ID | Currency | Address | Crime Category | Source | Confidence |
+|--------|----------|---------|----------------|--------|------------|
+{% for c in result.ecx_enrichment.crypto_hits %}
+| {{ c.id }} | {{ c.currency }} | `{{ c.address[:20] }}...` | {{ c.crime_category or "—" }} | {{ c.source or "—" }} | {{ c.confidence }} |
+{% endfor %}
+{% endif %}
+{% if result.ecx_enrichment.report_phishing_hits %}
+
+### Report-Phishing Email Archive ({{ result.ecx_enrichment.report_phishing_hits | length }})
+
+| # | Subject | Sender |
+|---|---------|--------|
+{% for rp in result.ecx_enrichment.report_phishing_hits %}
+| {{ loop.index }} | {{ rp.get('email_subject', '—')[:60] }} | {{ rp.get('sender_email', '—') }} |
+{% endfor %}
+{% endif %}
+{% if result.ecx_enrichment.errors %}
+
+### eCX Query Errors
+
+{% for err in result.ecx_enrichment.errors %}
+- {{ err }}
+{% endfor %}
+{% endif %}
+
+> **Source:** [eCrimeX](https://ecrimex.net) — APWG eCrime eXchange data clearinghouse.
+> Community intelligence enrichment provided under APWG data sharing agreement.
+{% endif %}
+
+---
 {% if result.threat_indicators %}
 
 ## Threat Indicators ({{ result.threat_indicators | length }})
@@ -264,10 +333,14 @@ This is the PII the site attempts to collect:
 | **Unique Networks** | {{ networks | join(', ') }} |
 | **Unique Tokens** | {{ tokens | join(', ') }} |
 
-| # | Token | Network | Wallet Address | Source | Confidence |
-|---|-------|---------|----------------|--------|------------|
+{% set ecx_wallet_addrs = [] %}
+{% if result.ecx_enrichment and result.ecx_enrichment.crypto_hits %}
+{% set ecx_wallet_addrs = result.ecx_enrichment.crypto_hits | map(attribute='address') | list %}
+{% endif %}
+| # | Token | Network | Wallet Address | Source | Confidence | eCX Status |
+|---|-------|---------|----------------|--------|------------|------------|
 {% for w in result.wallets %}
-| {{ loop.index }} | {{ w.token_symbol }} | {{ w.network_short }} | `{{ w.wallet_address }}` | {{ w.source }} | {{ "%.0f" | format(w.confidence * 100) }}% |
+| {{ loop.index }} | {{ w.token_symbol }} | {{ w.network_short }} | `{{ w.wallet_address }}` | {{ w.source }} | {{ "%.0f" | format(w.confidence * 100) }}% | {{ "Known ✓" if w.wallet_address in ecx_wallet_addrs else "—" }} |
 {% endfor %}
 
 > **Note:** These wallet addresses were extracted from the scam site during investigation.

@@ -98,6 +98,18 @@ budget_per_investigation_usd = 1.0
 enabled = true
 warn_at_pct = 80
 
+[ecx]
+api_key = ""
+attribution = "IntelligenceForGood"
+auto_submit_threshold = 80
+base_url = "https://sandbox.ecx2.ecrimex.net/api/v1"
+cache_ttl_hours = 24
+currency_map_path = "config/ecx_currency_map.json"
+enabled = false
+enrichment_enabled = true
+submission_enabled = false
+timeout = 15
+
 [storage]
 backend = "sqlite"
 persist_scans = true

@@ -157,6 +157,30 @@
       "token_symbol": "USDC",
       "network": "Solana SPL",
       "network_short": "sol"
+    },
+    {
+      "token_name": "Stellar Lumens",
+      "token_symbol": "XLM",
+      "network": "Stellar",
+      "network_short": "xlm"
+    },
+    {
+      "token_name": "Monero",
+      "token_symbol": "XMR",
+      "network": "Monero",
+      "network_short": "xmr"
+    },
+    {
+      "token_name": "Zcash",
+      "token_symbol": "ZEC",
+      "network": "Zcash",
+      "network_short": "zec"
+    },
+    {
+      "token_name": "Firo",
+      "token_symbol": "XZC",
+      "network": "Firo",
+      "network_short": "xzc"
     }
   ]
 }

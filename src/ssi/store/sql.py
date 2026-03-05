@@ -146,6 +146,27 @@ sa.Index("idx_pii_exposures_field_type", pii_exposures.c.field_type)
 
 
 # ---------------------------------------------------------------------------
+# ecx_enrichments — eCrimeX enrichment cache per investigation
+# ---------------------------------------------------------------------------
+
+ecx_enrichments = sa.Table(
+    "ecx_enrichments",
+    METADATA,
+    sa.Column("enrichment_id", UUID_TYPE, primary_key=True),
+    sa.Column("scan_id", UUID_TYPE, nullable=False),
+    sa.Column("query_module", sa.Text(), nullable=False),
+    sa.Column("query_value", sa.Text(), nullable=False),
+    sa.Column("ecx_record_id", sa.Integer(), nullable=True),
+    sa.Column("ecx_data", JSON_TYPE, nullable=True),
+    sa.Column("confidence", sa.Integer(), nullable=True),
+    sa.Column("queried_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+    sa.Column("cache_expires_at", TIMESTAMP, nullable=True),
+)
+sa.Index("idx_ecx_enrichments_scan_id", ecx_enrichments.c.scan_id)
+sa.Index("idx_ecx_enrichments_query", ecx_enrichments.c.query_module, ecx_enrichments.c.query_value)
+
+
+# ---------------------------------------------------------------------------
 # Core platform tables (read/write via the shared Cloud SQL database)
 #
 # These are NOT managed by SSI — they are owned by core's Alembic

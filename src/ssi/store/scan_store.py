@@ -12,7 +12,7 @@ can persist an entire investigation result in one call.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -699,6 +699,173 @@ class ScanStore:
             len(pii_dicts),
             agent_step_count,
         )
+
+    # ------------------------------------------------------------------
+    # ecx_enrichments cache
+    # ------------------------------------------------------------------
+
+    def cache_ecx_enrichments(
+        self,
+        scan_id: str,
+        enrichment_result: Any,
+        *,
+        cache_ttl_hours: int = 24,
+    ) -> int:
+        """Persist eCX enrichment records for cache and audit.
+
+        One row per (query_module, query_value) pair from the enrichment result.
+        Rows include the full eCX record data as JSON so cached results can be
+        returned without another eCX API call.
+
+        Args:
+            scan_id: The investigation scan ID.
+            enrichment_result: An ``ECXEnrichmentResult`` instance.
+            cache_ttl_hours: Hours until cache entries expire.
+
+        Returns:
+            Number of rows inserted.
+        """
+        from ssi.models.ecx import ECXEnrichmentResult
+
+        if not isinstance(enrichment_result, ECXEnrichmentResult):
+            return 0
+        if not enrichment_result.has_hits and not enrichment_result.query_count:
+            return 0
+
+        now = datetime.now(UTC)
+        expires_at = now + timedelta(hours=cache_ttl_hours)
+        rows: list[dict[str, Any]] = []
+
+        for hit in enrichment_result.phish_hits:
+            rows.append(
+                {
+                    "enrichment_id": str(uuid4()),
+                    "scan_id": scan_id,
+                    "query_module": "phish",
+                    "query_value": hit.url,
+                    "ecx_record_id": hit.id,
+                    "ecx_data": hit.model_dump(mode="json"),
+                    "confidence": hit.confidence,
+                    "queried_at": now,
+                    "cache_expires_at": expires_at,
+                }
+            )
+
+        for hit in enrichment_result.domain_hits:
+            rows.append(
+                {
+                    "enrichment_id": str(uuid4()),
+                    "scan_id": scan_id,
+                    "query_module": "malicious-domain",
+                    "query_value": hit.domain,
+                    "ecx_record_id": hit.id,
+                    "ecx_data": hit.model_dump(mode="json"),
+                    "confidence": hit.confidence,
+                    "queried_at": now,
+                    "cache_expires_at": expires_at,
+                }
+            )
+
+        for hit in enrichment_result.ip_hits:
+            rows.append(
+                {
+                    "enrichment_id": str(uuid4()),
+                    "scan_id": scan_id,
+                    "query_module": "malicious-ip",
+                    "query_value": hit.ip,
+                    "ecx_record_id": hit.id,
+                    "ecx_data": hit.model_dump(mode="json"),
+                    "confidence": hit.confidence,
+                    "queried_at": now,
+                    "cache_expires_at": expires_at,
+                }
+            )
+
+        for hit in enrichment_result.crypto_hits:
+            rows.append(
+                {
+                    "enrichment_id": str(uuid4()),
+                    "scan_id": scan_id,
+                    "query_module": "cryptocurrency-addresses",
+                    "query_value": hit.address,
+                    "ecx_record_id": hit.id,
+                    "ecx_data": hit.model_dump(mode="json"),
+                    "confidence": hit.confidence,
+                    "queried_at": now,
+                    "cache_expires_at": expires_at,
+                }
+            )
+
+        if not rows:
+            return 0
+
+        with self._session_factory() as session:
+            session.execute(sa.insert(sql_schema.ecx_enrichments), rows)
+            session.commit()
+        logger.debug("Cached %d eCX enrichment rows for scan %s", len(rows), scan_id)
+        return len(rows)
+
+    def get_ecx_enrichments(self, scan_id: str) -> list[dict[str, Any]]:
+        """Return all cached eCX enrichment rows for a scan.
+
+        Args:
+            scan_id: The investigation scan ID.
+
+        Returns:
+            List of enrichment row dicts.
+        """
+        with self._session_factory() as session:
+            rows = session.execute(
+                sa.select(sql_schema.ecx_enrichments)
+                .where(sql_schema.ecx_enrichments.c.scan_id == scan_id)
+                .order_by(sql_schema.ecx_enrichments.c.queried_at)
+            ).all()
+        result = []
+        for r in rows:
+            d = dict(r._mapping)
+            for key, val in d.items():
+                if hasattr(val, "isoformat"):
+                    d[key] = val.isoformat()
+            result.append(d)
+        return result
+
+    def get_cached_ecx_enrichment(
+        self,
+        query_module: str,
+        query_value: str,
+    ) -> list[dict[str, Any]]:
+        """Return unexpired cached eCX enrichment rows for a specific query.
+
+        Args:
+            query_module: eCX module name (e.g. ``"phish"``).
+            query_value: Query value (URL, domain, IP, or address).
+
+        Returns:
+            List of cached enrichment rows that have not expired.
+        """
+        now = datetime.now(UTC)
+        tbl = sql_schema.ecx_enrichments
+        with self._session_factory() as session:
+            rows = session.execute(
+                sa.select(tbl)
+                .where(tbl.c.query_module == query_module)
+                .where(tbl.c.query_value == query_value)
+                .where(
+                    sa.or_(
+                        tbl.c.cache_expires_at.is_(None),
+                        tbl.c.cache_expires_at > now,
+                    )
+                )
+                .order_by(tbl.c.queried_at.desc())
+            ).all()
+        result = []
+        for r in rows:
+            d = dict(r._mapping)
+            for key, val in d.items():
+                if hasattr(val, "isoformat"):
+                    d[key] = val.isoformat()
+            result.append(d)
+        return result
 
     # ------------------------------------------------------------------
     # Case creation (direct DB write to core's tables)

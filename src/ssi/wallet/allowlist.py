@@ -20,11 +20,11 @@ from ssi.wallet.models import TokenNetwork, WalletEntry
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Default allowlist (compiled from AWH's 26-pair list)
+# Default allowlist (compiled from AWH's 30-pair list)
 # ---------------------------------------------------------------------------
 
 DEFAULT_TOKEN_NETWORKS: list[TokenNetwork] = [
-    # Native tokens (12)
+    # Native tokens (16)
     TokenNetwork(token_name="BNB", token_symbol="BNB", network="BNB Smart Chain BEP-20", network_short="bsc"),
     TokenNetwork(token_name="Bitcoin", token_symbol="BTC", network="Bitcoin", network_short="btc"),
     TokenNetwork(token_name="Bitcoin Cash", token_symbol="BCH", network="Bitcoin Cash", network_short="bch"),
@@ -32,11 +32,15 @@ DEFAULT_TOKEN_NETWORKS: list[TokenNetwork] = [
     TokenNetwork(token_name="Dash", token_symbol="DASH", network="Dash", network_short="dash"),
     TokenNetwork(token_name="Dogecoin", token_symbol="DOGE", network="Dogecoin", network_short="doge"),
     TokenNetwork(token_name="Ethereum", token_symbol="ETH", network="Ethereum", network_short="eth"),
+    TokenNetwork(token_name="Firo", token_symbol="XZC", network="Firo", network_short="xzc"),
     TokenNetwork(token_name="Litecoin", token_symbol="LTC", network="Litecoin", network_short="ltc"),
+    TokenNetwork(token_name="Monero", token_symbol="XMR", network="Monero", network_short="xmr"),
     TokenNetwork(token_name="Polygon", token_symbol="MATIC", network="Polygon PoS", network_short="matic"),
     TokenNetwork(token_name="Ripple", token_symbol="XRP", network="XRP Ledger", network_short="xrp"),
     TokenNetwork(token_name="Solana", token_symbol="SOL", network="Solana", network_short="sol"),
+    TokenNetwork(token_name="Stellar Lumens", token_symbol="XLM", network="Stellar", network_short="xlm"),
     TokenNetwork(token_name="Tron", token_symbol="TRX", network="Tron", network_short="trx"),
+    TokenNetwork(token_name="Zcash", token_symbol="ZEC", network="Zcash", network_short="zec"),
     # USDT variants (8)
     TokenNetwork(token_name="Tether", token_symbol="USDT", network="Arbitrum One", network_short="arb"),
     TokenNetwork(token_name="Tether", token_symbol="USDT", network="Avalanche C-Chain", network_short="avax"),

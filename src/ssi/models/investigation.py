@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from ssi.models.ecx import ECXEnrichmentResult
 from ssi.wallet.models import WalletEntry
 
 
@@ -271,6 +272,7 @@ class InvestigationResult(BaseModel):
     wallets: list[WalletEntry] = Field(default_factory=list)
     pii_exposures: list[PiiExposure] = Field(default_factory=list)
     downloads: list[DownloadArtifact] = Field(default_factory=list)
+    ecx_enrichment: ECXEnrichmentResult | None = None
 
     # Evidence packaging
     evidence_zip_path: str = ""

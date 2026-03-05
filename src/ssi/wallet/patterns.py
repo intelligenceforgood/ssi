@@ -118,6 +118,24 @@ WALLET_PATTERNS: list[WalletPattern] = [
         max_length=130,
         example="addr1qxy2k5c2n5qfr9z7a3ggvpfqfkpt78eczgmd26qjqkmpv6lr2g7v5sc3wg0nfgfsdvlaq5g82dkyn5wsydmhqgemhd6kxegraeel",
     ),
+    # -- Specific-prefix patterns that would otherwise be swallowed by the
+    #    broad Solana/Base58 pattern below.  Order matters: more specific first.
+    WalletPattern(
+        name="Zcash (transparent)",
+        symbol="ZEC",
+        regex=re.compile(r"\b(t1[a-km-zA-HJ-NP-Z1-9]{33})\b"),
+        min_length=35,
+        max_length=35,
+        example="t1Rv4exT7bqhZogi2UrQN9MR2fmeNABF8FG",
+    ),
+    WalletPattern(
+        name="Firo (Zcoin)",
+        symbol="XZC",
+        regex=re.compile(r"\b(a[1-9A-HJ-NP-Za-km-z]{33})\b"),
+        min_length=34,
+        max_length=34,
+        example="aEr3vBGowDF8k6ATCP1xTAiidPnKbEbH77",
+    ),
     WalletPattern(
         name="Solana / Generic Base58",
         symbol="SOL",
@@ -166,6 +184,23 @@ WALLET_PATTERNS: list[WalletPattern] = [
         min_length=34,
         max_length=34,
         example="XyzSoLEFQxWUf3Nd83s2GFzTpPNdBi7LGG",
+    ),
+    # -- eCX-aligned additions (privacy / less-common chains) --
+    WalletPattern(
+        name="Stellar Lumens",
+        symbol="XLM",
+        regex=re.compile(r"\b(G[A-Z2-7]{55})\b"),
+        min_length=56,
+        max_length=56,
+        example="GBCFAMVYPJTXHVWRFP7VO6F4QRHJORQER43ODMFSPBWMGRPCN3MCXLKL",
+    ),
+    WalletPattern(
+        name="Monero",
+        symbol="XMR",
+        regex=re.compile(r"\b(4[0-9AB][1-9A-HJ-NP-Za-km-z]{93})\b"),
+        min_length=95,
+        max_length=95,
+        example="48cKkVXqQVSEXmuB4N1ynKe3cWCCEfJyNU3Uv9GodVo2SkhmnhdeYCPNCXoS8wh9HiEVqJCkMRzqLCAMkR3y5jx1NVQikYA",
     ),
 ]
 
