@@ -57,6 +57,10 @@ budget_per_investigation_usd = 2.0
 enabled = true
 warn_at_pct = 80
 
+[ecx]
+api_key = "QEB7ENnT4drdgh0jt72hXXC4R2TaQFHasY8HXCdB"
+enabled = true
+
 [storage]
 backend = "cloudsql"
 cloudsql_enable_iam_auth = true

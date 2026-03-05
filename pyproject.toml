@@ -75,6 +75,7 @@ packages = ["src/ssi"]
 [tool.pytest.ini_options]
 markers = [
   "integration: marks tests as integration tests (slower, may need network)",
+  "ecx_sandbox: marks tests requiring a live eCX sandbox API key (SSI_ECX__API_KEY)",
 ]
 testpaths = ["tests"]
 

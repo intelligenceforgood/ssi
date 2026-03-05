@@ -510,8 +510,10 @@ class TestCurrencyMap:
 class TestECXSettings:
     """ECX settings env-var overrides."""
 
-    def test_default_disabled(self) -> None:
-        """ECX should be disabled by default."""
+    def test_default_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ECX should be disabled when no overrides set enabled=true."""
+        monkeypatch.setenv("SSI_ECX__ENABLED", "false")
+        monkeypatch.delenv("SSI_ECX__API_KEY", raising=False)
         from ssi.settings.config import Settings
 
         s = Settings()
