@@ -379,6 +379,11 @@ def run_investigation(
             except Exception:
                 logger.warning("Failed to cache eCX enrichments for scan %s", scan_id, exc_info=True)
 
+    # eCX submission (Phase 2) — runs after persistence so findings are already
+    # on disk regardless of outcome.  Failures here must never propagate.
+    if scan_id and result.success:
+        _run_ecx_submission(scan_id, result)
+
     return result
 
 
@@ -994,7 +999,11 @@ def _run_ecx_enrichment(url: str, domain: str, result: InvestigationResult) -> N
         if result.dns and result.dns.a:
             primary_ip = result.dns.a[0]
 
-        ecx_result = enrich_from_ecx(url, domain, ip=primary_ip)
+        # Use the real hostname (with dots) for the domain search, not the
+        # filesystem-safe slug (which replaces dots with hyphens and would
+        # never match anything in the ECX malicious-domain index).
+        hostname = urlparse(url if "://" in url else f"https://{url}").hostname or domain
+        ecx_result = enrich_from_ecx(url, hostname, ip=primary_ip)
         if ecx_result.has_hits:
             result.ecx_enrichment = ecx_result
             logger.info(
@@ -1039,6 +1048,44 @@ def _run_ecx_wallet_enrichment(result: InvestigationResult) -> None:
             )
     except Exception as e:
         logger.warning("eCX wallet enrichment failed: %s", e)
+
+
+def _run_ecx_submission(scan_id: str, result: Any) -> None:
+    """Submit investigation findings to eCX via the governance service (Phase 2).
+
+    This function is non-blocking — all errors are caught and logged so that
+    a submission failure never affects the investigation outcome.  The APWG
+    data-sharing agreement gate inside :class:`~ssi.ecx.submission.ECXSubmissionService`
+    is the primary safety check; this function just wires the call.
+
+    Args:
+        scan_id: The scan identifier used to link submission records.
+        result: The completed :class:`~ssi.models.investigation.InvestigationResult`.
+    """
+    try:
+        from ssi.ecx.submission import get_submission_service
+
+        service = get_submission_service()
+        if service is None:
+            return  # Submission disabled or misconfigured — already logged inside factory
+
+        case_id: str | None = getattr(result, "case_id", None)
+        rows = service.process_investigation(scan_id, case_id, result)
+        if rows:
+            submitted = sum(1 for r in rows if r.get("status") == "submitted")
+            queued = sum(1 for r in rows if r.get("status") == "queued")
+            logger.info(
+                "eCX Phase 2: %d indicators processed — %d submitted, %d queued for review",
+                len(rows),
+                submitted,
+                queued,
+            )
+            # Attach submission records to the investigation result so callers and
+            # reports can surface Phase 2 status without an extra store look-up.
+            if hasattr(result, "ecx_submissions"):
+                result.ecx_submissions = rows
+    except Exception:
+        logger.warning("eCX submission pipeline failed for scan %s", scan_id, exc_info=True)
 
 
 def _domain_slug(url: str, max_length: int = 60) -> str:

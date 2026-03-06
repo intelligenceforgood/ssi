@@ -273,6 +273,10 @@ class InvestigationResult(BaseModel):
     pii_exposures: list[PiiExposure] = Field(default_factory=list)
     downloads: list[DownloadArtifact] = Field(default_factory=list)
     ecx_enrichment: ECXEnrichmentResult | None = None
+    ecx_submissions: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="eCX submission records created during Phase 2 governance (auto-submit + queued).",
+    )
 
     # Evidence packaging
     evidence_zip_path: str = ""

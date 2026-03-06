@@ -488,3 +488,138 @@ class TestPersistInvestigation:
         assert actions[1]["sequence"] == 2
         assert actions[2]["state"] == "error"
         assert actions[2]["error"] == "timeout"
+
+
+# ---------------------------------------------------------------------------
+# ECX Submission CRUD (Phase 2 — 2B)
+# ---------------------------------------------------------------------------
+
+
+class TestECXSubmissionCRUD:
+    """ScanStore CRUD helpers for the ecx_submissions table."""
+
+    def test_create_ecx_submission(self, store: ScanStore) -> None:
+        """create_ecx_submission should insert a row and return its ID."""
+        submission_id = "sub-test-001"
+        result = store.create_ecx_submission(
+            submission_id=submission_id,
+            scan_id="scan-x",
+            case_id=None,
+            ecx_module="phish",
+            submitted_value="https://evil.com",
+            confidence=82,
+            status="queued",
+            submitted_by="",
+        )
+        assert result == submission_id
+
+    def test_get_ecx_submission_returns_row(self, store: ScanStore) -> None:
+        """get_ecx_submission should return the row dict after creation."""
+        store.create_ecx_submission(
+            submission_id="sub-002",
+            scan_id="scan-y",
+            case_id="case-1",
+            ecx_module="malicious-domain",
+            submitted_value="evil.com",
+            confidence=75,
+            status="queued",
+            submitted_by="",
+        )
+        row = store.get_ecx_submission("sub-002")
+        assert row is not None
+        assert row["submission_id"] == "sub-002"
+        assert row["ecx_module"] == "malicious-domain"
+        assert row["submitted_value"] == "evil.com"
+        assert row["confidence"] == 75
+        assert row["status"] == "queued"
+
+    def test_get_ecx_submission_not_found(self, store: ScanStore) -> None:
+        """get_ecx_submission should return None for an unknown ID."""
+        assert store.get_ecx_submission("nonexistent-id") is None
+
+    def test_update_ecx_submission(self, store: ScanStore) -> None:
+        """update_ecx_submission should update specified columns."""
+        store.create_ecx_submission(
+            submission_id="sub-003",
+            scan_id="scan-z",
+            case_id=None,
+            ecx_module="phish",
+            submitted_value="https://phish.example.com",
+            confidence=80,
+            status="queued",
+            submitted_by="",
+        )
+        store.update_ecx_submission("sub-003", status="submitted", ecx_record_id=42)
+        row = store.get_ecx_submission("sub-003")
+        assert row is not None
+        assert row["status"] == "submitted"
+        assert row["ecx_record_id"] == 42
+
+    def test_list_ecx_submissions_unfiltered(self, store: ScanStore) -> None:
+        """list_ecx_submissions with no filters should return all rows."""
+        for i in range(3):
+            store.create_ecx_submission(
+                submission_id=f"sub-list-{i}",
+                scan_id="scan-list",
+                case_id=None,
+                ecx_module="phish",
+                submitted_value=f"https://evil{i}.com",
+                confidence=70 + i,
+                status="queued",
+                submitted_by="",
+            )
+        rows = store.list_ecx_submissions()
+        assert len(rows) >= 3
+
+    def test_list_ecx_submissions_filtered_by_status(self, store: ScanStore) -> None:
+        """list_ecx_submissions with status filter should only return matching rows."""
+        store.create_ecx_submission(
+            submission_id="sub-q",
+            scan_id="scan-f",
+            case_id=None,
+            ecx_module="phish",
+            submitted_value="https://q.com",
+            confidence=70,
+            status="queued",
+            submitted_by="",
+        )
+        store.create_ecx_submission(
+            submission_id="sub-s",
+            scan_id="scan-f",
+            case_id=None,
+            ecx_module="malicious-ip",
+            submitted_value="1.2.3.4",
+            confidence=80,
+            status="submitted",
+            submitted_by="alice",
+        )
+        queued = store.list_ecx_submissions(status="queued")
+        assert all(r["status"] == "queued" for r in queued)
+        submitted = store.list_ecx_submissions(status="submitted")
+        assert all(r["status"] == "submitted" for r in submitted)
+
+    def test_list_ecx_submissions_filtered_by_scan_id(self, store: ScanStore) -> None:
+        """list_ecx_submissions with scan_id filter should only return matching rows."""
+        store.create_ecx_submission(
+            submission_id="sub-scan-a",
+            scan_id="scan-A",
+            case_id=None,
+            ecx_module="phish",
+            submitted_value="https://a.com",
+            confidence=60,
+            status="queued",
+            submitted_by="",
+        )
+        store.create_ecx_submission(
+            submission_id="sub-scan-b",
+            scan_id="scan-B",
+            case_id=None,
+            ecx_module="phish",
+            submitted_value="https://b.com",
+            confidence=65,
+            status="queued",
+            submitted_by="",
+        )
+        rows = store.list_ecx_submissions(scan_id="scan-A")
+        assert len(rows) == 1
+        assert rows[0]["submission_id"] == "sub-scan-a"

@@ -510,12 +510,21 @@ def trigger_batch_investigate(
 def list_investigations(
     domain: str | None = Query(None, description="Filter by domain."),
     status: str | None = Query(None, description="Filter by status (completed, failed, running)."),
+    ecx_submission_status: str | None = Query(
+        None, description="Filter to investigations with an eCX submission in this status (e.g. queued, submitted)."
+    ),
     limit: int = Query(50, ge=1, le=200, description="Page size."),
     offset: int = Query(0, ge=0, description="Page offset."),
 ) -> dict[str, Any]:
     """Return a paginated list of historical investigations from the scan store."""
     store = build_scan_store()
-    scans = store.list_scans(domain=domain, status=status, limit=limit, offset=offset)
+    scans = store.list_scans(
+        domain=domain,
+        status=status,
+        ecx_submission_status=ecx_submission_status,
+        limit=limit,
+        offset=offset,
+    )
     # Serialise datetime objects for JSON
     for scan in scans:
         for key, val in scan.items():

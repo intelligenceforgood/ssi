@@ -204,15 +204,35 @@ class ScanStore:
         *,
         domain: str | None = None,
         status: str | None = None,
+        ecx_submission_status: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """Return a paginated list of scans, optionally filtered."""
-        stmt = sa.select(sql_schema.site_scans).order_by(sql_schema.site_scans.c.created_at.desc())
+        """Return a paginated list of scans, optionally filtered.
+
+        Args:
+            domain: Filter by exact domain name.
+            status: Filter by scan status.
+            ecx_submission_status: Filter to scans that have at least one
+                ``ecx_submissions`` row in this status (e.g. ``"queued"``).
+            limit: Maximum rows to return.
+            offset: Pagination offset.
+
+        Returns:
+            List of scan dicts ordered by ``created_at`` descending.
+        """
+        tbl = sql_schema.site_scans
+        stmt = sa.select(tbl).order_by(tbl.c.created_at.desc())
         if domain is not None:
-            stmt = stmt.where(sql_schema.site_scans.c.domain == domain)
+            stmt = stmt.where(tbl.c.domain == domain)
         if status is not None:
-            stmt = stmt.where(sql_schema.site_scans.c.status == status)
+            stmt = stmt.where(tbl.c.status == status)
+        if ecx_submission_status is not None:
+            sub = sa.select(sql_schema.ecx_submissions.c.scan_id).where(
+                sql_schema.ecx_submissions.c.scan_id == tbl.c.scan_id,
+                sql_schema.ecx_submissions.c.status == ecx_submission_status,
+            )
+            stmt = stmt.where(sa.exists(sub))
         stmt = stmt.limit(limit).offset(offset)
         with self._session_factory() as session:
             rows = session.execute(stmt).all()
@@ -866,6 +886,133 @@ class ScanStore:
                     d[key] = val.isoformat()
             result.append(d)
         return result
+
+    # ------------------------------------------------------------------
+    # ecx_submissions CRUD (Phase 2)
+    # ------------------------------------------------------------------
+
+    def create_ecx_submission(
+        self,
+        *,
+        submission_id: str,
+        scan_id: str | None = None,
+        case_id: str | None = None,
+        ecx_module: str,
+        submitted_value: str,
+        confidence: int = 0,
+        release_label: str = "",
+        status: str = "pending",
+        submitted_by: str = "",
+    ) -> str:
+        """Insert a new eCX submission tracking row.
+
+        Args:
+            submission_id: Pre-generated UUID for the row.
+            scan_id: SSI scan this submission belongs to.
+            case_id: Core case ID (if linked).
+            ecx_module: eCX module (e.g. ``"phish"``).
+            submitted_value: URL / domain / IP / address being submitted.
+            confidence: Confidence 0–100.
+            release_label: eCX release label (phish module).
+            status: Initial status — ``"pending"`` or ``"queued"``.
+            submitted_by: ``"auto"`` or analyst identifier.
+
+        Returns:
+            The ``submission_id``.
+        """
+        now = datetime.now(UTC)
+        with self._session_factory() as session:
+            session.execute(
+                sa.insert(sql_schema.ecx_submissions).values(
+                    submission_id=submission_id,
+                    scan_id=scan_id,
+                    case_id=case_id,
+                    ecx_module=ecx_module,
+                    submitted_value=submitted_value,
+                    confidence=confidence,
+                    release_label=release_label,
+                    status=status,
+                    submitted_by=submitted_by,
+                    submitted_at=None,
+                    error_message=None,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            session.commit()
+        logger.debug("Created ECX submission %s (%s %s)", submission_id, ecx_module, status)
+        return submission_id
+
+    def update_ecx_submission(self, submission_id: str, **fields: Any) -> None:
+        """Update arbitrary columns on an ``ecx_submissions`` row.
+
+        Args:
+            submission_id: The row to update.
+            **fields: Column values to set (e.g. ``status="submitted"``,
+                ``ecx_record_id=42``).
+        """
+        fields["updated_at"] = datetime.now(UTC)
+        tbl = sql_schema.ecx_submissions
+        with self._session_factory() as session:
+            session.execute(sa.update(tbl).where(tbl.c.submission_id == submission_id).values(**fields))
+            session.commit()
+
+    def get_ecx_submission(self, submission_id: str) -> dict[str, Any] | None:
+        """Return a single submission row as a dict, or ``None`` if not found.
+
+        Args:
+            submission_id: UUID of the submission row.
+
+        Returns:
+            Dict of column values, or ``None``.
+        """
+        tbl = sql_schema.ecx_submissions
+        with self._session_factory() as session:
+            row = session.execute(sa.select(tbl).where(tbl.c.submission_id == submission_id)).first()
+        return self._row_to_dict(row) if row else None
+
+    def list_ecx_submissions(
+        self,
+        *,
+        scan_id: str | None = None,
+        case_id: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Return a paginated list of submission rows.
+
+        Args:
+            scan_id: Filter by investigation scan ID.
+            case_id: Filter by core case ID.
+            status: Filter by submission status.
+            limit: Maximum rows to return.
+            offset: Pagination offset.
+
+        Returns:
+            List of submission dicts ordered by ``created_at`` descending.
+        """
+        tbl = sql_schema.ecx_submissions
+        stmt = sa.select(tbl).order_by(tbl.c.created_at.desc())
+        if scan_id is not None:
+            stmt = stmt.where(tbl.c.scan_id == scan_id)
+        if case_id is not None:
+            stmt = stmt.where(tbl.c.case_id == case_id)
+        if status is not None:
+            stmt = stmt.where(tbl.c.status == status)
+        stmt = stmt.limit(limit).offset(offset)
+        with self._session_factory() as session:
+            rows = session.execute(stmt).all()
+        return [self._row_to_dict(r) for r in rows]
+
+    @staticmethod
+    def _row_to_dict(row: Any) -> dict[str, Any]:
+        """Convert a SQLAlchemy row to a JSON-serialisable dict."""
+        d = dict(row._mapping)
+        for key, val in d.items():
+            if hasattr(val, "isoformat"):
+                d[key] = val.isoformat()
+        return d
 
     # ------------------------------------------------------------------
     # Case creation (direct DB write to core's tables)

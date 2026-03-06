@@ -167,6 +167,35 @@ sa.Index("idx_ecx_enrichments_query", ecx_enrichments.c.query_module, ecx_enrich
 
 
 # ---------------------------------------------------------------------------
+# ecx_submissions — Phase 2: indicator submission tracking
+# ---------------------------------------------------------------------------
+
+ecx_submissions = sa.Table(
+    "ecx_submissions",
+    METADATA,
+    sa.Column("submission_id", UUID_TYPE, primary_key=True),
+    sa.Column("scan_id", UUID_TYPE, nullable=True),
+    sa.Column("case_id", sa.Text(), nullable=True),
+    sa.Column("ecx_module", sa.Text(), nullable=False),  # phish|malicious-domain|malicious-ip|cryptocurrency-addresses
+    sa.Column("ecx_record_id", sa.Integer(), nullable=True),  # ID assigned by eCX on success
+    sa.Column("submitted_value", sa.Text(), nullable=False),  # URL/domain/IP/address
+    sa.Column("confidence", sa.Integer(), nullable=False, server_default="0"),
+    sa.Column("release_label", sa.Text(), nullable=False, server_default=""),
+    sa.Column("status", sa.Text(), nullable=False, server_default="pending"),
+    # pending | queued | submitted | updated | failed | rejected | retracted
+    sa.Column("submitted_by", sa.Text(), nullable=False, server_default=""),  # "auto" or analyst id
+    sa.Column("submitted_at", TIMESTAMP, nullable=True),
+    sa.Column("error_message", sa.Text(), nullable=True),
+    sa.Column("created_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+    sa.Column("updated_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+)
+sa.Index("idx_ecx_submissions_scan_id", ecx_submissions.c.scan_id)
+sa.Index("idx_ecx_submissions_case_id", ecx_submissions.c.case_id)
+sa.Index("idx_ecx_submissions_status", ecx_submissions.c.status)
+sa.Index("idx_ecx_submissions_module", ecx_submissions.c.ecx_module)
+
+
+# ---------------------------------------------------------------------------
 # Core platform tables (read/write via the shared Cloud SQL database)
 #
 # These are NOT managed by SSI — they are owned by core's Alembic

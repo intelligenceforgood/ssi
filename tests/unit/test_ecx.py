@@ -3,11 +3,13 @@
 Covers:
 - ECX Pydantic models (validation, defaults, has_hits)
 - Key normalisation (camelCase → snake_case)
-- ECXClient HTTP methods (mocked httpx responses)
+- ECXClient HTTP methods — search (Phase 1) and submit/note/update (Phase 2)
 - Singleton client accessor (_get_client)
 - Safe query wrapper (_safe_query)
 - Enrichment aggregation (enrich_from_ecx, enrich_wallets_from_ecx)
 - Currency map loading
+- Phase 2 submission API endpoints (list/approve/reject/retract)
+- Phase 2 submission CLI commands (submit/status/retract/submissions)
 """
 
 from __future__ import annotations
@@ -288,6 +290,131 @@ class TestECXClient:
         client = self._make_client()
         headers = client._headers()
         assert headers["Authorization"] == "Bearer test-key-123"
+
+    # ------------------------------------------------------------------
+    # Phase 2 — submit methods
+    # ------------------------------------------------------------------
+
+    def test_submit_phish_sends_correct_body(self) -> None:
+        """submit_phish should POST url, confidence, brand, and ip."""
+        client = self._make_client()
+        mock_resp = _mock_response({"id": 101})
+        with patch.object(client, "_request", return_value=mock_resp) as m:
+            record_id = client.submit_phish(
+                url="https://evil.com",
+                confidence=85,
+                brand="ExampleBank",
+                ip=["1.2.3.4"],
+            )
+        assert record_id == 101
+        _, kwargs = m.call_args
+        body = kwargs["json"]
+        assert body["url"] == "https://evil.com"
+        assert body["confidence"] == 85
+        assert body["brand"] == "ExampleBank"
+        assert body["ip"] == ["1.2.3.4"]
+
+    def test_submit_phish_optional_fields_omitted(self) -> None:
+        """submit_phish should omit brand and ip when not provided."""
+        client = self._make_client()
+        mock_resp = _mock_response({"id": 102})
+        with patch.object(client, "_request", return_value=mock_resp) as m:
+            client.submit_phish(url="https://evil.com", confidence=70)
+        _, kwargs = m.call_args
+        body = kwargs["json"]
+        assert "brand" not in body
+        assert "ip" not in body
+
+    def test_submit_crypto_sends_correct_body(self) -> None:
+        """submit_crypto should POST address, currency, crimeCategory, siteLink."""
+        client = self._make_client()
+        mock_resp = _mock_response({"id": 201})
+        with patch.object(client, "_request", return_value=mock_resp) as m:
+            record_id = client.submit_crypto(
+                address="bc1qfake",
+                currency="bitcoin",
+                confidence=90,
+                crime_category="fraud",
+                site_link="https://evil.com",
+                procedure="extracted from page",
+            )
+        assert record_id == 201
+        _, kwargs = m.call_args
+        body = kwargs["json"]
+        assert body["address"] == "bc1qfake"
+        assert body["currency"] == "bitcoin"
+        assert body["confidence"] == 90
+        assert body["crimeCategory"] == "fraud"
+        assert body["siteLink"] == "https://evil.com"
+        assert body["procedure"] == "extracted from page"
+
+    def test_submit_domain_sends_correct_body(self) -> None:
+        """submit_domain should POST domain, classification, confidence."""
+        client = self._make_client()
+        mock_resp = _mock_response({"id": 301})
+        with patch.object(client, "_request", return_value=mock_resp) as m:
+            record_id = client.submit_domain(
+                domain="evil.com",
+                classification="phishing",
+                confidence=80,
+            )
+        assert record_id == 301
+        _, kwargs = m.call_args
+        body = kwargs["json"]
+        assert body["domain"] == "evil.com"
+        assert body["classification"] == "phishing"
+        assert body["confidence"] == 80
+
+    def test_submit_ip_sends_correct_body(self) -> None:
+        """submit_ip should POST ip, confidence, and description."""
+        client = self._make_client()
+        mock_resp = _mock_response({"id": 401})
+        with patch.object(client, "_request", return_value=mock_resp) as m:
+            record_id = client.submit_ip(ip="1.2.3.4", confidence=75, description="C2 server")
+        assert record_id == 401
+        _, kwargs = m.call_args
+        body = kwargs["json"]
+        assert body["ip"] == "1.2.3.4"
+        assert body["confidence"] == 75
+        assert body["description"] == "C2 server"
+
+    def test_submit_ip_description_omitted_when_empty(self) -> None:
+        """submit_ip should omit description when not provided."""
+        client = self._make_client()
+        mock_resp = _mock_response({"id": 402})
+        with patch.object(client, "_request", return_value=mock_resp) as m:
+            client.submit_ip(ip="5.6.7.8", confidence=60)
+        _, kwargs = m.call_args
+        assert "description" not in kwargs["json"]
+
+    def test_add_note_posts_to_correct_endpoint(self) -> None:
+        """add_note should POST description to /{module}/{record_id}/note."""
+        client = self._make_client()
+        mock_resp = _mock_response({})
+        with patch.object(client, "_request", return_value=mock_resp) as m:
+            client.add_note("phish", 42, "Confirmed active scam site")
+        args, kwargs = m.call_args
+        assert args[0] == "POST"
+        assert args[1] == "/phish/42/note"
+        assert kwargs["json"] == {"description": "Confirmed active scam site"}
+
+    def test_update_record_sends_confidence_and_status(self) -> None:
+        """update_record should PUT confidence and status when both provided."""
+        client = self._make_client()
+        mock_resp = _mock_response({})
+        with patch.object(client, "_request", return_value=mock_resp) as m:
+            client.update_record("phish", 99, confidence=95, status="removed")
+        args, kwargs = m.call_args
+        assert args[0] == "PUT"
+        assert args[1] == "/phish/99"
+        assert kwargs["json"] == {"confidence": 95, "status": "removed"}
+
+    def test_update_record_skips_request_when_no_fields(self) -> None:
+        """update_record should not make an HTTP call when both fields are None."""
+        client = self._make_client()
+        with patch.object(client, "_request") as m:
+            client.update_record("phish", 99, confidence=None, status=None)
+        m.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -931,10 +1058,147 @@ class TestCLICommands:
             result = runner.invoke(ecx_app, ["search", "phish", "https://nothing.com"])
         assert result.exit_code == 0
 
+    # ------------------------------------------------------------------
+    # Phase 2 — submission CLI commands (2F)
+    # ------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# API Endpoint Tests (1F)
-# ---------------------------------------------------------------------------
+    def test_submit_investigation_no_service(self) -> None:
+        """ssi ecx submit should exit 1 when submission service is not configured."""
+        from typer.testing import CliRunner
+
+        from ssi.cli.ecx_cmd import ecx_app
+
+        runner = CliRunner()
+        with patch("ssi.ecx.submission.get_submission_service", return_value=None):
+            result = runner.invoke(ecx_app, ["submit", "scan-abc"])
+        assert result.exit_code == 1
+
+    def test_submit_investigation_scan_not_found(self) -> None:
+        """ssi ecx submit should exit 1 when the scan ID is unknown."""
+        from typer.testing import CliRunner
+
+        from ssi.cli.ecx_cmd import ecx_app
+
+        runner = CliRunner()
+        mock_service = MagicMock()
+        mock_store = MagicMock()
+        mock_store.get_scan.return_value = None
+
+        with (
+            patch("ssi.ecx.submission.get_submission_service", return_value=mock_service),
+            patch("ssi.store.build_scan_store", return_value=mock_store),
+        ):
+            result = runner.invoke(ecx_app, ["submit", "unknown-scan"])
+        assert result.exit_code == 1
+
+    def test_submit_investigation_success(self) -> None:
+        """ssi ecx submit should display a results table on success."""
+        from typer.testing import CliRunner
+
+        from ssi.cli.ecx_cmd import ecx_app
+
+        runner = CliRunner()
+        scan_row = {"scan_id": "scan-1", "url": "https://evil.com", "status": "completed", "indicators": []}
+        rows = [
+            {
+                "submission_id": "sub-1",
+                "ecx_module": "phish",
+                "submitted_value": "https://evil.com",
+                "confidence": 85,
+                "status": "submitted",
+                "ecx_record_id": 99,
+            }
+        ]
+        mock_service = MagicMock()
+        mock_service.process_investigation.return_value = rows
+        mock_store = MagicMock()
+        mock_store.get_scan.return_value = scan_row
+
+        with (
+            patch("ssi.ecx.submission.get_submission_service", return_value=mock_service),
+            patch("ssi.store.build_scan_store", return_value=mock_store),
+        ):
+            result = runner.invoke(ecx_app, ["submit", "scan-1"])
+        assert result.exit_code == 0
+
+    def test_submission_status_command(self) -> None:
+        """ssi ecx status should display submission rows for an investigation."""
+        from typer.testing import CliRunner
+
+        from ssi.cli.ecx_cmd import ecx_app
+
+        runner = CliRunner()
+        mock_store = MagicMock()
+        mock_store.list_ecx_submissions.return_value = [
+            {
+                "submission_id": "sub-1",
+                "ecx_module": "phish",
+                "submitted_value": "https://evil.com",
+                "confidence": 85,
+                "status": "queued",
+                "ecx_record_id": None,
+            }
+        ]
+
+        with patch("ssi.store.build_scan_store", return_value=mock_store):
+            result = runner.invoke(ecx_app, ["status", "scan-1"])
+        assert result.exit_code == 0
+
+    def test_retract_submission_cli_command(self) -> None:
+        """ssi ecx retract should call service.retract and exit 0 on success."""
+        from typer.testing import CliRunner
+
+        from ssi.cli.ecx_cmd import ecx_app
+
+        runner = CliRunner()
+        retracted_row = {
+            "submission_id": "sub-1",
+            "ecx_module": "phish",
+            "submitted_value": "https://evil.com",
+            "confidence": 85,
+            "status": "retracted",
+            "ecx_record_id": 55,
+        }
+        mock_service = MagicMock()
+        mock_service.retract.return_value = retracted_row
+
+        with patch("ssi.ecx.submission.get_submission_service", return_value=mock_service):
+            result = runner.invoke(ecx_app, ["retract", "sub-1"])
+        assert result.exit_code == 0
+
+    def test_retract_submission_cli_no_service(self) -> None:
+        """ssi ecx retract should exit 1 when service is not configured."""
+        from typer.testing import CliRunner
+
+        from ssi.cli.ecx_cmd import ecx_app
+
+        runner = CliRunner()
+        with patch("ssi.ecx.submission.get_submission_service", return_value=None):
+            result = runner.invoke(ecx_app, ["retract", "sub-1"])
+        assert result.exit_code == 1
+
+    def test_list_submissions_cli_command(self) -> None:
+        """ssi ecx submissions should list queued submissions and exit 0."""
+        from typer.testing import CliRunner
+
+        from ssi.cli.ecx_cmd import ecx_app
+
+        runner = CliRunner()
+        mock_store = MagicMock()
+        mock_store.list_ecx_submissions.return_value = [
+            {
+                "submission_id": "sub-1",
+                "ecx_module": "phish",
+                "submitted_value": "https://evil.com",
+                "confidence": 85,
+                "status": "queued",
+                "ecx_record_id": None,
+            }
+        ]
+
+        with patch("ssi.store.build_scan_store", return_value=mock_store):
+            result = runner.invoke(ecx_app, ["submissions"])
+        assert result.exit_code == 0
 
 
 class TestAPIEndpoints:
@@ -1029,3 +1293,173 @@ class TestAPIEndpoints:
         with patch("ssi.store.build_scan_store", return_value=mock_store):
             resp = client.get("/ecx/investigate/nonexistent")
         assert resp.status_code == 404
+
+    # ------------------------------------------------------------------
+    # Phase 2 — submission management endpoints (2E)
+    # ------------------------------------------------------------------
+
+    def _make_submission_row(self, submission_id: str = "sub-1", status: str = "queued") -> dict[str, Any]:
+        """Build a minimal submission store row dict."""
+        return {
+            "submission_id": submission_id,
+            "scan_id": "scan-1",
+            "case_id": None,
+            "ecx_module": "phish",
+            "submitted_value": "https://evil.com",
+            "confidence": 80,
+            "release_label": "",
+            "status": status,
+            "submitted_by": "",
+            "submitted_at": None,
+            "error_message": None,
+            "created_at": "2026-03-05T00:00:00+00:00",
+            "ecx_record_id": 42 if status == "submitted" else None,
+        }
+
+    def test_list_submissions_endpoint(self, client: Any) -> None:
+        """GET /ecx/submissions should return paginated submission list."""
+        rows = [self._make_submission_row("s1"), self._make_submission_row("s2")]
+        mock_store = MagicMock()
+        mock_store.list_ecx_submissions.return_value = rows
+
+        with patch("ssi.store.build_scan_store", return_value=mock_store):
+            resp = client.get("/ecx/submissions")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["count"] == 2
+        assert len(data["submissions"]) == 2
+
+    def test_list_submissions_filtered_by_status(self, client: Any) -> None:
+        """GET /ecx/submissions?status=queued should pass filter to store."""
+        mock_store = MagicMock()
+        mock_store.list_ecx_submissions.return_value = [self._make_submission_row()]
+
+        with patch("ssi.store.build_scan_store", return_value=mock_store):
+            resp = client.get("/ecx/submissions?status=queued")
+        assert resp.status_code == 200
+        mock_store.list_ecx_submissions.assert_called_once_with(
+            scan_id=None, case_id=None, status="queued", limit=50, offset=0
+        )
+
+    def test_approve_submission_endpoint(self, client: Any) -> None:
+        """POST /ecx/submissions/{id}/approve should return updated record."""
+        queued_row = self._make_submission_row("sub-q", "queued")
+        submitted_row = {**queued_row, "status": "submitted", "ecx_record_id": 55}
+        mock_store = MagicMock()
+        mock_store.get_ecx_submission.return_value = queued_row
+        mock_service = MagicMock()
+        mock_service.analyst_approve.return_value = submitted_row
+
+        with (
+            patch("ssi.store.build_scan_store", return_value=mock_store),
+            patch("ssi.api.ecx_routes._require_submission_service", return_value=mock_service),
+        ):
+            resp = client.post(
+                "/ecx/submissions/sub-q/approve",
+                json={"release_label": "TLP:WHITE", "analyst": "alice"},
+            )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "submitted"
+
+    def test_approve_submission_not_found(self, client: Any) -> None:
+        """POST approve for unknown submission should return 404."""
+        mock_store = MagicMock()
+        mock_store.get_ecx_submission.return_value = None
+        mock_service = MagicMock()
+
+        with (
+            patch("ssi.store.build_scan_store", return_value=mock_store),
+            patch("ssi.api.ecx_routes._require_submission_service", return_value=mock_service),
+        ):
+            resp = client.post(
+                "/ecx/submissions/nonexistent/approve",
+                json={"release_label": "TLP:WHITE", "analyst": "alice"},
+            )
+        assert resp.status_code == 404
+
+    def test_approve_submission_wrong_status(self, client: Any) -> None:
+        """POST approve for non-queued submission should return 400."""
+        submitted_row = self._make_submission_row("sub-s", "submitted")
+        mock_store = MagicMock()
+        mock_store.get_ecx_submission.return_value = submitted_row
+        mock_service = MagicMock()
+
+        with (
+            patch("ssi.store.build_scan_store", return_value=mock_store),
+            patch("ssi.api.ecx_routes._require_submission_service", return_value=mock_service),
+        ):
+            resp = client.post(
+                "/ecx/submissions/sub-s/approve",
+                json={"release_label": "TLP:WHITE", "analyst": "alice"},
+            )
+        assert resp.status_code == 400
+
+    def test_reject_submission_endpoint(self, client: Any) -> None:
+        """POST /ecx/submissions/{id}/reject should return rejected record."""
+        queued_row = self._make_submission_row("sub-q", "queued")
+        rejected_row = {**queued_row, "status": "rejected"}
+        mock_store = MagicMock()
+        mock_store.get_ecx_submission.return_value = queued_row
+        mock_service = MagicMock()
+        mock_service.analyst_reject.return_value = rejected_row
+
+        with (
+            patch("ssi.store.build_scan_store", return_value=mock_store),
+            patch("ssi.osint.ecrimex._get_client", return_value=MagicMock()),
+            patch("ssi.ecx.submission.ECXSubmissionService", return_value=mock_service),
+        ):
+            resp = client.post(
+                "/ecx/submissions/sub-q/reject",
+                json={"analyst": "bob", "reason": "False positive"},
+            )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "rejected"
+
+    def test_reject_submission_not_found(self, client: Any) -> None:
+        """POST reject for unknown submission should return 404."""
+        mock_store = MagicMock()
+        mock_store.get_ecx_submission.return_value = None
+
+        with patch("ssi.store.build_scan_store", return_value=mock_store):
+            resp = client.post(
+                "/ecx/submissions/unknown/reject",
+                json={"analyst": "bob", "reason": ""},
+            )
+        assert resp.status_code == 404
+
+    def test_retract_submission_endpoint(self, client: Any) -> None:
+        """POST /ecx/submissions/{id}/retract should return retracted record."""
+        submitted_row = self._make_submission_row("sub-s", "submitted")
+        retracted_row = {**submitted_row, "status": "retracted"}
+        mock_store = MagicMock()
+        mock_store.get_ecx_submission.return_value = submitted_row
+        mock_service = MagicMock()
+        mock_service.retract.return_value = retracted_row
+
+        with (
+            patch("ssi.store.build_scan_store", return_value=mock_store),
+            patch("ssi.api.ecx_routes._require_submission_service", return_value=mock_service),
+        ):
+            resp = client.post(
+                "/ecx/submissions/sub-s/retract",
+                json={"analyst": "carol", "reason": ""},
+            )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "retracted"
+
+    def test_retract_submission_not_submitted(self, client: Any) -> None:
+        """POST retract for non-submitted submission should return 400."""
+        queued_row = self._make_submission_row("sub-q", "queued")
+        mock_store = MagicMock()
+        mock_store.get_ecx_submission.return_value = queued_row
+        mock_service = MagicMock()
+
+        with (
+            patch("ssi.store.build_scan_store", return_value=mock_store),
+            patch("ssi.api.ecx_routes._require_submission_service", return_value=mock_service),
+        ):
+            resp = client.post(
+                "/ecx/submissions/sub-q/retract",
+                json={"analyst": "carol", "reason": ""},
+            )
+        assert resp.status_code == 400

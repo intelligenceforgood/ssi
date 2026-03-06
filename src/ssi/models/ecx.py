@@ -102,16 +102,64 @@ class ECXEnrichmentResult(BaseModel):
 
 
 class ECXSubmissionRecord(BaseModel):
-    """Tracks a submission to eCrimeX (Phase 2)."""
+    """Tracks a single indicator submission to eCrimeX (Phase 2).
 
-    ecx_module: str = ""
-    ecx_record_id: int | None = None
+    One row is created per indicator per investigation: the scam URL,
+    each harvested wallet, the hosting domain, and the primary IP are
+    each submitted as separate records.
+
+    Statuses:
+        ``pending``   — created but not yet processed.
+        ``queued``    — below auto-submit threshold, waiting for analyst review.
+        ``submitted`` — successfully posted to eCX.
+        ``updated``   — existing eCX record updated (confidence/status bump).
+        ``failed``    — eCX API error; see ``error_message``.
+        ``rejected``  — analyst declined submission.
+        ``retracted`` — previously submitted record retracted from eCX.
+    """
+
+    submission_id: str = Field(default_factory=lambda: str(__import__("uuid").uuid4()))
+    ecx_module: str = ""  # phish | malicious-domain | malicious-ip | cryptocurrency-addresses
+    ecx_record_id: int | None = None  # Server-assigned ID after a successful POST/PUT
     case_id: str = ""
     scan_id: str = ""
-    submitted_value: str = ""
-    confidence: int = 0
-    status: str = "pending"  # pending | submitted | updated | failed | retracted
-    release_label: str = ""
-    submitted_by: str = ""
+    submitted_value: str = ""  # URL / domain / IP / wallet address
+    confidence: int = 0  # 0–100 integer confidence passed to eCX
+    release_label: str = ""  # eCX release label for phish (e.g. "active")
+    status: str = "pending"  # See docstring for valid values
+    submitted_by: str = ""  # "auto" or analyst identifier
     submitted_at: datetime | None = None
     error_message: str = ""
+    created_at: datetime = Field(
+        default_factory=lambda: __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+    )
+
+
+class ECXApproveRequest(BaseModel):
+    """Request body for approving a queued eCX submission."""
+
+    release_label: str = Field(default="", description="eCX release label (e.g. 'active').")
+    analyst: str = Field(..., description="Analyst identifier approving this submission.")
+
+
+class ECXRejectRequest(BaseModel):
+    """Request body for rejecting a queued eCX submission."""
+
+    analyst: str = Field(..., description="Analyst identifier rejecting this submission.")
+    reason: str = Field(default="", description="Optional rejection reason.")
+
+
+class ECXSubmissionResponse(BaseModel):
+    """API response wrapper for a single submission record."""
+
+    submission_id: str
+    ecx_module: str
+    ecx_record_id: int | None
+    scan_id: str
+    submitted_value: str
+    confidence: int
+    status: str
+    submitted_by: str
+    submitted_at: datetime | None
+    error_message: str | None = None
+    created_at: datetime | None

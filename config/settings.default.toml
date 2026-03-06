@@ -102,12 +102,19 @@ warn_at_pct = 80
 api_key = ""
 attribution = "IntelligenceForGood"
 auto_submit_threshold = 80
+# Sandbox URL — safe for submission testing (no real data, only test records).
+# Override to https://api.ecrimex.net/api/v1 in settings.local.toml for real enrichment.
 base_url = "https://sandbox.ecx2.ecrimex.net/api/v1"
 cache_ttl_hours = 24
 currency_map_path = "config/ecx_currency_map.json"
 enabled = false
 enrichment_enabled = true
+queue_threshold = 50
 submission_enabled = false
+# SAFETY: Both submission_enabled AND submission_agreement_signed must be true
+# before any indicator data is transmitted to eCX.  Set this to true only after
+# the APWG data sharing agreement has been fully executed.
+submission_agreement_signed = false
 timeout = 15
 
 [storage]

@@ -301,6 +301,155 @@ class ECXClient:
         data = resp.json().get("data", [])
         return [_normalize_keys(r) for r in data]
 
+    # --- Phase 2: Submit ---
+
+    def submit_phish(
+        self,
+        url: str,
+        confidence: int,
+        brand: str = "",
+        ip: list[str] | None = None,
+    ) -> int:
+        """Submit a phishing URL to eCrimeX.
+
+        Args:
+            url: The phishing URL to report.
+            confidence: Confidence score 0–100.
+            brand: Impersonated brand name (empty if unknown).
+            ip: Optional list of hosting IP addresses.
+
+        Returns:
+            eCX record ID assigned to the new submission.
+        """
+        body: dict[str, Any] = {
+            "url": url,
+            "confidence": confidence,
+        }
+        if brand:
+            body["brand"] = brand
+        if ip:
+            body["ip"] = ip
+        resp = self._request("POST", "/phish", json=body)
+        return int(resp.json().get("id", 0))
+
+    def submit_crypto(
+        self,
+        address: str,
+        currency: str,
+        confidence: int,
+        crime_category: str = "fraud",
+        site_link: str = "",
+        procedure: str = "",
+    ) -> int:
+        """Submit a cryptocurrency address to eCrimeX.
+
+        Args:
+            address: Wallet address string.
+            currency: eCX currency code (e.g. ``"BTC"``, ``"ETH"``).
+            confidence: Confidence score 0–100.
+            crime_category: eCX crime category (default ``"fraud"``).
+            site_link: URL of the scam site using this address.
+            procedure: Extraction procedure description.
+
+        Returns:
+            eCX record ID assigned to the new submission.
+        """
+        body: dict[str, Any] = {
+            "address": address,
+            "currency": currency,
+            "confidence": confidence,
+            "crimeCategory": crime_category,
+        }
+        if site_link:
+            body["siteLink"] = site_link
+        if procedure:
+            body["procedure"] = procedure
+        resp = self._request("POST", "/cryptocurrency-addresses", json=body)
+        return int(resp.json().get("id", 0))
+
+    def submit_domain(
+        self,
+        domain: str,
+        classification: str,
+        confidence: int,
+    ) -> int:
+        """Submit a malicious domain to eCrimeX.
+
+        Args:
+            domain: The hostname to report.
+            classification: Domain classification label (e.g. ``"phishing"``).
+            confidence: Confidence score 0–100.
+
+        Returns:
+            eCX record ID assigned to the new submission.
+        """
+        body: dict[str, Any] = {
+            "domain": domain,
+            "classification": classification,
+            "confidence": confidence,
+        }
+        resp = self._request("POST", "/malicious-domain", json=body)
+        return int(resp.json().get("id", 0))
+
+    def submit_ip(
+        self,
+        ip: str,
+        confidence: int,
+        description: str = "",
+    ) -> int:
+        """Submit a malicious IP address to eCrimeX.
+
+        Args:
+            ip: IP address to report.
+            confidence: Confidence score 0–100.
+            description: Human-readable description of the malicious activity.
+
+        Returns:
+            eCX record ID assigned to the new submission.
+        """
+        body: dict[str, Any] = {
+            "ip": ip,
+            "confidence": confidence,
+        }
+        if description:
+            body["description"] = description
+        resp = self._request("POST", "/malicious-ip", json=body)
+        return int(resp.json().get("id", 0))
+
+    def add_note(self, module: str, record_id: int, description: str) -> None:
+        """Append a note to an existing eCX record.
+
+        Args:
+            module: eCX module path (e.g. ``"phish"``, ``"malicious-domain"``).
+            record_id: The eCX record to annotate.
+            description: Note text.
+        """
+        body = {"description": description}
+        self._request("POST", f"/{module}/{record_id}/note", json=body)
+
+    def update_record(
+        self,
+        module: str,
+        record_id: int,
+        confidence: int | None = None,
+        status: str | None = None,
+    ) -> None:
+        """Update confidence or status on an existing eCX record.
+
+        Args:
+            module: eCX module path (e.g. ``"phish"``).
+            record_id: The eCX record to update.
+            confidence: New confidence value (omitted if ``None``).
+            status: New status string (omitted if ``None``).
+        """
+        body: dict[str, Any] = {}
+        if confidence is not None:
+            body["confidence"] = confidence
+        if status is not None:
+            body["status"] = status
+        if body:
+            self._request("PUT", f"/{module}/{record_id}", json=body)
+
 
 # ---------------------------------------------------------------------------
 # Singleton client accessor

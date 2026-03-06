@@ -60,6 +60,9 @@ warn_at_pct = 80
 [ecx]
 api_key = "QEB7ENnT4drdgh0jt72hXXC4R2TaQFHasY8HXCdB"
 enabled = true
+# Production endpoint — real community intelligence data.
+# Sandbox URL (settings.default.toml) is only used for unit/integration/smoke tests.
+base_url = "https://api.ecrimex.net/api/v1"
 
 [storage]
 backend = "cloudsql"

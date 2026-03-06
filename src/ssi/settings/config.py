@@ -370,6 +370,13 @@ class ECXSettings(BaseSettings):
 
     The default ``base_url`` points to the eCX sandbox environment.  Set
     ``SSI_ECX__BASE_URL`` to ``https://ecrimex.net/api/v1`` for production.
+
+    Submission safety gates (Phase 2):
+        Both ``submission_enabled`` *and* ``submission_agreement_signed``
+        must be ``True`` before any indicator data is sent to eCX.  The
+        second flag requires an explicit opt-in confirming the APWG data
+        sharing agreement is in place — a single accidental flag flip cannot
+        trigger live submissions.
     """
 
     model_config = SettingsConfigDict(env_prefix="SSI_ECX__")
@@ -380,8 +387,11 @@ class ECXSettings(BaseSettings):
     attribution: str = "IntelligenceForGood"
     timeout: int = 15
     enrichment_enabled: bool = True
+    # Phase 2 submission gates — BOTH must be true before any data leaves SSI.
     submission_enabled: bool = False
-    auto_submit_threshold: int = 80
+    submission_agreement_signed: bool = False  # Set true only after APWG DSA is executed
+    auto_submit_threshold: int = 80  # Risk score >= this → auto-submit; below → queue
+    queue_threshold: int = 50  # Risk score >= this → queue for review; below → skip
     cache_ttl_hours: int = 24
     currency_map_path: str = "config/ecx_currency_map.json"
 
