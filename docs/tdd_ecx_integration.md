@@ -949,6 +949,86 @@ class ECXPoller:
 
 On GCP, the poller runs as a Cloud Scheduler-triggered Cloud Run Job (same pattern as other SSI jobs). Locally, it runs as a Typer CLI command invoked via cron or manually.
 
+#### Local Execution
+
+```bash
+# Run one full polling cycle manually
+conda run -n i4g-ssi ssi ecx poll
+
+# Poll only the phish module
+conda run -n i4g-ssi ssi ecx poll --module phish
+```
+
+Required env vars for local polling:
+
+- `SSI_ECX__ENABLED=true`
+- `SSI_ECX__POLLING_ENABLED=true`
+- `SSI_ECX__API_KEY=<key>`
+
+#### GCP Deployment
+
+The poller reuses the existing `ssi-svc` Docker image with the entrypoint args `["ecx", "poll"]`. Infrastructure is defined in `infra/environments/app/dev/terraform.tfvars` under the `ecx_poller` entry in `run_jobs`.
+
+**Cloud Run Job:** `ssi-ecx-poller`
+
+- Image: `us-central1-docker.pkg.dev/i4g-dev/applications/ssi-svc:dev`
+- Service account: SSI service account (shared with the SSI API service)
+- Timeout: 300 s, max retries: 1
+- VPC connector: Serverless connector (for Cloud SQL access)
+
+**Cloud Scheduler:** Triggers the job every 15 minutes (`*/15 * * * *`).
+
+**Environment Variables** (set in `terraform.tfvars`):
+
+| Variable                                | Value                            | Purpose                         |
+| --------------------------------------- | -------------------------------- | ------------------------------- |
+| `SSI_ECX__ENABLED`                      | `true`                           | Enable eCX integration          |
+| `SSI_ECX__POLLING_ENABLED`              | `true`                           | Enable polling mode             |
+| `SSI_ECX__POLLING_MODULES`              | `phish`                          | Modules to poll                 |
+| `SSI_ECX__POLLING_CONFIDENCE_THRESHOLD` | `50`                             | Min confidence to act on        |
+| `SSI_ECX__POLLING_AUTO_INVESTIGATE`     | `false`                          | Auto-trigger SSI investigations |
+| `SSI_ECX__BASE_URL`                     | `https://api.ecrimex.net/api/v1` | eCX API base URL                |
+| `SSI_LLM__PROVIDER`                     | `mock`                           | LLM provider for job context    |
+
+**Secrets** (via Secret Manager):
+
+| Variable           | Secret Reference                                  |
+| ------------------ | ------------------------------------------------- |
+| `SSI_ECX__API_KEY` | `projects/i4g-dev/secrets/ssi-ecx-api-key:latest` |
+
+#### Monitoring
+
+The poller tracks state in the `ecx_polling_state` table:
+
+- `last_polled_id` — cursor for incremental polling per module
+- `records_found` / `errors` — counters from the last cycle
+- `last_polled_at` — timestamp of last successful poll
+
+Query polling health:
+
+```bash
+conda run -n i4g-ssi ssi ecx poll-status
+```
+
+### 11.4 Campaign Correlation
+
+The `CampaignCorrelator` (in `ssi/src/ssi/ecx/correlation.py`) links related SSI investigations into campaigns using three strategies:
+
+1. **Wallet-based** — Investigations sharing the same cryptocurrency wallet address are grouped into a campaign with taxonomy label `shared-wallet`.
+2. **Infrastructure-based** — Investigations sharing hosting IP addresses (from eCX phish or malicious-ip enrichments) are grouped with taxonomy label `shared-infrastructure`.
+3. **Brand-based** — Investigations impersonating the same brand within a configurable time window (default 30 days) are grouped with taxonomy label `brand-impersonation`.
+
+Each strategy creates a record in core's `campaigns` table and links matching cases via `cases.campaign_id`. Deduplication ensures cases already in a campaign are not reassigned.
+
+```python
+from ssi.ecx.correlation import get_correlator
+
+correlator = get_correlator()
+if correlator:
+    results = correlator.correlate_all()
+    # {"wallet": 3, "infrastructure": 1, "brand": 2}
+```
+
 ---
 
 ## 12. Security
@@ -1118,10 +1198,11 @@ A dedicated test module (`tests/integration/test_ecx_sandbox.py`) runs against t
 
 Phase 1 and 2 require no new infrastructure — eCX queries run within the existing SSI Cloud Run Service and Job.
 
-Phase 3 adds:
+Phase 3 adds the eCX poller job (defined in `infra/environments/app/dev/terraform.tfvars` under `run_jobs.ecx_poller`):
 
-- Cloud Scheduler job for periodic eCX polling (in `infra/environments/app/dev/ssi_ecx_poller.tf`)
-- New Cloud Run Job for the poller execution
+- **Cloud Run Job** (`ssi-ecx-poller`) — Reuses the `ssi-svc` Docker image with args `["ecx", "poll"]`.
+- **Cloud Scheduler** — 15-minute interval (`*/15 * * * *`), created automatically by the `run_jobs` Terraform module.
+- **VPC Connector** — Override in `main.tf` (`run_job_vpc_connector_overrides.ecx_poller`) connects the job to Cloud SQL via the serverless VPC connector.
 
 ### 15.3 Secret Manager
 

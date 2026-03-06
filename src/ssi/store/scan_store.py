@@ -1005,6 +1005,84 @@ class ScanStore:
             rows = session.execute(stmt).all()
         return [self._row_to_dict(r) for r in rows]
 
+    # ------------------------------------------------------------------
+    # eCX polling state (Phase 3)
+    # ------------------------------------------------------------------
+
+    def get_polling_state(self, module: str) -> dict[str, Any] | None:
+        """Return the polling cursor for an eCX module, or ``None``.
+
+        Args:
+            module: eCX module name (e.g. ``"phish"``).
+
+        Returns:
+            Polling state dict or ``None`` if never polled.
+        """
+        tbl = sql_schema.ecx_polling_state
+        stmt = sa.select(tbl).where(tbl.c.module == module)
+        with self._session_factory() as session:
+            row = session.execute(stmt).first()
+        return self._row_to_dict(row) if row else None
+
+    def upsert_polling_state(
+        self,
+        module: str,
+        *,
+        last_polled_id: int,
+        records_found: int = 0,
+        errors: int = 0,
+    ) -> None:
+        """Insert or update the polling cursor for an eCX module.
+
+        Args:
+            module: eCX module name.
+            last_polled_id: Highest eCX record ID seen in this poll cycle.
+            records_found: Number of new records found.
+            errors: Number of errors encountered.
+        """
+        from datetime import datetime
+
+        now = datetime.now(UTC)
+        tbl = sql_schema.ecx_polling_state
+        with self._session_factory() as session:
+            existing = session.execute(sa.select(tbl).where(tbl.c.module == module)).first()
+            if existing:
+                session.execute(
+                    sa.update(tbl)
+                    .where(tbl.c.module == module)
+                    .values(
+                        last_polled_id=last_polled_id,
+                        last_polled_at=now,
+                        records_found=records_found,
+                        errors=errors,
+                        updated_at=now,
+                    )
+                )
+            else:
+                session.execute(
+                    sa.insert(tbl).values(
+                        module=module,
+                        last_polled_id=last_polled_id,
+                        last_polled_at=now,
+                        records_found=records_found,
+                        errors=errors,
+                        updated_at=now,
+                    )
+                )
+            session.commit()
+
+    def list_polling_states(self) -> list[dict[str, Any]]:
+        """Return all polling state rows, ordered by module name.
+
+        Returns:
+            List of polling state dicts.
+        """
+        tbl = sql_schema.ecx_polling_state
+        stmt = sa.select(tbl).order_by(tbl.c.module)
+        with self._session_factory() as session:
+            rows = session.execute(stmt).all()
+        return [self._row_to_dict(r) for r in rows]
+
     @staticmethod
     def _row_to_dict(row: Any) -> dict[str, Any]:
         """Convert a SQLAlchemy row to a JSON-serialisable dict."""
@@ -1013,6 +1091,137 @@ class ScanStore:
             if hasattr(val, "isoformat"):
                 d[key] = val.isoformat()
         return d
+
+    # ------------------------------------------------------------------
+    # Statistics / trend queries
+    # ------------------------------------------------------------------
+
+    def stats_submissions_by_brand(self, days: int = 30) -> list[dict[str, Any]]:
+        """Return submission counts grouped by brand and date.
+
+        Joins ``ecx_submissions`` with ``ecx_enrichments`` to correlate
+        brand names, then aggregates by day.  Returns a list of dicts:
+        ``[{brand, date, count}]`` sorted by date ascending.
+        """
+        subs = sql_schema.ecx_submissions
+        enr = sql_schema.ecx_enrichments
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+
+        # Brand is stored in ecx_enrichments.ecx_data JSON.
+        # We join on scan_id and extract brand from the JSON field.
+        stmt = (
+            sa.select(
+                enr.c.ecx_data["brand"].label("brand"),
+                sa.func.date(subs.c.created_at).label("date"),
+                sa.func.count().label("count"),
+            )
+            .select_from(subs.join(enr, subs.c.scan_id == enr.c.scan_id, isouter=True))
+            .where(subs.c.ecx_module == "phish")
+            .where(subs.c.created_at >= cutoff)
+            .group_by("brand", "date")
+            .order_by(sa.text("date"))
+        )
+
+        with self._session_factory() as session:
+            rows = session.execute(stmt).all()
+
+        results: list[dict[str, Any]] = []
+        for r in rows:
+            brand_val = r.brand if r.brand else "unknown"
+            # Strip JSON quotes from SQLite JSON extraction
+            if isinstance(brand_val, str):
+                brand_val = brand_val.strip('"')
+            results.append({"brand": brand_val, "date": str(r.date), "count": r.count})
+        return results
+
+    def stats_wallet_heatmap(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Return top wallets by occurrence count, grouped by currency.
+
+        Returns ``[{token_symbol, network_short, wallet_address, count}]``
+        ordered by count descending.
+        """
+        tbl = sql_schema.harvested_wallets
+        stmt = (
+            sa.select(
+                tbl.c.token_symbol,
+                tbl.c.network_short,
+                tbl.c.wallet_address,
+                sa.func.count().label("count"),
+            )
+            .group_by(tbl.c.token_symbol, tbl.c.network_short, tbl.c.wallet_address)
+            .order_by(sa.desc("count"))
+            .limit(limit)
+        )
+        with self._session_factory() as session:
+            rows = session.execute(stmt).all()
+        return [
+            {
+                "token_symbol": r.token_symbol,
+                "network_short": r.network_short,
+                "wallet_address": r.wallet_address,
+                "count": r.count,
+            }
+            for r in rows
+        ]
+
+    def stats_wallet_currency_breakdown(self) -> list[dict[str, Any]]:
+        """Return wallet counts grouped by token_symbol (currency).
+
+        Returns ``[{token_symbol, count}]`` ordered by count descending.
+        """
+        tbl = sql_schema.harvested_wallets
+        stmt = (
+            sa.select(
+                tbl.c.token_symbol,
+                sa.func.count().label("count"),
+            )
+            .group_by(tbl.c.token_symbol)
+            .order_by(sa.desc("count"))
+        )
+        with self._session_factory() as session:
+            rows = session.execute(stmt).all()
+        return [{"token_symbol": r.token_symbol, "count": r.count} for r in rows]
+
+    def stats_geo_infrastructure(self, days: int = 90) -> list[dict[str, Any]]:
+        """Return geographic distribution from enrichment data.
+
+        Extracts ``country_code`` (or ``ip_country``) from the
+        ``ecx_data`` JSON in ``ecx_enrichments`` and aggregates by
+        country.  Returns ``[{country, count}]`` ordered by count
+        descending.
+        """
+        tbl = sql_schema.ecx_enrichments
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+
+        stmt = (
+            sa.select(tbl.c.ecx_data, tbl.c.queried_at)
+            .where(tbl.c.queried_at >= cutoff)
+            .where(tbl.c.ecx_record_id.isnot(None))
+        )
+
+        with self._session_factory() as session:
+            rows = session.execute(stmt).all()
+
+        country_counts: dict[str, int] = {}
+        for r in rows:
+            data = r.ecx_data or {}
+            if isinstance(data, str):
+                import json
+
+                try:
+                    data = json.loads(data)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+            country = data.get("country_code") or data.get("ip_country") or data.get("country") or "unknown"
+            if isinstance(country, str):
+                country = country.strip('"').upper()
+            country_counts[country] = country_counts.get(country, 0) + 1
+
+        return sorted(
+            [{"country": k, "count": v} for k, v in country_counts.items()],
+            key=lambda x: x["count"],
+            reverse=True,
+        )
 
     # ------------------------------------------------------------------
     # Case creation (direct DB write to core's tables)

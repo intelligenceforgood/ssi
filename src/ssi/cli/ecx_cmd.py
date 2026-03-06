@@ -23,9 +23,9 @@ console = Console()
 
 def _get_client() -> None:
     """Get an ECXClient or exit with an error message."""
-    from ssi.osint.ecrimex import _get_client
+    from ssi.osint.ecrimex import get_client
 
-    client = _get_client()
+    client = get_client()
     if client is None:
         console.print("[red]eCX is not configured.[/red] Set SSI_ECX__ENABLED=true and SSI_ECX__API_KEY.")
         raise typer.Exit(code=1)
@@ -390,3 +390,79 @@ def list_submissions(
             ecx_id,
         )
     console.print(table)
+
+
+# ---------------------------------------------------------------------------
+# ssi ecx poll [--module <module>]
+# ---------------------------------------------------------------------------
+
+
+@ecx_app.command("poll")
+def poll(
+    module: str = typer.Option("", "--module", "-m", help="Poll a specific module only (e.g. phish)."),
+    output_json: bool = typer.Option(False, "--json", "-j", help="Output raw JSON."),
+) -> None:
+    """Manually trigger an eCX polling cycle.
+
+    Queries configured eCX modules for new records since the last poll
+    and optionally triggers SSI investigations.  Use ``--module`` to poll
+    a single module instead of all configured modules.
+    """
+
+    from ssi.ecx.poller import get_poller
+
+    poller = get_poller()
+    if poller is None:
+        console.print(
+            "[red]eCX polling is not configured.[/red] "
+            "Set SSI_ECX__ENABLED=true, SSI_ECX__POLLING_ENABLED=true, and SSI_ECX__API_KEY."
+        )
+        raise typer.Exit(code=1)
+
+    if module:
+        result = poller.poll_module(module)
+        summary: dict = {
+            "modules": {module: result},
+            "total_new": result["new"],
+            "total_triggered": result["triggered"],
+            "errors": [],
+        }
+    else:
+        summary = poller.run_poll_cycle()
+
+    if output_json:
+        console.print_json(json.dumps(summary, default=str))
+        return
+
+    # Display results
+    errors = summary.get("errors", [])
+    if errors:
+        for err in errors:
+            console.print(f"[red]Error:[/red] {err}")
+
+    modules_data = summary.get("modules", {})
+    if not modules_data:
+        console.print("[yellow]No modules polled.[/yellow]")
+        return
+
+    poll_table = Table(title="eCX Poll Results")
+    poll_table.add_column("Module")
+    poll_table.add_column("New Records", justify="right")
+    poll_table.add_column("Filtered Out", justify="right")
+    poll_table.add_column("Triggered", justify="right")
+    poll_table.add_column("Last ID", justify="right")
+
+    for mod, data in modules_data.items():
+        poll_table.add_row(
+            mod,
+            str(data.get("new", 0)),
+            str(data.get("filtered", 0)),
+            str(data.get("triggered", 0)),
+            str(data.get("last_id", "—")),
+        )
+
+    console.print(poll_table)
+    console.print(
+        f"\n[bold]Total:[/bold] {summary.get('total_new', 0)} new records, "
+        f"{summary.get('total_triggered', 0)} investigations triggered"
+    )

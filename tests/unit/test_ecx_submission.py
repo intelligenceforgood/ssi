@@ -544,7 +544,7 @@ class TestGetSubmissionService:
         mock_store = MagicMock()
         with (
             patch("ssi.settings.get_settings", return_value=settings),
-            patch("ssi.osint.ecrimex._get_client", return_value=mock_ecx),
+            patch("ssi.osint.ecrimex.get_client", return_value=mock_ecx),
             patch("ssi.store.build_scan_store", return_value=mock_store),
         ):
             result = get_submission_service()

@@ -377,6 +377,11 @@ class ECXSettings(BaseSettings):
         second flag requires an explicit opt-in confirming the APWG data
         sharing agreement is in place — a single accidental flag flip cannot
         trigger live submissions.
+
+    Polling (Phase 3):
+        ``polling_enabled`` controls inbound polling for new eCX records.
+        ``polling_modules`` defines which modules to poll.
+        ``polling_interval_minutes`` sets the polling cadence.
     """
 
     model_config = SettingsConfigDict(env_prefix="SSI_ECX__")
@@ -394,6 +399,16 @@ class ECXSettings(BaseSettings):
     queue_threshold: int = 50  # Risk score >= this → queue for review; below → skip
     cache_ttl_hours: int = 24
     currency_map_path: str = "config/ecx_currency_map.json"
+    # Phase 3 — inbound polling
+    polling_enabled: bool = False
+    polling_modules: list[str] = Field(
+        default_factory=lambda: ["phish"],
+    )
+    polling_interval_minutes: int = 15
+    polling_confidence_threshold: int = 50  # Only trigger investigation for records with confidence >= this
+    polling_auto_investigate: bool = False  # When True, auto-trigger SSI investigation for new records
+    polling_brands: list[str] = Field(default_factory=list)  # Empty = all brands
+    polling_tlds: list[str] = Field(default_factory=list)  # Empty = all TLDs
 
 
 class TaskStoreSettings(BaseSettings):

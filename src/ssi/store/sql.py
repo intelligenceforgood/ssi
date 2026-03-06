@@ -196,6 +196,24 @@ sa.Index("idx_ecx_submissions_module", ecx_submissions.c.ecx_module)
 
 
 # ---------------------------------------------------------------------------
+# ecx_polling_state — Phase 3: per-module polling cursor
+# ---------------------------------------------------------------------------
+
+ecx_polling_state = sa.Table(
+    "ecx_polling_state",
+    METADATA,
+    sa.Column(
+        "module", sa.Text(), primary_key=True
+    ),  # phish | malicious-domain | malicious-ip | cryptocurrency-addresses
+    sa.Column("last_polled_id", sa.Integer(), nullable=False, server_default="0"),
+    sa.Column("last_polled_at", TIMESTAMP, nullable=True),
+    sa.Column("records_found", sa.Integer(), nullable=False, server_default="0"),
+    sa.Column("errors", sa.Integer(), nullable=False, server_default="0"),
+    sa.Column("updated_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+)
+
+
+# ---------------------------------------------------------------------------
 # Core platform tables (read/write via the shared Cloud SQL database)
 #
 # These are NOT managed by SSI — they are owned by core's Alembic
@@ -206,10 +224,23 @@ sa.Index("idx_ecx_submissions_module", ecx_submissions.c.ecx_module)
 
 CORE_METADATA = sa.MetaData()
 
+campaigns = sa.Table(
+    "campaigns",
+    CORE_METADATA,
+    sa.Column("campaign_id", UUID_TYPE, primary_key=True),
+    sa.Column("name", sa.Text(), nullable=False),
+    sa.Column("description", sa.Text(), nullable=True),
+    sa.Column("taxonomy_labels", JSON_TYPE, nullable=True),
+    sa.Column("status", sa.Text(), nullable=False, server_default="active"),
+    sa.Column("created_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+    sa.Column("updated_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+)
+
 cases = sa.Table(
     "cases",
     CORE_METADATA,
     sa.Column("case_id", sa.Text(), primary_key=True),
+    sa.Column("campaign_id", UUID_TYPE, nullable=True),
     sa.Column("dataset", sa.Text(), nullable=False),
     sa.Column("source_type", sa.Text(), nullable=False),
     sa.Column("classification", sa.Text(), nullable=True),

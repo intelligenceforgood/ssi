@@ -1405,8 +1405,7 @@ class TestAPIEndpoints:
 
         with (
             patch("ssi.store.build_scan_store", return_value=mock_store),
-            patch("ssi.osint.ecrimex._get_client", return_value=MagicMock()),
-            patch("ssi.ecx.submission.ECXSubmissionService", return_value=mock_service),
+            patch("ssi.api.ecx_routes._require_submission_service", return_value=mock_service),
         ):
             resp = client.post(
                 "/ecx/submissions/sub-q/reject",

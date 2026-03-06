@@ -458,7 +458,7 @@ class ECXClient:
 _client_instance: ECXClient | None = None
 
 
-def _get_client() -> ECXClient | None:
+def get_client() -> ECXClient | None:
     """Return a singleton :class:`ECXClient` built from settings.
 
     Returns ``None`` when eCX is disabled or the API key is missing.
@@ -486,6 +486,10 @@ def _get_client() -> ECXClient | None:
         timeout=settings.ecx.timeout,
     )
     return _client_instance
+
+
+# Backward-compatible alias for existing internal callers.
+_get_client = get_client
 
 
 # ---------------------------------------------------------------------------

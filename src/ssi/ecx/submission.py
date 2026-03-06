@@ -629,7 +629,7 @@ def get_submission_service() -> ECXSubmissionService | None:
     Returns:
         A ready-to-use service instance, or ``None``.
     """
-    from ssi.osint.ecrimex import _get_client
+    from ssi.osint.ecrimex import get_client
     from ssi.settings import get_settings
     from ssi.store import build_scan_store
 
@@ -637,7 +637,7 @@ def get_submission_service() -> ECXSubmissionService | None:
     if not settings.submission_enabled:
         return None
 
-    client = _get_client()
+    client = get_client()
     if client is None:
         return None
 

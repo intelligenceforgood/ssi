@@ -11,6 +11,10 @@ Phase 2 — submission management:
 - ``POST /ecx/submissions/{id}/approve`` — analyst approval
 - ``POST /ecx/submissions/{id}/reject`` — analyst rejection
 - ``POST /ecx/submissions/{id}/retract`` — retract a submitted record
+
+Phase 3 — intelligence feed & polling status:
+- ``GET /ecx/feed`` — browse new eCX records with filters
+- ``GET /ecx/polling-status`` — polling cursor state per module
 """
 
 from __future__ import annotations
@@ -63,9 +67,9 @@ def _require_client() -> Any:
     Raises:
         HTTPException: With status 503 if eCX is not configured or disabled.
     """
-    from ssi.osint.ecrimex import _get_client
+    from ssi.osint.ecrimex import get_client
 
-    client = _get_client()
+    client = get_client()
     if client is None:
         raise HTTPException(status_code=503, detail="eCX integration is not configured or disabled.")
     return client
@@ -317,14 +321,7 @@ def reject_submission(submission_id: str, body: ECXRejectRequest) -> ECXSubmissi
             detail=f"Submission status is '{current}' — only queued/pending submissions can be rejected.",
         )
 
-    # Rejection doesn't need the eCX client — it's a local-only state change.
-    from ssi.ecx.submission import ECXSubmissionService
-    from ssi.osint.ecrimex import _get_client
-
-    client = _get_client()
-    if client is None:
-        raise HTTPException(status_code=503, detail="eCX not configured.")
-    service = ECXSubmissionService(client=client, store=store)
+    service = _require_submission_service()
     updated = service.analyst_reject(submission_id, body.analyst, body.reason)
     if not updated:
         raise HTTPException(status_code=500, detail="Rejection failed.")
@@ -366,6 +363,185 @@ def retract_submission(submission_id: str, body: ECXRejectRequest) -> ECXSubmiss
     if not updated:
         raise HTTPException(status_code=500, detail="Retraction failed.")
     return _submission_to_response(updated)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — Intelligence Feed & Polling Status
+# ---------------------------------------------------------------------------
+
+_VALID_FEED_MODULES = {"phish", "malicious-domain", "malicious-ip", "cryptocurrency-addresses"}
+
+
+class ECXFeedResponse(BaseModel):
+    """Paginated eCX intelligence feed response."""
+
+    module: str
+    count: int
+    records: list[dict[str, Any]]
+
+
+class ECXPollingStatusResponse(BaseModel):
+    """Polling cursor state for all modules."""
+
+    modules: list[dict[str, Any]]
+
+
+@ecx_router.get("/feed", response_model=ECXFeedResponse)
+def get_feed(
+    module: str = Query(default="phish", description="eCX module to browse."),
+    since_id: int = Query(default=0, ge=0, description="Return records with ID greater than this."),
+    confidence_min: int = Query(default=0, ge=0, le=100, description="Minimum confidence score."),
+    brand: str | None = Query(default=None, description="Filter by brand (case-insensitive substring)."),
+    limit: int = Query(default=50, ge=1, le=100, description="Maximum records."),
+) -> ECXFeedResponse:
+    """Browse new eCX records from the intelligence feed.
+
+    Queries eCX for recent records with optional filters. This endpoint
+    powers the intelligence feed UI where analysts can browse community
+    submissions and trigger investigations.
+
+    Args:
+        module: eCX module name.
+        since_id: Cursor for incremental browsing (eCX record IDs are monotonic).
+        confidence_min: Discard records below this confidence.
+        brand: Optional brand substring filter.
+        limit: Page size.
+
+    Returns:
+        Feed records for the requested module.
+    """
+    if module not in _VALID_FEED_MODULES:
+        raise HTTPException(status_code=400, detail=f"Invalid module. Choose from: {sorted(_VALID_FEED_MODULES)}")
+
+    client = _require_client()
+    from ssi.ecx.poller import _MODULE_SEARCH_FIELDS
+    from ssi.osint.ecrimex import _normalize_keys
+
+    fields = _MODULE_SEARCH_FIELDS.get(module, ["id"])
+    body: dict[str, Any] = {
+        "filters": {"idGt": since_id},
+        "fields": fields,
+        "limit": limit,
+    }
+    resp = client._request("POST", f"/{module}/search", json=body)
+    data = resp.json().get("data", [])
+    records = [_normalize_keys(r) for r in data]
+
+    # Apply optional filters
+    if confidence_min > 0:
+        records = [r for r in records if r.get("confidence", 0) >= confidence_min]
+    if brand:
+        brand_lower = brand.lower()
+        records = [r for r in records if brand_lower in str(r.get("brand", "")).lower()]
+
+    return ECXFeedResponse(module=module, count=len(records), records=records)
+
+
+@ecx_router.get("/polling-status", response_model=ECXPollingStatusResponse)
+def get_polling_status() -> ECXPollingStatusResponse:
+    """Return polling cursor state for all eCX modules.
+
+    Returns:
+        Module-level polling state including last-polled ID, timestamp,
+        record counts, and error counts.
+    """
+    from ssi.store import build_scan_store
+
+    store = build_scan_store()
+    states = store.list_polling_states()
+    return ECXPollingStatusResponse(modules=states)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3F — Statistics / Trend endpoints
+# ---------------------------------------------------------------------------
+
+
+class BrandSeries(BaseModel):
+    """Single data point: brand + date + count."""
+
+    brand: str
+    date: str
+    count: int
+
+
+class BrandSeriesResponse(BaseModel):
+    """Phish submissions grouped by brand and date."""
+
+    series: list[BrandSeries] = Field(default_factory=list)
+
+
+class WalletHeatmapEntry(BaseModel):
+    """A frequently-seen wallet address with occurrence count."""
+
+    token_symbol: str
+    network_short: str
+    wallet_address: str
+    count: int
+
+
+class CurrencyBreakdownEntry(BaseModel):
+    """Wallet count per currency/token."""
+
+    token_symbol: str
+    count: int
+
+
+class WalletHeatmapResponse(BaseModel):
+    """Top wallets and currency breakdown."""
+
+    top_wallets: list[WalletHeatmapEntry] = Field(default_factory=list)
+    currency_breakdown: list[CurrencyBreakdownEntry] = Field(default_factory=list)
+
+
+class GeoEntry(BaseModel):
+    """Country-level infrastructure count."""
+
+    country: str
+    count: int
+
+
+class GeoInfrastructureResponse(BaseModel):
+    """Geographic distribution of malicious infrastructure."""
+
+    distribution: list[GeoEntry] = Field(default_factory=list)
+
+
+@ecx_router.get("/stats/phish-by-brand", response_model=BrandSeriesResponse)
+def stats_phish_by_brand(
+    days: int = Query(default=30, ge=1, le=365),
+) -> BrandSeriesResponse:
+    """Return phish submission counts grouped by brand and date."""
+    from ssi.store import build_scan_store
+
+    store = build_scan_store()
+    series = store.stats_submissions_by_brand(days=days)
+    return BrandSeriesResponse(series=series)
+
+
+@ecx_router.get("/stats/wallet-heatmap", response_model=WalletHeatmapResponse)
+def stats_wallet_heatmap(
+    limit: int = Query(default=20, ge=1, le=100),
+) -> WalletHeatmapResponse:
+    """Return top wallets by occurrence and currency breakdown."""
+    from ssi.store import build_scan_store
+
+    store = build_scan_store()
+    top_wallets = store.stats_wallet_heatmap(limit=limit)
+    currency_breakdown = store.stats_wallet_currency_breakdown()
+    return WalletHeatmapResponse(top_wallets=top_wallets, currency_breakdown=currency_breakdown)
+
+
+@ecx_router.get("/stats/geo-infrastructure", response_model=GeoInfrastructureResponse)
+def stats_geo_infrastructure(
+    days: int = Query(default=90, ge=1, le=365),
+) -> GeoInfrastructureResponse:
+    """Return geographic distribution of malicious infrastructure."""
+    from ssi.store import build_scan_store
+
+    store = build_scan_store()
+    distribution = store.stats_geo_infrastructure(days=days)
+    return GeoInfrastructureResponse(distribution=distribution)
 
 
 def _submission_to_response(row: dict[str, Any]) -> ECXSubmissionResponse:

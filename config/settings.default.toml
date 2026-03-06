@@ -116,6 +116,14 @@ submission_enabled = false
 # the APWG data sharing agreement has been fully executed.
 submission_agreement_signed = false
 timeout = 15
+# Phase 3 — inbound polling
+polling_auto_investigate = false
+polling_brands = []
+polling_confidence_threshold = 50
+polling_enabled = false
+polling_interval_minutes = 15
+polling_modules = ["phish"]
+polling_tlds = []
 
 [storage]
 backend = "sqlite"
