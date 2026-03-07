@@ -58,7 +58,7 @@ enabled = true
 warn_at_pct = 80
 
 [ecx]
-api_key = "QEB7ENnT4drdgh0jt72hXXC4R2TaQFHasY8HXCdB"
+api_key = "" # Injected at runtime via SSI_ECX__API_KEY from Secret Manager (ssi-ecx-api-key)
 enabled = true
 # Production endpoint — real community intelligence data.
 # Sandbox URL (settings.default.toml) is only used for unit/integration/smoke tests.
