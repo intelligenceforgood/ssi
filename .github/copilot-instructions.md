@@ -36,7 +36,20 @@
 
 12. **Infrastructure Alignment** – Terraform lives in the sibling `infra/` repo. Target `i4g-dev` before `i4g-prod`.
 
-13. **Merge Readiness & Pre-Merge Review** – When the user requests a **pre-merge review**, execute the full checklist in `core/.github/pre-merge-review.instructions.md`. This includes: (a) coding standards audit against `core/.github/general-coding.instructions.md` — type hints on every function, Google-style docstrings on all public/private methods, no unused imports or dead code; (b) code quality — safe variable scoping, specific exception handling, no hard-coded secrets; (c) architecture alignment — correct use of stores/factories/settings; (d) test suite passes with zero failures; (e) docs/config updated if behavior changed; **(f) run `pre-commit run --all-files` and confirm every hook passes with no files modified on a second consecutive run — the review is not complete until this clean double-pass is achieved**. A static code audit alone is insufficient: the hooks are what enforce quality at commit time, and the review must replicate exactly what the committer will encounter. Produce a summary of issues found, fixes applied, test results, hook run output, and remaining items.
+13. **Merge Readiness & Pre-Merge Review** – When the user requests a **pre-merge review**, execute the full checklist in `core/.github/pre-merge-review.instructions.md`. This includes: (a) coding standards audit against `core/.github/general-coding.instructions.md` — type hints on every function, Google-style docstrings on all public/private methods, no unused imports or dead code; (b) code quality — safe variable scoping, specific exception handling, no hard-coded secrets; (c) architecture alignment — correct use of stores/factories/settings; (d) test suite passes with zero failures; (e) docs/config updated if behavior changed; **(f) run the pre-commit double-pass — see exact procedure below**. A static code audit alone is insufficient: the hooks are what enforce quality at commit time, and the review must replicate exactly what the committer will encounter. Produce a summary of issues found, fixes applied, test results, hook run output, and remaining items.
+
+    **SSI pre-commit procedure (must follow exactly):**
+    ```
+    cd /Users/jerry/Work/project/i4g/ssi
+    conda run -n i4g-ssi pre-commit run --all-files   # Pass 1 — auto-fixes formatting
+    git add -u                                        # Stage any auto-fixed files
+    conda run -n i4g-ssi pre-commit run --all-files   # Pass 2 — must be fully clean
+    ```
+    - Always use `conda run -n i4g-ssi pre-commit run --all-files` — **never** bare `pre-commit` (wrong env, wrong hooks).
+    - Run from the `ssi/` repo root — `.pre-commit-config.yaml` is there, not in the workspace root.
+    - Pass 1 will auto-fix Black/isort/ruff formatting; stage those changes before Pass 2.
+    - The review is **not complete** until Pass 2 exits with no files modified and all hooks passing.
+    - If a hook fails on Pass 2 that was not failing on Pass 1, do not re-run blindly — troubleshoot the specific failure first.
 
 14. **Env + Smoke Discipline** – Treat environment variables as a contract. When adding or changing settings: (a) add or update coverage under `tests/unit/` so overrides and defaults are validated locally, (b) refresh relevant docs, and (c) execute a local smoke test before any cloud deployment.
 
