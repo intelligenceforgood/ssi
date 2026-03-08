@@ -40,7 +40,7 @@ retain_days = 365
 storage_backend = "gcs"
 
 [api]
-cors_origins = ["https://console.i4g.dev", "https://app.intelligenceforgood.org", "http://localhost:3000"]
+cors_origins = ["https://console.i4g.dev", "https://app.dev.intelligenceforgood.org", "http://localhost:3000"]
 host = "0.0.0.0"
 port = 8100
 require_auth = false
@@ -48,7 +48,7 @@ require_auth = false
 [integration]
 # IMPORTANT: In Cloud Run, this is overridden by SSI_INTEGRATION__CORE_API_URL
 # to point at the core Cloud Run service URL directly (bypasses IAP).
-core_api_url = "https://api.intelligenceforgood.org"
+core_api_url = "https://api.dev.intelligenceforgood.org"
 push_to_core = true
 trigger_dossier = false
 
