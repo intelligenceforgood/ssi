@@ -87,6 +87,8 @@ class ZenBrowserManager:
         self._resize_h: int = s.zen_browser.screenshot_resize_height
         self._proxy_host: str = s.proxy.host
         self._proxy_port: str = s.proxy.port
+        self._proxy_username: str = s.proxy.username
+        self._proxy_password: str = s.proxy.password
         self._proxy_enabled: bool = s.proxy.enabled
 
         self._browser: zd.Browser | None = None
@@ -103,7 +105,12 @@ class ZenBrowserManager:
         config = zd.Config()
 
         if self._proxy_enabled and self._proxy_host and self._proxy_port:
-            proxy_url = f"http://{self._proxy_host}:{self._proxy_port}"
+            if self._proxy_username and self._proxy_password:
+                proxy_url = (
+                    f"http://{self._proxy_username}:{self._proxy_password}@{self._proxy_host}:{self._proxy_port}"
+                )
+            else:
+                proxy_url = f"http://{self._proxy_host}:{self._proxy_port}"
             config.add_argument(f"--proxy-server={proxy_url}")
             logger.info("Proxy configured: %s:%s", self._proxy_host, self._proxy_port)
 

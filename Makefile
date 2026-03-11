@@ -1,5 +1,5 @@
 .PHONY: setup install install-dev test lint format clean browsers rehydrate \
-        build-svc build-dev deploy-dev
+        build-svc build-dev deploy-dev build-prod deploy-prod
 
 # ---------- Setup ----------
 # Full first-time setup: install Python deps + native libs + Playwright browser.
@@ -54,6 +54,16 @@ deploy-dev: build-dev
 		--image us-central1-docker.pkg.dev/i4g-dev/applications/ssi-svc:dev \
 		--region us-central1 \
 		--project i4g-dev
+
+build-prod:
+	scripts/build_image.sh ssi-svc prod \
+		--registry us-central1-docker.pkg.dev/i4g-prod/applications
+
+deploy-prod: build-prod
+	gcloud run deploy ssi-svc \
+		--image us-central1-docker.pkg.dev/i4g-prod/applications/ssi-svc:prod \
+		--region us-central1 \
+		--project i4g-prod
 
 # ---------- Clean ----------
 clean:

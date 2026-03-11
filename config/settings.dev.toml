@@ -1,80 +1,11 @@
-# SSI Dev (GCP) Settings
-# Overrides defaults for Cloud Run deployment on i4g-dev.
-
-[llm]
-gcp_location = "us-central1"
-gcp_project = "i4g-dev"
-max_tokens = 4096
-model = "gemini-2.5-flash"
-provider = "gemini"
-temperature = 0.1
-token_budget_per_session = 100000
-
-[browser]
-headless = true
-record_har = true
-record_video = false
-sandbox = false # Cloud Run runs as root; Chromium needs --no-sandbox
-
-[zen_browser]
-headless = true
-page_zoom = 0.75
-screenshot_resize_height = 720
-screenshot_resize_width = 1280
-
-[proxy]
-enabled = true
-host = "gate.decodo.com"
-port = "10001"
-
-[agent]
-dom_inspection_enabled = true
-max_actions_per_site = 80
-overlay_dismiss_enabled = true
-
-[evidence]
-gcs_bucket = "i4g-dev-ssi-evidence"
-gcs_prefix = "investigations"
-output_dir = "data/evidence"
-retain_days = 365
-storage_backend = "gcs"
+# Dev (i4g-dev) overrides.
+#
+# Most cloud values live in settings.default.toml.  This file only
+# captures values that are inherently environment-specific and NOT injected
+# by Terraform env vars (see infra/environments/app/dev/terraform.tfvars).
 
 [api]
 cors_origins = ["https://console.i4g.dev", "https://app.dev.intelligenceforgood.org", "http://localhost:3000"]
-host = "0.0.0.0"
-port = 8100
-require_auth = false
 
 [integration]
-# IMPORTANT: In Cloud Run, this is overridden by SSI_INTEGRATION__CORE_API_URL
-# to point at the core Cloud Run service URL directly (bypasses IAP).
 core_api_url = "https://api.dev.intelligenceforgood.org"
-push_to_core = true
-trigger_dossier = false
-
-[cost]
-budget_per_investigation_usd = 2.0
-enabled = true
-warn_at_pct = 80
-
-[ecx]
-api_key = "" # Injected at runtime via SSI_ECX__API_KEY from Secret Manager (ssi-ecx-api-key)
-enabled = true
-# Production endpoint — real community intelligence data.
-# Sandbox URL (settings.default.toml) is only used for unit/integration/smoke tests.
-base_url = "https://api.ecrimex.net/api/v1"
-
-[storage]
-backend = "cloudsql"
-cloudsql_enable_iam_auth = true
-persist_scans = true
-
-[playbook]
-enabled = true
-fallback_to_llm = true
-
-[monitoring]
-enabled = true
-max_event_history = 1000
-snapshot_screenshots = true
-websocket_enabled = true

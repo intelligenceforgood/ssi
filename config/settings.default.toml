@@ -1,138 +1,156 @@
-# SSI Default Settings
-# Override with settings.local.toml or SSI_* environment variables.
+# SSI Default Settings — Cloud / Production Baseline
+#
+# This file defines opinionated defaults that apply to every environment.
+# Values here are production-ready; dev, prod, and local overrides are
+# minimal (CORS origins, integration URLs, local-dev toggles).
+#
+# Per-environment TOML files layer on top:
+#   settings.default.toml  <  settings.{SSI_ENV}.toml  <  settings.local.toml  <  env vars
+#
+# Cloud Run env vars (SSI_*) injected by Terraform take final precedence.
+# GCP project IDs, CloudSQL credentials, GCS buckets, and API keys are
+# always injected via env vars or Secret Manager — never hard-coded here.
 
+# ── LLM ─────────────────────────────────────────────────────────────────────────
 [llm]
 gcp_location = "us-central1"
-gcp_project = ""
 max_tokens = 4096
-model = "llama3.1"
-ollama_base_url = "http://localhost:11434"
-provider = "ollama"
+model = "gemini-2.5-flash"
+provider = "gemini"
 temperature = 0.1
 token_budget_per_session = 100000
+# gcp_project — injected via SSI_LLM__GCP_PROJECT per environment.
+# Ollama settings (used only when provider = "ollama" in local override):
+ollama_base_url = "http://localhost:11434"
 
+# ── Browser (Playwright) ────────────────────────────────────────────────────────
 [browser]
 headless = true
 record_har = true
 record_video = false
-sandbox = true
+sandbox = false # Cloud Run runs as root; Chromium requires --no-sandbox.
 timeout_ms = 30000
 
+# ── Zen Browser (undetected Chrome) ─────────────────────────────────────────────
 [zen_browser]
 action_timeout = 15
-chrome_binary = ""
 headless = true
 page_load_timeout = 45
 page_zoom = 0.75
 screenshot_resize_height = 720
 screenshot_resize_width = 1280
+# chrome_binary — injected via SSI_ZEN_BROWSER__CHROME_BINARY in Cloud Run.
 
+# ── Proxy (Decodo / SmartProxy) ─────────────────────────────────────────────────
 [proxy]
-enabled = false
+enabled = true
 host = "gate.decodo.com"
 port = "10001"
+username = "spoeevz5nw"
+# password — injected via SSI_PROXY__PASSWORD from Secret Manager.
 
-[agent]
-blank_page_retries_default = 4
-blank_page_retries_find_register = 8
-blank_page_retries_navigate_deposit = 2
-cheap_model_states = ["FILL_REGISTER", "SUBMIT_REGISTER", "CHECK_EMAIL_VERIFICATION"]
-dom_assisted_threshold = 40
-dom_direct_threshold = 75
-dom_inspection_enabled = true
-max_actions_per_site = 80
-max_context_messages = 6
-max_repeated_actions = 3
-overlay_dismiss_enabled = true
-prompt_cache_enabled = true
-stuck_threshold_check_email = 3
-stuck_threshold_default = 10
-stuck_threshold_extract_wallets = 20
-stuck_threshold_fill_register = 12
-stuck_threshold_find_register = 8
-stuck_threshold_load_site = 5
-stuck_threshold_navigate_deposit = 10
-stuck_threshold_submit_register = 15
+# ── Agent (state machine) ───────────────────────────────────────────────────────
+# All thresholds use Pydantic model defaults. Override individual values only
+# when tuning; no need to repeat them here.
 
+# ── OSINT ────────────────────────────────────────────────────────────────────────
 [osint]
 dns_timeout_sec = 5
 whois_timeout_sec = 10
+# API keys (virustotal, urlscan, ipinfo) — injected from Secret Manager.
 
+# ── Evidence ─────────────────────────────────────────────────────────────────────
 [evidence]
+gcs_prefix = "investigations"
 output_dir = "data/evidence"
 retain_days = 365
-storage_backend = "local"
+storage_backend = "gcs"
+# gcs_bucket — injected via SSI_EVIDENCE__GCS_BUCKET per environment.
 
+# ── Identity Vault ───────────────────────────────────────────────────────────────
 [identity]
 db_url = "sqlite:///data/identity_vault.db"
 default_locale = "en_US"
 rotate_per_session = true
 
+# ── API ──────────────────────────────────────────────────────────────────────────
 [api]
-cors_origins = ["http://localhost:3000", "http://localhost:5173"]
 host = "0.0.0.0"
 port = 8100
 rate_limit_per_minute = 30
 require_auth = false
+# cors_origins — set per environment in settings.{env}.toml.
 
+# ── Integration (core platform) ─────────────────────────────────────────────────
 [integration]
-core_api_url = "http://localhost:8000"
 dataset = "ssi"
-push_to_core = false
+push_to_core = true
 trigger_dossier = false
+# core_api_url — set per environment in settings.{env}.toml.
+# core_api_key — injected via SSI_INTEGRATION__CORE_API_KEY from Secret Manager.
 
+# ── Stealth ──────────────────────────────────────────────────────────────────────
 [stealth]
 apply_stealth_scripts = true
-proxy_urls = []
 randomize_fingerprint = true
 rotation_strategy = "round_robin"
 
+# ── CAPTCHA ──────────────────────────────────────────────────────────────────────
 [captcha]
 screenshot_on_detect = true
-solver_api_key = ""
 strategy = "skip"
 wait_seconds = 15
 
+# ── Cost ─────────────────────────────────────────────────────────────────────────
 [cost]
-budget_per_investigation_usd = 1.0
+budget_per_investigation_usd = 2.0
 enabled = true
 warn_at_pct = 80
 
+# ── eCrimeX (eCX) ───────────────────────────────────────────────────────────────
 [ecx]
-api_key = ""
 attribution = "IntelligenceForGood"
-auto_submit_threshold = 80
-# Sandbox URL — safe for submission testing (no real data, only test records).
-# Override to https://api.ecrimex.net/api/v1 in settings.local.toml for real enrichment.
-base_url = "https://sandbox.ecx2.ecrimex.net/api/v1"
+base_url = "https://api.ecrimex.net/api/v1"
 cache_ttl_hours = 24
 currency_map_path = "config/ecx_currency_map.json"
-enabled = false
+enabled = true
 enrichment_enabled = true
-queue_threshold = 50
-submission_enabled = false
-# SAFETY: Both submission_enabled AND submission_agreement_signed must be true
-# before any indicator data is transmitted to eCX.  Set this to true only after
-# the APWG data sharing agreement has been fully executed.
-submission_agreement_signed = false
 timeout = 15
-# Phase 3 — inbound polling
+# Submission safety gates — BOTH must be true before any data leaves SSI.
+auto_submit_threshold = 80
+queue_threshold = 50
+submission_agreement_signed = false
+submission_enabled = false
+# Inbound polling (Phase 3)
 polling_auto_investigate = false
-polling_brands = []
 polling_confidence_threshold = 50
 polling_enabled = false
 polling_interval_minutes = 15
 polling_modules = ["phish"]
-polling_tlds = []
+# api_key — injected via SSI_ECX__API_KEY from Secret Manager.
 
+# ── Storage ──────────────────────────────────────────────────────────────────────
 [storage]
-backend = "sqlite"
+backend = "cloudsql"
+cloudsql_enable_iam_auth = true
 persist_scans = true
+# cloudsql_instance, cloudsql_database, cloudsql_user — injected via env vars.
+# Local fallback paths (used only when backend = "sqlite"):
 sqlite_path = "data/ssi_store.db"
-# Point at core's database so SSI writes are visible to core's read endpoints.
-# Override via SSI_STORAGE__DB_URL env var.
-db_url = "sqlite:///../core/data/i4g_store.db"
 
+# ── Feedback ─────────────────────────────────────────────────────────────────────
 [feedback]
 db_path = "data/evidence/feedback.db"
 enabled = true
+
+# ── Playbook ─────────────────────────────────────────────────────────────────────
+[playbook]
+enabled = true
+fallback_to_llm = true
+
+# ── Monitoring ───────────────────────────────────────────────────────────────────
+[monitoring]
+enabled = true
+max_event_history = 1000
+snapshot_screenshots = true
+websocket_enabled = true

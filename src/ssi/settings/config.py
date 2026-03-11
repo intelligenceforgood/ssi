@@ -4,7 +4,8 @@ Config precedence (highest wins):
   1. CLI flags (where applicable)
   2. Environment variables (SSI_* with __ for nesting)
   3. settings.local.toml
-  4. settings.default.toml
+  4. settings.{SSI_ENV}.toml  (dev | prod | local)
+  5. settings.default.toml    (cloud / production baseline)
 """
 
 from __future__ import annotations
@@ -178,6 +179,8 @@ class ProxySettings(BaseSettings):
 
     host: str = "gate.decodo.com"
     port: str = "10001"
+    username: str = "spoeevz5nw"
+    password: str = ""
     enabled: bool = False
 
 

@@ -1,19 +1,57 @@
 # Local developer overrides — not committed to git.
 # Copy this file to settings.local.toml and customize.
+#
+# Defaults (settings.default.toml) are cloud/production-ready (Gemini, CloudSQL,
+# GCS, proxy enabled).  The overrides below switch to a local-friendly stack.
+# Uncomment the sections you need.
 
-# [osint]
-# virustotal_api_key = "your-key-here"
-# ipinfo_token = "your-token-here"
+# ── LLM: use Ollama locally instead of Gemini ───────────────────────────────────
+[llm]
+provider = "ollama"
+model = "llama3.1"
+# vision_model = "gemma3"   # Optional vision-capable model for multimodal calls
 
-# [llm]
-# provider = "ollama"
-# model = "llama3.3"
-
-# [browser]
+# ── Browser: enable sandbox locally (not running as root) ────────────────────────
+[browser]
+sandbox = true
 # headless = false  # Set to false to watch the browser during development
 
-# [storage]
-# Point SSI at core's database so investigations appear in core's UI.
-# db_url = "sqlite:///../core/data/i4g_store.db"
+# ── Proxy: disabled by default locally; enable if you have credentials ───────────
+# [proxy]
+# enabled = true
+# password = ""  # Or inject via SSI_PROXY__PASSWORD env var
+
+# ── Evidence: local filesystem instead of GCS ───────────────────────────────────
+[evidence]
+storage_backend = "local"
+
+# ── API: localhost CORS ─────────────────────────────────────────────────────────
+[api]
+cors_origins = ["http://localhost:3000", "http://localhost:5173"]
+
+# ── Integration: point at local core server, no push ────────────────────────────
+[integration]
+core_api_url = "http://localhost:8000"
+push_to_core = false
+
+# ── Cost: lower budget for local testing ─────────────────────────────────────────
+[cost]
+budget_per_investigation_usd = 1.0
+
+# ── Storage: SQLite locally, pointing at core's DB ──────────────────────────────
+[storage]
+backend = "sqlite"
+# Point at core's database so SSI writes are visible to core's read endpoints.
+db_url = "sqlite:///../core/data/i4g_store.db"
 # To use SSI's own standalone DB instead, clear db_url:
 # db_url = ""
+
+# ── OSINT API keys ──────────────────────────────────────────────────────────────
+# [osint]
+# virustotal_api_key = "your-key-here"
+# urlscan_api_key = "your-key-here"
+# ipinfo_token = "your-token-here"
+
+# ── eCX: API key for enrichment ─────────────────────────────────────────────────
+# [ecx]
+# api_key = "your-ecx-api-key"

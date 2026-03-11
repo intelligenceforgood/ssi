@@ -1,0 +1,11 @@
+# Prod (i4g-prod) overrides.
+#
+# Most production values live in settings.default.toml.  This file only
+# captures values that are inherently environment-specific and NOT injected
+# by Terraform env vars (see infra/environments/app/prod/terraform.tfvars).
+
+[api]
+cors_origins = ["https://console.intelligenceforgood.org", "https://app.intelligenceforgood.org"]
+
+[integration]
+core_api_url = "https://api.intelligenceforgood.org"

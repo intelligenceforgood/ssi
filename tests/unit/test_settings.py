@@ -38,8 +38,16 @@ class TestSettings:
         assert os.path.isabs(s.evidence.output_dir)
 
     def test_dev_profile_loads_gemini(self, monkeypatch):
-        """SSI_ENV=dev should load settings.dev.toml with Gemini provider."""
+        """SSI_ENV=dev with GCP_PROJECT override should resolve Gemini.
+
+        In Cloud Run, settings.local.toml is absent so defaults (Gemini) apply.
+        Locally, settings.local.toml overrides to Ollama.  We simulate the
+        Cloud Run scenario by injecting the env var explicitly.
+        """
         monkeypatch.setenv("SSI_ENV", "dev")
+        monkeypatch.setenv("SSI_LLM__PROVIDER", "gemini")
+        monkeypatch.setenv("SSI_LLM__MODEL", "gemini-2.5-flash")
+        monkeypatch.setenv("SSI_LLM__GCP_PROJECT", "i4g-dev")
         from ssi.settings.config import Settings
 
         s = Settings()
@@ -49,8 +57,14 @@ class TestSettings:
         assert s.llm.gcp_project == "i4g-dev"
 
     def test_dev_profile_gcs_evidence(self, monkeypatch):
-        """Dev profile should enable GCS evidence storage."""
+        """Dev profile should enable GCS evidence storage.
+
+        Inject env vars to simulate Cloud Run (no settings.local.toml).
+        The GCS bucket is injected by Terraform, so we set it explicitly.
+        """
         monkeypatch.setenv("SSI_ENV", "dev")
+        monkeypatch.setenv("SSI_EVIDENCE__STORAGE_BACKEND", "gcs")
+        monkeypatch.setenv("SSI_EVIDENCE__GCS_BUCKET", "i4g-dev-ssi-evidence")
         from ssi.settings.config import Settings
 
         s = Settings()
@@ -59,8 +73,12 @@ class TestSettings:
         assert s.evidence.gcs_prefix == "investigations"
 
     def test_dev_profile_sandbox_disabled(self, monkeypatch):
-        """Dev profile should disable browser sandbox for Cloud Run."""
+        """Dev profile should disable browser sandbox for Cloud Run.
+
+        Inject env var to simulate Cloud Run (no settings.local.toml).
+        """
         monkeypatch.setenv("SSI_ENV", "dev")
+        monkeypatch.setenv("SSI_BROWSER__SANDBOX", "false")
         from ssi.settings.config import Settings
 
         s = Settings()
@@ -151,9 +169,10 @@ class TestProxySettings:
         from ssi.settings.config import Settings
 
         s = Settings()
-        assert s.proxy.enabled is False
+        assert s.proxy.enabled is True  # Defaults are production-ready (proxy on)
         assert s.proxy.host == "gate.decodo.com"
         assert s.proxy.port == "10001"
+        assert s.proxy.username == "spoeevz5nw"
 
 
 class TestAgentSettings:
@@ -293,7 +312,7 @@ class TestMonitoringSettings:
         assert s.monitoring.websocket_enabled is True
         assert s.monitoring.jsonl_output is False
         assert s.monitoring.snapshot_screenshots is True
-        assert s.monitoring.max_event_history == 500
+        assert s.monitoring.max_event_history == 1000
         assert s.monitoring.guidance_timeout_sec == 300
 
 
