@@ -115,7 +115,7 @@ cache_ttl_hours = 24
 currency_map_path = "config/ecx_currency_map.json"
 enabled = true
 enrichment_enabled = true
-timeout = 15
+timeout = 8 # eCX is best-effort enrichment; fail fast when unreachable.
 # Submission safety gates — BOTH must be true before any data leaves SSI.
 auto_submit_threshold = 80
 queue_threshold = 50

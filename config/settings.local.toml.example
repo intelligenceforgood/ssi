@@ -53,5 +53,8 @@ db_url = "sqlite:///../core/data/i4g_store.db"
 # ipinfo_token = "your-token-here"
 
 # ── eCX: API key for enrichment ─────────────────────────────────────────────────
+# ECX is enabled by default (settings.default.toml).  Set api_key to enable
+# enrichment locally, or set enabled = false to skip ECX queries entirely.
 # [ecx]
 # api_key = "your-ecx-api-key"
+# enabled = false  # Uncomment to disable ECX if no key or experiencing 502s

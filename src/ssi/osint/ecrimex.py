@@ -32,6 +32,15 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
+
+class _RetryableHTTPError(httpx.HTTPStatusError):
+    """Raised for 429/5xx responses so ``@with_retries`` can back off.
+
+    Subclasses :class:`httpx.HTTPStatusError` so callers that catch the
+    base class still work (e.g. ``_safe_query``).
+    """
+
+
 # ---------------------------------------------------------------------------
 # camelCase → snake_case field normalisation
 # ---------------------------------------------------------------------------
@@ -116,16 +125,20 @@ class ECXClient:
         }
 
     @with_retries(
-        max_retries=3,
-        backoff_seconds=2.0,
-        retryable_exceptions=(httpx.TransportError,),
+        max_retries=2,
+        backoff_seconds=1.0,
+        retryable_exceptions=(_RetryableHTTPError,),
     )
     def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         """Execute an HTTP request with retry and error handling.
 
-        Non-retryable HTTP errors (4xx except 429) are logged and
-        re-raised so callers can handle them.  HTTP 429 and 5xx errors
-        are retried with exponential backoff.
+        HTTP 429/5xx errors are retried up to 2 times with exponential
+        backoff via ``_RetryableHTTPError``.
+
+        Transport errors (ReadTimeout, ConnectTimeout, NetworkError) are
+        **not** retried — eCX is a best-effort enrichment source and
+        ``_safe_query`` handles graceful degradation immediately, avoiding
+        multi-minute hangs when eCX is unreachable.
 
         Args:
             method: HTTP method (GET, POST, PUT).
@@ -136,14 +149,21 @@ class ECXClient:
             The HTTP response.
 
         Raises:
-            httpx.HTTPStatusError: For non-retryable HTTP errors.
-            httpx.TransportError: After max retries on transport failures.
+            _RetryableHTTPError: For 429/5xx (caught by decorator, retried).
+            httpx.HTTPStatusError: For non-retryable 4xx errors.
+            httpx.TransportError: Propagated immediately to ``_safe_query``.
         """
         resp = self._http.request(method, path, **kwargs)
 
-        # Retry on rate limit and server errors
+        # Raise a retryable subclass for server errors and rate limits so
+        # @with_retries can back off and retry.  Plain HTTPStatusError would
+        # not be caught by the decorator.
         if resp.status_code in (429, 500, 502, 503, 504):
-            resp.raise_for_status()
+            raise _RetryableHTTPError(
+                f"eCX HTTP {resp.status_code} — will retry",
+                request=resp.request,
+                response=resp,
+            )
 
         # Module access denied — log and let caller handle empty results
         if resp.status_code == 403:
@@ -520,6 +540,13 @@ def _safe_query(
     except httpx.HTTPStatusError as exc:
         msg = f"{fn.__name__}: HTTP {exc.response.status_code}"
         logger.warning("eCX query failed — %s", msg)
+        if errors is not None:
+            errors.append(msg)
+    except httpx.TransportError as exc:
+        # Timeout or connection failure — eCX is unreachable right now.
+        # Log concisely (no stack trace) and continue enrichment without this module.
+        msg = f"{fn.__name__}: {type(exc).__name__}"
+        logger.warning("eCX unreachable — %s (skipping)", msg)
         if errors is not None:
             errors.append(msg)
     except Exception as exc:

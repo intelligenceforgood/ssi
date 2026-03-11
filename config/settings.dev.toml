@@ -9,3 +9,9 @@ cors_origins = ["https://console.i4g.dev", "https://app.dev.intelligenceforgood.
 
 [integration]
 core_api_url = "https://api.dev.intelligenceforgood.org"
+
+[ecx]
+enabled = true
+# api_key — injected via SSI_ECX__API_KEY from Secret Manager (i4g-dev).
+# To temporarily test enrichment from your workstation:
+#   conda run -n i4g-ssi SSI_ECX__API_KEY=<key> ssi investigate <url>

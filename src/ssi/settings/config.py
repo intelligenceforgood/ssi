@@ -371,8 +371,9 @@ class ECXSettings(BaseSettings):
     Controls API access to the APWG eCrimeX data clearinghouse for enrichment
     (Phase 1), submission (Phase 2), and polling (Phase 3).
 
-    The default ``base_url`` points to the eCX sandbox environment.  Set
-    ``SSI_ECX__BASE_URL`` to ``https://ecrimex.net/api/v1`` for production.
+    The default ``base_url`` points to the eCX production environment.
+    Use the sandbox (``https://sandbox.ecx2.ecrimex.net/api/v1``) only for
+    local integration testing; override via ``SSI_ECX__BASE_URL``.
 
     Submission safety gates (Phase 2):
         Both ``submission_enabled`` *and* ``submission_agreement_signed``
@@ -391,9 +392,9 @@ class ECXSettings(BaseSettings):
 
     enabled: bool = False
     api_key: str = ""
-    base_url: str = "https://sandbox.ecx2.ecrimex.net/api/v1"
+    base_url: str = "https://api.ecrimex.net/api/v1"
     attribution: str = "IntelligenceForGood"
-    timeout: int = 15
+    timeout: int = 8  # Fail fast — eCX is best-effort enrichment, not a hard dependency.
     enrichment_enabled: bool = True
     # Phase 2 submission gates — BOTH must be true before any data leaves SSI.
     submission_enabled: bool = False

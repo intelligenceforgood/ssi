@@ -663,7 +663,7 @@ class TestECXSettings:
         assert s.ecx.api_key == "my-secret-key"
 
     def test_env_override_base_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """SSI_ECX__BASE_URL should override the sandbox default."""
+        """SSI_ECX__BASE_URL env var should override the configured default."""
         monkeypatch.setenv("SSI_ECX__BASE_URL", "https://prod.ecx.example.com/api/v1")
         from ssi.settings.config import Settings
 
