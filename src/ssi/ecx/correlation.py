@@ -2,7 +2,7 @@
 
 Links SSI investigations through shared indicators (wallets, IPs/ASNs,
 brand impersonation patterns) and creates campaign records in the core
-``campaigns`` table so analysts can see coordinated threat activity.
+``threat_campaigns`` table so analysts can see coordinated threat activity.
 
 Correlation strategies:
 
@@ -390,34 +390,40 @@ class CampaignCorrelator:
         name: str,
         description: str,
         taxonomy_labels: list[str],
+        origin: str = "ssi_correlation",
     ) -> str:
-        """Insert a new campaign row into core's ``campaigns`` table.
+        """Insert a new campaign row into core's ``threat_campaigns`` table.
 
         Args:
             session: Active DB session.
-            name: Campaign display name.
+            name: Campaign display name (truncated to 60 chars).
             description: Human-readable description.
             taxonomy_labels: Classification labels for the campaign.
+            origin: Origin source identifier.
 
         Returns:
             The generated ``campaign_id``.
         """
-        from ssi.store.sql import CORE_METADATA
+        import json
 
-        campaigns = CORE_METADATA.tables.get("campaigns")
-        if campaigns is None:
-            campaigns = _get_campaigns_table()
+        from ssi.store.sql import threat_campaigns
 
         campaign_id = str(uuid4())
         now = datetime.now(UTC)
 
+        # Truncate name to 60 chars per S1-27; preserve original in metadata
+        display_name = name[:60] if len(name) > 60 else name
+        metadata = {"original_label": name, "taxonomy_labels": taxonomy_labels}
+
         session.execute(
-            sa.insert(campaigns).values(
+            sa.insert(threat_campaigns).values(
                 campaign_id=campaign_id,
-                name=name,
+                name=display_name,
                 description=description,
-                taxonomy_labels=taxonomy_labels,
-                status="active",
+                origin=origin,
+                status="emerging",
+                metadata=json.dumps(metadata),
+                created_by="ssi_correlator",
                 created_at=now,
                 updated_at=now,
             )
@@ -429,7 +435,9 @@ class CampaignCorrelator:
         session: Session,
         case_ids: set[str],
     ) -> str | None:
-        """Check if any of the given cases already belong to a campaign.
+        """Check if any of the given cases already belong to a threat campaign.
+
+        Looks up ``threat_campaign_cases`` for existing links.
 
         Args:
             session: Active DB session.
@@ -438,18 +446,11 @@ class CampaignCorrelator:
         Returns:
             The ``campaign_id`` if found, else ``None``.
         """
-        from ssi.store.sql import CORE_METADATA
-
-        cases_table = CORE_METADATA.tables.get("cases")
-        if cases_table is None:
-            cases_table = _get_cases_table()
+        from ssi.store.sql import threat_campaign_cases
 
         stmt = (
-            sa.select(cases_table.c.campaign_id)
-            .where(
-                cases_table.c.case_id.in_(list(case_ids)),
-                cases_table.c.campaign_id.isnot(None),
-            )
+            sa.select(threat_campaign_cases.c.campaign_id)
+            .where(threat_campaign_cases.c.case_id.in_(list(case_ids)))
             .limit(1)
         )
         row = session.execute(stmt).first()
@@ -461,7 +462,7 @@ class CampaignCorrelator:
         campaign_id: str,
         case_ids: set[str],
     ) -> int:
-        """Set ``campaign_id`` on cases that are not yet linked.
+        """Insert rows into ``threat_campaign_cases`` for unlinked cases.
 
         Args:
             session: Active DB session.
@@ -469,27 +470,35 @@ class CampaignCorrelator:
             case_ids: Cases to link.
 
         Returns:
-            Number of cases actually updated.
+            Number of cases actually linked.
         """
-        from ssi.store.sql import CORE_METADATA
-
-        cases_table = CORE_METADATA.tables.get("cases")
-        if cases_table is None:
-            cases_table = _get_cases_table()
+        from ssi.store.sql import threat_campaign_cases
 
         now = datetime.now(UTC)
-        result = session.execute(
-            sa.update(cases_table)
-            .where(
-                cases_table.c.case_id.in_(list(case_ids)),
-                sa.or_(
-                    cases_table.c.campaign_id.is_(None),
-                    cases_table.c.campaign_id != campaign_id,
-                ),
-            )
-            .values(campaign_id=campaign_id, updated_at=now)
+        linked = 0
+
+        # Find which case_ids are already linked to this campaign
+        existing_stmt = sa.select(threat_campaign_cases.c.case_id).where(
+            threat_campaign_cases.c.campaign_id == campaign_id,
+            threat_campaign_cases.c.case_id.in_(list(case_ids)),
         )
-        return result.rowcount  # type: ignore[return-value]
+        already_linked = {r.case_id for r in session.execute(existing_stmt).fetchall()}
+
+        for cid in case_ids:
+            if cid in already_linked:
+                continue
+            session.execute(
+                sa.insert(threat_campaign_cases).values(
+                    campaign_id=campaign_id,
+                    case_id=cid,
+                    linked_at=now,
+                    linked_by="ssi_correlator",
+                    link_reason="auto_correlation",
+                )
+            )
+            linked += 1
+
+        return linked
 
 
 # ---------------------------------------------------------------------------
@@ -534,68 +543,6 @@ def _build_scan_case_map(session: Session, scan_ids: set[str]) -> dict[str, str]
     )
     rows = session.execute(stmt).fetchall()
     return {row.scan_id: row.case_id for row in rows}
-
-
-def _get_campaigns_table() -> sa.Table:
-    """Get or reflect the ``campaigns`` table from CORE_METADATA.
-
-    Since SSI's CORE_METADATA may not define ``campaigns`` inline,
-    we define the minimal columns needed for INSERT.
-
-    Returns:
-        A SQLAlchemy ``Table`` bound to CORE_METADATA.
-    """
-    from ssi.store.sql import CORE_METADATA, JSON_TYPE, TIMESTAMP, UUID_TYPE
-
-    return sa.Table(
-        "campaigns",
-        CORE_METADATA,
-        sa.Column("campaign_id", UUID_TYPE, primary_key=True),
-        sa.Column("name", sa.Text(), nullable=False),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("taxonomy_labels", JSON_TYPE, nullable=True),
-        sa.Column("status", sa.Text(), nullable=False, server_default="active"),
-        sa.Column("created_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
-        sa.Column("updated_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
-        extend_existing=True,
-    )
-
-
-def _get_cases_table() -> sa.Table:
-    """Ensure the ``cases`` stub in CORE_METADATA has ``campaign_id``.
-
-    The SSI ``cases`` table definition in ``sql.py`` CORE_METADATA
-    may not include ``campaign_id``.  We add it here.
-
-    Returns:
-        A SQLAlchemy ``Table`` bound to CORE_METADATA.
-    """
-    from ssi.store.sql import CORE_METADATA, TIMESTAMP, UUID_TYPE
-
-    cases_tbl = CORE_METADATA.tables.get("cases")
-    if cases_tbl is not None and "campaign_id" in cases_tbl.c:
-        return cases_tbl
-
-    # Re-define with campaign_id
-    return sa.Table(
-        "cases",
-        CORE_METADATA,
-        sa.Column("case_id", sa.Text(), primary_key=True),
-        sa.Column("campaign_id", UUID_TYPE, nullable=True),
-        sa.Column("dataset", sa.Text(), nullable=False),
-        sa.Column("source_type", sa.Text(), nullable=False),
-        sa.Column("classification", sa.Text(), nullable=True),
-        sa.Column("classification_status", sa.Text(), nullable=False, server_default="pending"),
-        sa.Column("classification_result", sa.JSON(), nullable=True),
-        sa.Column("confidence", sa.Numeric(5, 4), nullable=False, server_default="0"),
-        sa.Column("risk_score", sa.Numeric(5, 1), nullable=False, server_default="0"),
-        sa.Column("raw_text_sha256", sa.Text(), nullable=False),
-        sa.Column("status", sa.Text(), nullable=False, server_default="open"),
-        sa.Column("metadata", sa.JSON(), nullable=True),
-        sa.Column("updated_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
-        sa.Column("created_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
-        extend_existing=True,
-    )
 
 
 def get_correlator() -> CampaignCorrelator | None:

@@ -236,6 +236,33 @@ campaigns = sa.Table(
     sa.Column("updated_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
 )
 
+threat_campaigns = sa.Table(
+    "threat_campaigns",
+    CORE_METADATA,
+    sa.Column("campaign_id", UUID_TYPE, primary_key=True),
+    sa.Column("name", sa.Text(), nullable=False),
+    sa.Column("description", sa.Text(), nullable=True),
+    sa.Column("origin", sa.Text(), nullable=False, server_default="manual"),
+    sa.Column("status", sa.Text(), nullable=False, server_default="emerging"),
+    sa.Column("risk_score", sa.Numeric(5, 1), nullable=False, server_default="0"),
+    sa.Column("taxonomy_rollup", JSON_TYPE, nullable=True),
+    sa.Column("metadata", JSON_TYPE, nullable=True),
+    sa.Column("created_by", sa.Text(), nullable=False, server_default="system"),
+    sa.Column("created_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+    sa.Column("updated_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+)
+
+threat_campaign_cases = sa.Table(
+    "threat_campaign_cases",
+    CORE_METADATA,
+    sa.Column("campaign_id", UUID_TYPE, nullable=False),
+    sa.Column("case_id", sa.Text(), nullable=False),
+    sa.Column("linked_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+    sa.Column("linked_by", sa.Text(), nullable=False, server_default="manual"),
+    sa.Column("link_reason", sa.Text(), nullable=True),
+    sa.UniqueConstraint("campaign_id", "case_id", name="uq_threat_campaign_cases"),
+)
+
 cases = sa.Table(
     "cases",
     CORE_METADATA,
