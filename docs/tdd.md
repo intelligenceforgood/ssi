@@ -247,6 +247,7 @@ Each scanned site is a **case** in the core database, enabling full integration 
 | `cases`            | Each scam site = one case (`source_type="ssi_scan"`) | Excellent |
 | `ingestion_runs`   | Each batch scan = one ingestion run                  | Good      |
 | `campaigns`        | Group related scam sites                             | Good      |
+| `campaign_stats`   | Threat campaign aggregates (TIFAP migration target)  | Good      |
 | `source_documents` | Investigation JSON, screenshots, HAR, DOM            | Good      |
 | `entities`         | Domains, IPs, registrants, SSL issuers               | Good      |
 | `indicators`       | Wallet addresses, malicious IPs/domains/URLs         | Excellent |
@@ -843,3 +844,17 @@ tests/fixtures/scam_sites/
 ```
 
 **Current coverage**: 599 tests (575 unit + 24 integration).
+
+## 13. Campaign Correlator Migration to Threat Campaigns (Core Sprint 6)
+
+SSI's `CampaignCorrelator` (Phase 3 of eCrimeX integration) groups related investigations into campaigns using wallet-based, IP/ASN-based, and brand-pattern strategies. With Core Sprint 6, campaign data now flows into the `campaign_stats` table (TIFAP threat campaigns model) in addition to the existing `campaigns` table.
+
+### Migration path
+
+1. **Write path**: `ScanStore.create_case_record()` continues writing to `campaigns` via the existing relationship. The Core aggregation job (`i4g jobs aggregate`) materializes `campaign_stats` from the `campaigns` + `cases` tables, so SSI campaigns are automatically reflected in TIFAP analytics.
+2. **Read path**: SSI campaign views (Console `/ssi/campaigns`) continue reading from the `campaigns` table. The TIFAP Intelligence Dashboard and Campaign detail views read from `campaign_stats`.
+3. **Schema alignment**: The `campaign_stats.campaign_id` foreign key references `campaigns.id`, ensuring SSI-created campaigns appear in TIFAP views without additional writes.
+
+### No SSI code changes required
+
+The migration is transparent to SSI because the aggregation happens in Core's worker job. SSI's `CampaignCorrelator` writes to `campaigns`; Core's aggregation job reads from `campaigns` and writes to `campaign_stats`.
