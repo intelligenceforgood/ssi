@@ -53,6 +53,7 @@ site_scans = sa.Table(
     sa.Column("metadata", JSON_TYPE, nullable=True),
     sa.Column("started_at", TIMESTAMP, nullable=True),
     sa.Column("completed_at", TIMESTAMP, nullable=True),
+    sa.Column("normalized_url", sa.Text(), nullable=True),
     sa.Column("created_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
     sa.Column("updated_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
 )
@@ -61,6 +62,28 @@ sa.Index("idx_site_scans_domain", site_scans.c.domain)
 sa.Index("idx_site_scans_status", site_scans.c.status)
 sa.Index("idx_site_scans_created_at", site_scans.c.created_at)
 sa.Index("idx_site_scans_risk_score", site_scans.c.risk_score)
+sa.Index(
+    "idx_site_scans_normalized_url",
+    site_scans.c.normalized_url,
+    site_scans.c.status,
+    site_scans.c.completed_at,
+)
+
+# ---------------------------------------------------------------------------
+# case_investigations — many-to-many link between cases and scans
+# ---------------------------------------------------------------------------
+
+case_investigations = sa.Table(
+    "case_investigations",
+    METADATA,
+    sa.Column("case_id", sa.Text(), nullable=False),
+    sa.Column("scan_id", UUID_TYPE, nullable=False),
+    sa.Column("trigger_type", sa.Text(), nullable=False, server_default="manual"),  # manual | auto | case_created
+    sa.Column("created_at", TIMESTAMP, nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+    sa.PrimaryKeyConstraint("case_id", "scan_id"),
+)
+sa.Index("idx_case_investigations_scan_id", case_investigations.c.scan_id)
+sa.Index("idx_case_investigations_trigger_type", case_investigations.c.trigger_type)
 
 # ---------------------------------------------------------------------------
 # harvested_wallets — extracted cryptocurrency addresses

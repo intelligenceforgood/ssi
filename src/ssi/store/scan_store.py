@@ -106,6 +106,12 @@ class ScanStore:
         """
         scan_id = scan_id or str(uuid4())
         now = datetime.now(UTC)
+
+        # Compute canonical URL for dedup lookups
+        from i4g.utils.url_normalization import normalize_url
+
+        normalized = normalize_url(url)
+
         with self._session_factory() as session:
             session.execute(
                 sa.insert(sql_schema.site_scans).values(
@@ -115,6 +121,7 @@ class ScanStore:
                     domain=domain,
                     scan_type=scan_type,
                     status="running",
+                    normalized_url=normalized,
                     metadata=metadata or {},
                     started_at=now,
                     created_at=now,
@@ -1398,6 +1405,16 @@ class ScanStore:
                     sa.update(sql_schema.site_scans)
                     .where(sql_schema.site_scans.c.scan_id == scan_id)
                     .values(case_id=case_id, updated_at=now)
+                )
+
+                # Write to case_investigations join table (many-to-many link)
+                link_insert = dialect_insert(session, sql_schema.case_investigations)
+                session.execute(
+                    link_insert.values(
+                        case_id=case_id,
+                        scan_id=scan_id,
+                        trigger_type="case_created",
+                    ).on_conflict_do_nothing()
                 )
 
                 session.commit()
