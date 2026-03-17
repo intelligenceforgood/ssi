@@ -1196,7 +1196,7 @@ A dedicated test module (`tests/integration/test_ecx_sandbox.py`) runs against t
 
 ### 15.2 Infrastructure (Terraform)
 
-Phase 1 and 2 require no new infrastructure — eCX queries run within the existing SSI Cloud Run Service and Job.
+Phase 1 and 2 require no new infrastructure — eCX queries run within the existing SSI Cloud Run Service (`ssi-svc`).
 
 Phase 3 adds the eCX poller job (defined in `infra/environments/app/dev/terraform.tfvars` under `run_jobs.ecx_poller`):
 

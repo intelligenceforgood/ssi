@@ -75,6 +75,7 @@ rotate_per_session = true
 
 # ── API ──────────────────────────────────────────────────────────────────────────
 [api]
+dedup_staleness_days = 30
 host = "0.0.0.0"
 port = 8100
 rate_limit_per_minute = 30
@@ -135,8 +136,8 @@ backend = "cloudsql"
 cloudsql_enable_iam_auth = true
 persist_scans = true
 # cloudsql_instance, cloudsql_database, cloudsql_user — injected via env vars.
-# Local fallback paths (used only when backend = "sqlite"):
-sqlite_path = "data/ssi_store.db"
+# Local fallback path (used only when backend = "sqlite" and db_url is unset):
+sqlite_path = "data/i4g_store.db"
 
 # ── Feedback ─────────────────────────────────────────────────────────────────────
 [feedback]

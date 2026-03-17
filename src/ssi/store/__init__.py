@@ -1,9 +1,10 @@
 """SSI Store — SQL schema, engine helpers, and ScanStore.
 
-This package provides SSI's local persistence layer, mirroring the four
-tables defined in core's schema (``site_scans``, ``harvested_wallets``,
+SSI shares a single database with core (locally ``core/data/i4g_store.db``,
+in cloud the shared Cloud SQL instance).  This package mirrors the four
+SSI table definitions (``site_scans``, ``harvested_wallets``,
 ``agent_sessions``, ``pii_exposures``) so SSI can read/write them
-independently of the core API.
+without importing the ``i4g`` package.
 """
 
 from __future__ import annotations

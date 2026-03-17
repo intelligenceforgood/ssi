@@ -44,7 +44,7 @@ investigate:
 
 # ---------- Docker / Deploy ----------
 build-svc:
-	docker build -f docker/Dockerfile -t ssi-svc:local .
+	docker build -f docker/ssi-svc.Dockerfile -t ssi-svc:local .
 
 build-dev:
 	scripts/build_image.sh ssi-svc dev

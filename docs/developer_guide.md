@@ -511,17 +511,15 @@ SSI runs on Google Cloud Run in the `i4g-dev` project alongside the core platfor
 Terraform config lives in `infra/environments/app/dev/`:
 
 - Service account `sa-ssi` with Vertex AI, Storage, Logging, Monitoring roles
-- Cloud Run job `ssi-investigate` (long-running investigations)
+- Cloud Run Service `ssi-svc` (persistent FastAPI server, CPU always allocated)
 - GCS bucket `i4g-dev-ssi-evidence` for evidence storage
-
-SSI API endpoints are served by the core gateway Cloud Run Service (no separate SSI service).
 
 ### Deploy workflow
 
 ```bash
-# 1. Build and push job image
+# 1. Build and push service image
 cd ssi/
-make push-job
+scripts/build_image.sh ssi-svc dev
 
 # 2. Apply Terraform
 cd ../infra/environments/app/dev/

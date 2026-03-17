@@ -158,7 +158,7 @@ Simpler imports: `from ssi.models import InvestigationResult`. No namespace pack
 | **LLM (text)**        | Ollama (Llama 3.3)                       | Vertex AI Gemini 2.0 Flash                | Vertex AI Gemini 2.0 Flash                 |
 | **LLM (vision)**      | Ollama (Gemma 3 12B / Qwen3-VL 8B)       | Vertex AI Gemini 2.0 Flash                | Vertex AI Gemini 2.0 Flash                 |
 | **LLM (escalation)**  | —                                        | Vertex AI Gemini 2.5 Pro                  | Vertex AI Gemini 2.5 Pro                   |
-| **Relational DB**     | SQLite (`data/ssi_store.db`)             | Cloud SQL PostgreSQL 15                   | Cloud SQL PostgreSQL 15                    |
+| **Relational DB**     | Shared SQLite (`core/data/i4g_store.db`) | Cloud SQL PostgreSQL 15 (shared)          | Cloud SQL PostgreSQL 15 (shared)           |
 | **Evidence Storage**  | Local FS (`data/evidence/`)              | GCS bucket                                | GCS bucket                                 |
 | **Proxy**             | Decodo residential (premium)             | Decodo residential (premium)              | Decodo residential (premium)               |
 | **Secrets**           | `.env.local`                             | GCP Secret Manager                        | GCP Secret Manager                         |
@@ -726,8 +726,8 @@ interface GuidanceCommand {
 │                        GCP Project (i4g-dev)                │
 │                                                             │
 │  ┌───────────────────┐     ┌──────────────────────────┐     │
-│  │ Cloud Run Service │     │ Cloud Run Job            │     │
-│  │ core gateway      │     │ ssi-investigate          │     │
+│  │ Cloud Run Service │     │ Cloud Run Service        │     │
+│  │ core gateway      │     │ ssi-svc                  │     │
 │  │ (FastAPI, 19 rtr) │────▶│ (Browser + LLM + OSINT)  │     │
 │  └────────┬──────────┘     └────────────┬─────────────┘     │
 │           │                             │                   │
@@ -752,20 +752,18 @@ interface GuidanceCommand {
 
 In `infra/environments/app/dev/`:
 
-- `ssi_cloud_run_job.tf` — SSI investigation Cloud Run job
+- `ssi_cloud_run_service.tf` — SSI Cloud Run Service (`ssi-svc`)
 - `ssi_gcs.tf` — Evidence GCS bucket
 - `ssi_secrets.tf` — OSINT API keys, proxy credentials
 - `ssi_iam.tf` — `sa-ssi` service account + roles
 
-SSI API endpoints are served by the core gateway Cloud Run Service (no separate SSI service).
-
 ### 9.3 Docker Images
 
 ```
-docker/Dockerfile              → SSI Cloud Run Service (Chromium + zendriver + Playwright + OSINT + WeasyPrint)
+docker/ssi-svc.Dockerfile      → SSI Cloud Run Service (Chromium + zendriver + Playwright + OSINT + WeasyPrint)
 ```
 
-The SSI service runs as its own Cloud Run Service with `POST /investigate` and `POST /investigate/batch` endpoints.
+SSI runs as its own Cloud Run Service (`ssi-svc`) with `POST /trigger/investigate` and `POST /trigger/batch` endpoints.
 
 ---
 

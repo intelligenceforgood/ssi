@@ -54,6 +54,10 @@ class InvestigateRequest(BaseModel):
         default="ssi",
         description="Dataset label for the case created in core.",
     )
+    force: bool = Field(
+        default=False,
+        description="Bypass URL dedup check and force a new investigation.",
+    )
 
 
 class InvestigateResponse(BaseModel):
@@ -61,6 +65,11 @@ class InvestigateResponse(BaseModel):
 
     scan_id: str | None
     status: str
+    already_investigated: bool = False
+    existing_scan_id: str | None = None
+    existing_risk_score: float | None = None
+    days_since_scan: int | None = None
+    reason: str = ""
 
 
 class BatchInvestigateRequest(BaseModel):
@@ -314,6 +323,83 @@ def _run_batch_investigation(
 
 
 # ---------------------------------------------------------------------------
+# URL dedup helper
+# ---------------------------------------------------------------------------
+
+
+def _check_url_duplicate(url: str, *, staleness_days: int = 30) -> dict[str, Any] | None:
+    """Return dedup info dict if *url* was recently investigated, else ``None``.
+
+    Mirrors the logic in ``i4g.services.investigation_dedup.check_url_duplicate``
+    but operates against the local SSI store so that it works without importing
+    the ``i4g`` package.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    import sqlalchemy as sa
+
+    from ssi.store import build_scan_store
+    from ssi.store.sql import site_scans
+    from ssi.utils.url_normalization import normalize_url
+
+    normalized = normalize_url(url)
+    store = build_scan_store()
+
+    stmt = (
+        sa.select(
+            site_scans.c.scan_id,
+            site_scans.c.risk_score,
+            site_scans.c.completed_at,
+            site_scans.c.status,
+        )
+        .where(
+            site_scans.c.normalized_url == normalized,
+            site_scans.c.status.in_(["completed", "running", "pending"]),
+        )
+        .order_by(site_scans.c.completed_at.desc().nulls_last())
+        .limit(1)
+    )
+
+    with store._session_factory() as session:
+        row = session.execute(stmt).fetchone()
+
+    if row is None:
+        return None
+
+    scan_id = str(row.scan_id)
+    risk_score = float(row.risk_score) if row.risk_score is not None else None
+    status = row.status
+
+    # Running or pending → duplicate (investigation in progress).
+    if status in ("running", "pending"):
+        return {
+            "existing_scan_id": scan_id,
+            "existing_risk_score": risk_score,
+            "days_since_scan": 0,
+            "reason": "scan_in_progress",
+        }
+
+    # Completed → check staleness window.
+    completed_at = row.completed_at
+    if completed_at is not None:
+        if completed_at.tzinfo is None:
+            completed_at = completed_at.replace(tzinfo=UTC)
+        cutoff = datetime.now(UTC) - timedelta(days=staleness_days)
+        days_since = (datetime.now(UTC) - completed_at).days
+
+        if completed_at >= cutoff:
+            return {
+                "existing_scan_id": scan_id,
+                "existing_risk_score": risk_score,
+                "days_since_scan": days_since,
+                "reason": "fresh_scan_exists",
+            }
+
+    # Stale or no completed_at → not a duplicate.
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Investigation trigger endpoints
 # ---------------------------------------------------------------------------
 
@@ -357,6 +443,21 @@ async def trigger_investigate(
     )
 
     from ssi.store import build_scan_store
+
+    # ---- URL dedup check (skip if force=True) ----
+    if not payload.force:
+        dedup = _check_url_duplicate(payload.url, staleness_days=get_ssi_settings().api.dedup_staleness_days)
+        if dedup is not None:
+            logger.info("Dedup hit for %s: %s (scan %s)", payload.url, dedup["reason"], dedup["existing_scan_id"])
+            return InvestigateResponse(
+                scan_id=None,
+                status="skipped",
+                already_investigated=True,
+                existing_scan_id=dedup["existing_scan_id"],
+                existing_risk_score=dedup["existing_risk_score"],
+                days_since_scan=dedup["days_since_scan"],
+                reason=dedup["reason"],
+            )
 
     # Always ensure a scan_id exists so the EventBus can be registered
     # and the poll proxy can query /investigations/{scan_id} immediately.

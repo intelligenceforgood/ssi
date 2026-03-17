@@ -42,9 +42,8 @@ budget_per_investigation_usd = 1.0
 [storage]
 backend = "sqlite"
 # Point at core's database so SSI writes are visible to core's read endpoints.
+# SSI shares core's database.  This path is relative from the ssi/ repo root.
 db_url = "sqlite:///../core/data/i4g_store.db"
-# To use SSI's own standalone DB instead, clear db_url:
-# db_url = ""
 
 # ── OSINT API keys ──────────────────────────────────────────────────────────────
 # [osint]

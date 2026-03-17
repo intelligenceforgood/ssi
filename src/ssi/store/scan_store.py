@@ -60,6 +60,7 @@ class ScanStore:
                 dialect_name = bind.dialect.name
                 if dialect_name != "postgresql":
                     METADATA.create_all(session.connection())
+                    self._migrate_sqlite_schema(session)
                 else:
                     from sqlalchemy import inspect as sa_inspect
 
@@ -77,6 +78,62 @@ class ScanStore:
                         logger.info("SSI scan tables verified in PostgreSQL")
         except Exception:
             logger.warning("Table verification/creation failed during ScanStore init", exc_info=True)
+
+    # ------------------------------------------------------------------
+    # Inline schema migration for SQLite
+    # ------------------------------------------------------------------
+
+    def _migrate_sqlite_schema(self, session: sa.orm.Session) -> None:
+        """Add columns that were introduced after the initial table creation.
+
+        ``METADATA.create_all()`` only creates *new* tables — it never
+        ``ALTER``s existing ones.  This method bridges the gap so that
+        local SQLite databases created before the ``normalized_url``
+        column was added still work without manual intervention.
+        """
+        conn = session.connection()
+
+        # Check existing columns in site_scans
+        result = conn.execute(sa.text("PRAGMA table_info(site_scans)"))
+        existing_columns = {row[1] for row in result.fetchall()}
+
+        if "normalized_url" not in existing_columns:
+            logger.info("Migrating site_scans: adding normalized_url column")
+            conn.execute(sa.text("ALTER TABLE site_scans ADD COLUMN normalized_url TEXT"))
+            session.commit()
+
+            # Backfill normalized_url for existing rows
+            self._backfill_normalized_urls(session)
+
+        # Ensure case_investigations table exists (create_all handles
+        # this for new DBs, but check explicitly for older ones).
+        result = conn.execute(
+            sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name='case_investigations'")
+        )
+        if result.fetchone() is None:
+            logger.info("Migrating: creating case_investigations table")
+            sql_schema.case_investigations.create(conn, checkfirst=True)
+            session.commit()
+
+    def _backfill_normalized_urls(self, session: sa.orm.Session) -> None:
+        """Populate ``normalized_url`` for existing rows that lack it."""
+        from ssi.utils.url_normalization import normalize_url
+
+        conn = session.connection()
+        rows = conn.execute(sa.text("SELECT scan_id, url FROM site_scans WHERE normalized_url IS NULL")).fetchall()
+
+        if not rows:
+            return
+
+        for scan_id, url in rows:
+            normalized = normalize_url(url)
+            conn.execute(
+                sa.text("UPDATE site_scans SET normalized_url = :n WHERE scan_id = :sid"),
+                {"n": normalized, "sid": scan_id},
+            )
+
+        session.commit()
+        logger.info("Backfilled normalized_url for %d existing scans", len(rows))
 
     # ------------------------------------------------------------------
     # site_scans CRUD

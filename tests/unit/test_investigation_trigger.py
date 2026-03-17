@@ -22,8 +22,9 @@ client = TestClient(app)
 class TestInvestigateEndpoint:
     """Tests for POST /trigger/investigate."""
 
+    @patch("ssi.api.investigation_routes._check_url_duplicate", return_value=None)
     @patch("ssi.api.investigation_routes._run_investigation")
-    def test_returns_202_accepted(self, mock_run: MagicMock) -> None:
+    def test_returns_202_accepted(self, mock_run: MagicMock, _mock_dedup: MagicMock) -> None:
         """Endpoint returns 202 with scan_id and 'accepted' status."""
         resp = client.post(
             "/trigger/investigate",
@@ -34,8 +35,9 @@ class TestInvestigateEndpoint:
         assert data["status"] == "accepted"
         assert data["scan_id"] == "scan-abc"
 
+    @patch("ssi.api.investigation_routes._check_url_duplicate", return_value=None)
     @patch("ssi.api.investigation_routes._run_investigation")
-    def test_spawns_background_task(self, mock_run: MagicMock) -> None:
+    def test_spawns_background_task(self, mock_run: MagicMock, _mock_dedup: MagicMock) -> None:
         """Background task is spawned with correct investigation parameters."""
         resp = client.post(
             "/trigger/investigate",
@@ -59,8 +61,9 @@ class TestInvestigateEndpoint:
             event_bus=ANY,
         )
 
+    @patch("ssi.api.investigation_routes._check_url_duplicate", return_value=None)
     @patch("ssi.api.investigation_routes._run_investigation")
-    def test_defaults_applied(self, mock_run: MagicMock) -> None:
+    def test_defaults_applied(self, mock_run: MagicMock, _mock_dedup: MagicMock) -> None:
         """Default values are applied for optional fields."""
         resp = client.post(
             "/trigger/investigate",
@@ -80,8 +83,9 @@ class TestInvestigateEndpoint:
         resp = client.post("/trigger/investigate", json={})
         assert resp.status_code == 422
 
+    @patch("ssi.api.investigation_routes._check_url_duplicate", return_value=None)
     @patch("ssi.api.investigation_routes._run_investigation")
-    def test_rejects_invalid_scan_type(self, mock_run: MagicMock) -> None:
+    def test_rejects_invalid_scan_type(self, mock_run: MagicMock, _mock_dedup: MagicMock) -> None:
         """Invalid scan_type values are rejected."""
         resp = client.post(
             "/trigger/investigate",
@@ -89,8 +93,9 @@ class TestInvestigateEndpoint:
         )
         assert resp.status_code == 422
 
+    @patch("ssi.api.investigation_routes._check_url_duplicate", return_value=None)
     @patch("ssi.api.investigation_routes._run_investigation")
-    def test_scan_id_generated_when_omitted(self, mock_run: MagicMock) -> None:
+    def test_scan_id_generated_when_omitted(self, mock_run: MagicMock, _mock_dedup: MagicMock) -> None:
         """scan_id is auto-generated when not provided in the request."""
         resp = client.post(
             "/trigger/investigate",
@@ -137,3 +142,76 @@ class TestBatchInvestigateEndpoint:
         """Request without manifest or manifest_uri returns 422."""
         resp = client.post("/trigger/batch", json={})
         assert resp.status_code == 422
+
+
+class TestInvestigateDedupCheck:
+    """Tests for URL dedup logic in POST /trigger/investigate."""
+
+    @patch("ssi.api.investigation_routes._run_investigation")
+    @patch("ssi.api.investigation_routes._check_url_duplicate")
+    def test_returns_dedup_info_when_duplicate(self, mock_dedup: MagicMock, mock_run: MagicMock) -> None:
+        """When dedup check finds a recent scan, endpoint returns it without starting a new investigation."""
+        mock_dedup.return_value = {
+            "existing_scan_id": "scan-abc-existing",
+            "existing_risk_score": 87.5,
+            "days_since_scan": 2,
+            "reason": "fresh_scan_exists",
+        }
+        resp = client.post("/trigger/investigate", json={"url": "https://scam.example.com"})
+        assert resp.status_code == 202
+        data = resp.json()
+        assert data["already_investigated"] is True
+        assert data["existing_scan_id"] == "scan-abc-existing"
+        assert data["existing_risk_score"] == 87.5
+        assert data["days_since_scan"] == 2
+        assert data["reason"] == "fresh_scan_exists"
+        assert data["scan_id"] is None
+        mock_run.assert_not_called()
+
+    @patch("ssi.api.investigation_routes._run_investigation")
+    @patch("ssi.api.investigation_routes._check_url_duplicate")
+    def test_proceeds_when_no_duplicate(self, mock_dedup: MagicMock, mock_run: MagicMock) -> None:
+        """When dedup check returns None, investigation proceeds normally."""
+        mock_dedup.return_value = None
+        resp = client.post(
+            "/trigger/investigate",
+            json={"url": "https://new-scam.example.com", "scan_id": "scan-new"},
+        )
+        assert resp.status_code == 202
+        data = resp.json()
+        assert data["status"] == "accepted"
+        assert data["scan_id"] == "scan-new"
+        assert data.get("already_investigated", False) is False
+        mock_run.assert_called_once()
+
+    @patch("ssi.api.investigation_routes._run_investigation")
+    @patch("ssi.api.investigation_routes._check_url_duplicate")
+    def test_force_bypasses_dedup(self, mock_dedup: MagicMock, mock_run: MagicMock) -> None:
+        """Setting force=True skips the dedup check entirely."""
+        resp = client.post(
+            "/trigger/investigate",
+            json={"url": "https://scam.example.com", "force": True, "scan_id": "scan-forced"},
+        )
+        assert resp.status_code == 202
+        data = resp.json()
+        assert data["status"] == "accepted"
+        assert data["scan_id"] == "scan-forced"
+        mock_dedup.assert_not_called()
+        mock_run.assert_called_once()
+
+    @patch("ssi.api.investigation_routes._run_investigation")
+    @patch("ssi.api.investigation_routes._check_url_duplicate")
+    def test_in_progress_scan_returns_dedup(self, mock_dedup: MagicMock, mock_run: MagicMock) -> None:
+        """An in-progress scan for the same URL returns dedup info."""
+        mock_dedup.return_value = {
+            "existing_scan_id": "scan-running",
+            "existing_risk_score": None,
+            "days_since_scan": 0,
+            "reason": "scan_in_progress",
+        }
+        resp = client.post("/trigger/investigate", json={"url": "https://scam.example.com"})
+        assert resp.status_code == 202
+        data = resp.json()
+        assert data["already_investigated"] is True
+        assert data["reason"] == "scan_in_progress"
+        mock_run.assert_not_called()

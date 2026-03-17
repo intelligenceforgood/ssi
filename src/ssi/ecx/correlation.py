@@ -39,9 +39,10 @@ _BRAND_WINDOW_DAYS = 30
 class CampaignCorrelator:
     """Correlate SSI investigations and create campaign records.
 
-    Operates against the shared database (core tables) and SSI's own
-    ``site_scans`` / ``harvested_wallets`` / ``ecx_enrichments`` tables
-    to discover clusters of related investigations.
+    Operates against the shared database — the same instance used by
+    core — querying ``site_scans``, ``harvested_wallets``, and
+    ``ecx_enrichments`` tables to discover clusters of related
+    investigations.
 
     Args:
         session_factory: A ``sessionmaker`` bound to the shared DB engine.

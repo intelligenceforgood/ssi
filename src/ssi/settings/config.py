@@ -269,17 +269,17 @@ class StorageSettings(BaseSettings):
     - ``core_api`` — delegate all persistence to the core platform
       (not yet implemented).
 
-    The ``db_url`` field lets SSI point at an external SQLAlchemy
-    database URL (e.g. core's SQLite file) instead of SSI's own DB.
-    When set and ``backend`` is ``"sqlite"``, ``db_url`` takes
-    precedence over ``sqlite_path``.
+    The ``db_url`` field provides a SQLAlchemy URL for the shared
+    database.  In local dev this points at core's SQLite file
+    (``sqlite:///../core/data/i4g_store.db``); in cloud it is unused
+    because ``backend`` is ``"cloudsql"``.
     """
 
     model_config = SettingsConfigDict(env_prefix="SSI_STORAGE__")
 
-    backend: str = "sqlite"  # sqlite | cloudsql | core_api
-    sqlite_path: str = "data/ssi_store.db"
-    db_url: str = ""  # SQLAlchemy URL override; when set, takes precedence over sqlite_path
+    backend: str = "sqlite"  # sqlite | cloudsql
+    sqlite_path: str = "data/i4g_store.db"  # fallback; db_url takes precedence
+    db_url: str = ""  # SQLAlchemy URL for the shared DB; set in settings.local.toml
     persist_scans: bool = True
 
     # Cloud SQL connection settings (used when backend == "cloudsql")
@@ -310,6 +310,7 @@ class APISettings(BaseSettings):
     rate_limit_per_minute: int = 30
     max_concurrent_investigations: int = 5
     require_auth: bool = False
+    dedup_staleness_days: int = 30
 
 
 class PlaybookSettings(BaseSettings):
