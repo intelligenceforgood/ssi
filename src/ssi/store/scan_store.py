@@ -108,7 +108,7 @@ class ScanStore:
         now = datetime.now(UTC)
 
         # Compute canonical URL for dedup lookups
-        from i4g.utils.url_normalization import normalize_url
+        from ssi.utils.url_normalization import normalize_url
 
         normalized = normalize_url(url)
 
