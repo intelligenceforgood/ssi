@@ -176,13 +176,23 @@ class EvidenceStorageClient:
         return self._gcs_bucket
 
     def _gcs_key(self, investigation_id: str, filename: str) -> str:
-        """Build the GCS object key for a file."""
-        return f"{self.gcs_prefix}/{investigation_id}/{filename}"
+        """Build the GCS object key for a file using sharded path layout."""
+        sharded = self._sharded_subpath(investigation_id)
+        return f"{self.gcs_prefix}/{sharded}/{filename}"
 
     def _gcs_uri(self, investigation_id: str, filename: str) -> str:
         """Build the full ``gs://`` URI for a file."""
         key = self._gcs_key(investigation_id, filename)
         return f"gs://{self.gcs_bucket_name}/{key}"
+
+    @staticmethod
+    def _sharded_subpath(investigation_id: str) -> str:
+        """Return the 2-level hex-sharded sub-path for an investigation ID.
+
+        Example: ``'fd70a83f-...'`` → ``'scans/fd/70/fd70a83f-...'``
+        """
+        hex_str = investigation_id.replace("-", "").lower()
+        return f"scans/{hex_str[:2]}/{hex_str[2:4]}/{investigation_id}"
 
     def _upload_file_gcs(self, investigation_id: str, file_path: Path) -> str:
         """Upload a single file to GCS and return its ``gs://`` URI."""
