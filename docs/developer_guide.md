@@ -419,7 +419,7 @@ One Docker image is provided for the SSI Cloud Run Service:
 ```bash
 # Cloud Run Service image
 make build-svc
-# or: docker build -f docker/Dockerfile -t ssi-svc:local .
+# or: docker build -f docker/ssi-svc.Dockerfile -t ssi-svc:local .
 ```
 
 ### Pushing to Artifact Registry
