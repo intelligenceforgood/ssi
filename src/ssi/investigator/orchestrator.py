@@ -890,7 +890,7 @@ def _upload_evidence_to_gcs(result: InvestigationResult, inv_dir: Path) -> None:
 
         # Use the same sharded sub-path that upload_directory wrote to.
         gcs_prefix = settings.evidence.gcs_prefix.rstrip("/")
-        sharded = EvidenceStorageClient._sharded_subpath(investigation_id)
+        sharded = EvidenceStorageClient.sharded_subpath(investigation_id)
         result.output_path = f"gs://{settings.evidence.gcs_bucket}/{gcs_prefix}/{sharded}"
         logger.info("Updated evidence_path to %s", result.output_path)
     except Exception as e:
