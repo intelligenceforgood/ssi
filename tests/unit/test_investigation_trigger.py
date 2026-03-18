@@ -215,3 +215,18 @@ class TestInvestigateDedupCheck:
         assert data["already_investigated"] is True
         assert data["reason"] == "scan_in_progress"
         mock_run.assert_not_called()
+
+    @patch("ssi.api.investigation_routes._run_investigation")
+    @patch("ssi.api.investigation_routes._check_url_duplicate")
+    def test_scan_id_provided_skips_dedup(self, mock_dedup: MagicMock, mock_run: MagicMock) -> None:
+        """When scan_id is provided (core-triggered), dedup check is skipped."""
+        resp = client.post(
+            "/trigger/investigate",
+            json={"url": "https://scam.example.com", "scan_id": "core-pre-created-id"},
+        )
+        assert resp.status_code == 202
+        data = resp.json()
+        assert data["status"] == "accepted"
+        assert data["scan_id"] == "core-pre-created-id"
+        mock_dedup.assert_not_called()
+        mock_run.assert_called_once()

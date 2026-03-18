@@ -881,17 +881,17 @@ def _upload_evidence_to_gcs(result: InvestigationResult, inv_dir: Path) -> None:
         return
 
     try:
-        from ssi.evidence.storage import build_evidence_storage_client
+        from ssi.evidence.storage import EvidenceStorageClient, build_evidence_storage_client
 
         client = build_evidence_storage_client()
         investigation_id = str(result.investigation_id)
         uploaded = client.upload_directory(investigation_id, inv_dir)
         logger.info("Uploaded %d evidence files to GCS for investigation %s", len(uploaded), investigation_id)
 
-        # Update output_path to the GCS URI so the core gateway can
-        # locate evidence via the gs:// prefix (Phase C fix).
+        # Use the same sharded sub-path that upload_directory wrote to.
         gcs_prefix = settings.evidence.gcs_prefix.rstrip("/")
-        result.output_path = f"gs://{settings.evidence.gcs_bucket}/{gcs_prefix}/{investigation_id}"
+        sharded = EvidenceStorageClient._sharded_subpath(investigation_id)
+        result.output_path = f"gs://{settings.evidence.gcs_bucket}/{gcs_prefix}/{sharded}"
         logger.info("Updated evidence_path to %s", result.output_path)
     except Exception as e:
         logger.warning("GCS evidence upload failed (local copy retained): %s", e)

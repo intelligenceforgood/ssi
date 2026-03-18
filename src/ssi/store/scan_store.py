@@ -65,7 +65,13 @@ class ScanStore:
                     from sqlalchemy import inspect as sa_inspect
 
                     existing = sa_inspect(bind).get_table_names()
-                    required = {"site_scans", "harvested_wallets", "agent_sessions", "pii_exposures"}
+                    required = {
+                        "site_scans",
+                        "harvested_wallets",
+                        "agent_sessions",
+                        "pii_exposures",
+                        "ecx_enrichments",
+                    }
                     missing = required - set(existing)
                     if missing:
                         logger.warning(

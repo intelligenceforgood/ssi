@@ -444,8 +444,12 @@ async def trigger_investigate(
 
     from ssi.store import build_scan_store
 
-    # ---- URL dedup check (skip if force=True) ----
-    if not payload.force:
+    # ---- URL dedup check (skip if force=True or core pre-assigned scan_id) ----
+    # When core triggers SSI it pre-creates the scan row and provides a
+    # scan_id.  The dedup decision was already made by core, so we must
+    # not skip the investigation here — otherwise the pre-created row
+    # stays at status="running" forever.
+    if not payload.force and not payload.scan_id:
         dedup = _check_url_duplicate(payload.url, staleness_days=get_ssi_settings().api.dedup_staleness_days)
         if dedup is not None:
             logger.info("Dedup hit for %s: %s (scan %s)", payload.url, dedup["reason"], dedup["existing_scan_id"])

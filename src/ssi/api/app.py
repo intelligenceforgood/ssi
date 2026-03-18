@@ -18,6 +18,11 @@ from ssi.api.web import web_router
 from ssi.api.ws_routes import ws_router
 from ssi.settings import get_settings
 
+# Configure the root logger so that application-level INFO/WARNING/ERROR
+# messages are emitted in Cloud Run (uvicorn only configures its own
+# loggers, leaving the root logger at WARNING by default).
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
 logger = logging.getLogger(__name__)
 
 try:

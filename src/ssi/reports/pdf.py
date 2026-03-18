@@ -258,10 +258,18 @@ def render_pdf_report(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    HTML(string=full_html).write_pdf(
-        str(output_path),
-        stylesheets=[CSS(string=_PDF_CSS)],
-    )
+    # Write to a temp file first, then rename — prevents serving a
+    # partial/malformed PDF if weasyprint crashes mid-render.
+    tmp_path = output_path.with_suffix(".pdf.tmp")
+    try:
+        HTML(string=full_html).write_pdf(
+            str(tmp_path),
+            stylesheets=[CSS(string=_PDF_CSS)],
+        )
+        tmp_path.rename(output_path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
     logger.info("PDF report written to %s", output_path)
     return output_path
