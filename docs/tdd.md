@@ -1,8 +1,9 @@
 # SSI Technical Design Document
 
 > **Audience:** Developers and system architects.
-> **Last Updated**: February 22, 2026
-> **Status**: Implemented (merge cycle complete)
+> **Last Updated**: March 2026
+> **Last Verified**: March 2026
+> **Status**: Implemented (post-AWH merge, Sprint 6 integration complete)
 
 This document is the canonical technical design reference for the Scam Site Investigator (SSI), covering architecture decisions, system design, data schema, API surface, deployment, and testing.
 

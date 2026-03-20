@@ -2,6 +2,7 @@
 
 > **Audience:** Developers and system architects
 > **Last Updated**: March 5, 2026
+> **Last Verified**: March 2026
 > **Status**: Draft — Design Review
 > **Parent Document**: `ssi/docs/tdd.md` (SSI TDD)
 > **Product Requirements**: `planning/prd_ecx_integration.md`
