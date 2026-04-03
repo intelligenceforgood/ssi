@@ -8,7 +8,7 @@ Ported from AWH's ``controller.py`` with these SSI adaptations:
 * ``IdentityVault`` replaces the MCP Faker server.
 * ``MetricsCollector`` replaces the standalone metrics module.
 * ``GuidanceHandler`` protocol replaces console-based human interaction.
-* Screenshots saved to a local ``Path`` instead of Azure Blob Storage.
+* Screenshots saved to a local ``Path``.
 * No MCP or EventBus dependencies — pure async Python.
 * Settings from ``ssi.settings.get_settings()`` instead of flat config.
 """
