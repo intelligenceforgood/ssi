@@ -1406,6 +1406,7 @@ class ScanStore:
                             confidence=0,
                             risk_score=risk_score,
                             raw_text_sha256=raw_text_sha256,
+                            description=result.url or "",
                             status="open",
                             metadata=metadata_dict,
                             created_at=now,
@@ -1413,7 +1414,7 @@ class ScanStore:
                         )
                     )
 
-                    # Insert scam_records row (needed for dashboard join)
+                    # Insert scam_records row (search cache)
                     insert_sr = dialect_insert(session, sql_schema.scam_records)
                     session.execute(
                         insert_sr.values(
@@ -1422,8 +1423,6 @@ class ScanStore:
                             entities=None,
                             classification=None,
                             confidence=0,
-                            classification_result=classification_result,
-                            tags=None,
                             created_at=now,
                             metadata=metadata_dict,
                         ).on_conflict_do_nothing(index_elements=["case_id"])
