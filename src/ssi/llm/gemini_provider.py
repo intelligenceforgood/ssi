@@ -47,7 +47,7 @@ class GeminiProvider(LLMProvider):
     Google AI Studio with an API key for local development.
 
     Args:
-        model: Gemini model name (e.g. ``gemini-2.5-flash``).
+        model: Gemini model name (e.g. ``gemini-3-flash-preview``).
         project: GCP project ID (Vertex AI only).
         location: GCP region (Vertex AI only, default ``us-central1``).
         temperature: Default sampling temperature.
@@ -56,7 +56,7 @@ class GeminiProvider(LLMProvider):
 
     def __init__(
         self,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
         project: str = "",
         location: str = "us-central1",
         temperature: float = 0.1,

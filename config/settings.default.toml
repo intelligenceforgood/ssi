@@ -15,7 +15,7 @@
 [llm]
 gcp_location = "us-central1"
 max_tokens = 4096
-model = "gemini-2.5-flash"
+model = "gemini-3-flash-preview"
 provider = "gemini"
 temperature = 0.1
 token_budget_per_session = 100000

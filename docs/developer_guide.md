@@ -440,10 +440,10 @@ Requires `gcloud` auth: `gcloud auth login` and `gcloud auth configure-docker us
 
 SSI supports two LLM providers via a pluggable abstraction layer (see [src/ssi/llm/](../src/ssi/llm/)):
 
-| Provider   | Local | Cloud | Model Example      |
-| ---------- | ----- | ----- | ------------------ |
-| **Ollama** | Yes   | —     | `llama3.1`         |
-| **Gemini** | —     | Yes   | `gemini-2.0-flash` |
+| Provider   | Local | Cloud | Model Example            |
+| ---------- | ----- | ----- | ------------------------ |
+| **Ollama** | Yes   | —     | `llama3.1`               |
+| **Gemini** | —     | Yes   | `gemini-3-flash-preview` |
 
 ### Switching providers
 
@@ -457,7 +457,7 @@ export SSI_LLM__PROVIDER=ollama
 export SSI_LLM__PROVIDER=gemini
 export SSI_LLM__GCP_PROJECT=i4g-dev
 export SSI_LLM__GCP_LOCATION=us-central1
-export SSI_LLM__MODEL=gemini-2.0-flash
+export SSI_LLM__MODEL=gemini-3-flash-preview
 ```
 
 On Cloud Run, the Gemini provider authenticates via the service account's default credentials — no API key needed.
@@ -532,7 +532,7 @@ The Cloud Run service receives `SSI_*` environment variables via Terraform (see 
 
 - `SSI_ENV=dev` — environment profile
 - `SSI_LLM__PROVIDER=gemini` — use Gemini on GCP
-- `SSI_LLM__MODEL=gemini-2.0-flash` — model selection
+- `SSI_LLM__MODEL=gemini-3-flash-preview` — model selection
 - `SSI_LLM__GCP_PROJECT=i4g-dev` — Vertex AI project
 - `SSI_EVIDENCE__STORAGE_BACKEND=gcs` — cloud storage for evidence
 

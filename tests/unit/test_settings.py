@@ -46,14 +46,14 @@ class TestSettings:
         """
         monkeypatch.setenv("SSI_ENV", "dev")
         monkeypatch.setenv("SSI_LLM__PROVIDER", "gemini")
-        monkeypatch.setenv("SSI_LLM__MODEL", "gemini-2.5-flash")
+        monkeypatch.setenv("SSI_LLM__MODEL", "gemini-3-flash-preview")
         monkeypatch.setenv("SSI_LLM__GCP_PROJECT", "i4g-dev")
         from ssi.settings.config import Settings
 
         s = Settings()
         assert s.env == "dev"
         assert s.llm.provider == "gemini"
-        assert s.llm.model == "gemini-2.5-flash"
+        assert s.llm.model == "gemini-3-flash-preview"
         assert s.llm.gcp_project == "i4g-dev"
 
     def test_dev_profile_gcs_evidence(self, monkeypatch):

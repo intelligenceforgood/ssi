@@ -156,9 +156,9 @@ Simpler imports: `from ssi.models import InvestigationResult`. No namespace pack
 | **API**               | FastAPI + uvicorn (port 8100)            | Core gateway (Cloud Run)                  | Core gateway (Cloud Run)                   |
 | **Browser (Active)**  | zendriver + Chromium (headless)          | Cloud Run Job (gVisor)                    | Cloud Run Job (gVisor)                     |
 | **Browser (Passive)** | Playwright + Chromium                    | Cloud Run Job                             | Cloud Run Job                              |
-| **LLM (text)**        | Ollama (Llama 3.3)                       | Vertex AI Gemini 2.0 Flash                | Vertex AI Gemini 2.0 Flash                 |
-| **LLM (vision)**      | Ollama (Gemma 3 12B / Qwen3-VL 8B)       | Vertex AI Gemini 2.0 Flash                | Vertex AI Gemini 2.0 Flash                 |
-| **LLM (escalation)**  | —                                        | Vertex AI Gemini 2.5 Pro                  | Vertex AI Gemini 2.5 Pro                   |
+| **LLM (text)**        | Ollama (Llama 3.3)                       | Vertex AI Gemini 3 Flash                  | Vertex AI Gemini 3 Flash                   |
+| **LLM (vision)**      | Ollama (Gemma 3 12B / Qwen3-VL 8B)       | Vertex AI Gemini 3 Flash                  | Vertex AI Gemini 3 Flash                   |
+| **LLM (escalation)**  | —                                        | Vertex AI Gemini 3 Pro                    | Vertex AI Gemini 3 Pro                     |
 | **Relational DB**     | Shared SQLite (`core/data/i4g_store.db`) | Cloud SQL PostgreSQL 15 (shared)          | Cloud SQL PostgreSQL 15 (shared)           |
 | **Evidence Storage**  | Local FS (`data/evidence/`)              | GCS bucket                                | GCS bucket                                 |
 | **Proxy**             | Decodo residential (premium)             | Decodo residential (premium)              | Decodo residential (premium)               |
@@ -180,7 +180,7 @@ zendriver = ">=0.5"          # CDP-based undetected Chrome (active interaction)
 playwright = ">=1.49"        # Feature-rich browser (passive capture, HAR)
 
 # LLM providers
-google-generativeai = ">=0.8"     # Gemini 2.0 Flash + 2.5 Pro
+google-generativeai = ">=0.8"     # Gemini 3 Flash + 3 Pro
 
 # OSINT
 python-whois = ">=0.9"
@@ -544,7 +544,7 @@ class LLMProvider(ABC):
     async def batch_fill(self, screenshot, form_context, identity) -> list[AgentAction]: ...
 
 class OllamaProvider(LLMProvider):     # Local: Llama 3.3 (text), Gemma 3 / Qwen3-VL (vision)
-class GeminiProvider(LLMProvider):     # GCP: Gemini 2.0 Flash (primary), 2.5 Pro (escalation)
+class GeminiProvider(LLMProvider):     # GCP: Gemini 3 Flash (primary), 3 Pro (escalation)
 class MockProvider(LLMProvider):       # Testing
 ```
 

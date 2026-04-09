@@ -49,7 +49,8 @@ _LLM_COST_PER_1K_TOKENS: dict[str, dict[str, float]] = {
     "gemini-1.5-flash": {"input": 0.000075, "output": 0.0003},
     "gemini-1.5-pro": {"input": 0.00125, "output": 0.005},
     "gemini-2.0-flash": {"input": 0.0001, "output": 0.0004},  # retired Jun 1 2026 — kept for historical records
-    "gemini-2.5-flash": {"input": 0.0003, "output": 0.0025},
+    "gemini-2.5-flash": {"input": 0.0003, "output": 0.0025},  # retiring Oct 16 2026 — kept for historical records
+    "gemini-3-flash-preview": {"input": 0.0005, "output": 0.003},
     # OpenAI (if ever added)
     "gpt-4o": {"input": 0.0025, "output": 0.01},
     "gpt-4o-mini": {"input": 0.00015, "output": 0.0006},
