@@ -580,9 +580,11 @@ class TestCampaignCRUD:
             session.commit()
 
         with factory() as session:
-            from ssi.store.sql import campaigns
+            from ssi.store.sql import threat_campaigns
 
-            row = session.execute(sa.select(campaigns).where(campaigns.c.campaign_id == campaign_id)).first()
+            row = session.execute(
+                sa.select(threat_campaigns).where(threat_campaigns.c.campaign_id == campaign_id)
+            ).first()
             assert row is not None
             assert row.name == "Test Campaign"
 

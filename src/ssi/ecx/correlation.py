@@ -436,9 +436,11 @@ class CampaignCorrelator:
         session: Session,
         case_ids: set[str],
     ) -> str | None:
-        """Check if any of the given cases already belong to a threat campaign.
+        """Check if any of the given cases already belong to a campaign.
 
-        Looks up ``threat_campaign_cases`` for existing links.
+        Checks both the ``threat_campaign_cases`` join table and the
+        denormalized ``cases.campaign_id`` column so that campaigns
+        created outside the correlator are also detected.
 
         Args:
             session: Active DB session.
@@ -447,15 +449,29 @@ class CampaignCorrelator:
         Returns:
             The ``campaign_id`` if found, else ``None``.
         """
-        from ssi.store.sql import threat_campaign_cases
+        from ssi.store.sql import cases, threat_campaign_cases
 
+        # Check the join table first
         stmt = (
             sa.select(threat_campaign_cases.c.campaign_id)
             .where(threat_campaign_cases.c.case_id.in_(list(case_ids)))
             .limit(1)
         )
         row = session.execute(stmt).first()
-        return row.campaign_id if row else None
+        if row:
+            return row.campaign_id
+
+        # Fall back to the denormalized column on cases
+        stmt2 = (
+            sa.select(cases.c.campaign_id)
+            .where(
+                cases.c.case_id.in_(list(case_ids)),
+                cases.c.campaign_id.isnot(None),
+            )
+            .limit(1)
+        )
+        row2 = session.execute(stmt2).first()
+        return row2.campaign_id if row2 else None
 
     @staticmethod
     def _link_cases_to_campaign(
@@ -473,7 +489,7 @@ class CampaignCorrelator:
         Returns:
             Number of cases actually linked.
         """
-        from ssi.store.sql import threat_campaign_cases
+        from ssi.store.sql import cases, threat_campaign_cases
 
         now = datetime.now(UTC)
         linked = 0
@@ -484,6 +500,13 @@ class CampaignCorrelator:
             threat_campaign_cases.c.case_id.in_(list(case_ids)),
         )
         already_linked = {r.case_id for r in session.execute(existing_stmt).fetchall()}
+
+        # Also treat cases whose denormalized column already points here as linked
+        denorm_stmt = sa.select(cases.c.case_id).where(
+            cases.c.case_id.in_(list(case_ids)),
+            cases.c.campaign_id == campaign_id,
+        )
+        already_linked |= {r.case_id for r in session.execute(denorm_stmt).fetchall()}
 
         for cid in case_ids:
             if cid in already_linked:
@@ -497,6 +520,8 @@ class CampaignCorrelator:
                     link_reason="auto_correlation",
                 )
             )
+            # Also update the denormalized campaign_id on the cases table
+            session.execute(sa.update(cases).where(cases.c.case_id == cid).values(campaign_id=campaign_id))
             linked += 1
 
         return linked
