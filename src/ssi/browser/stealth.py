@@ -197,6 +197,14 @@ def build_browser_profile(
     # --- Launch args ---
     profile.launch_args["headless"] = headless
 
+    # Container-safe Chromium flags — /dev/shm is only 64 MB in Cloud Run
+    # and GPU compositing allocates extra memory we don't need headless.
+    profile.launch_args.setdefault("args", [])
+    profile.launch_args["args"] += [
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+    ]
+
     # Proxy: pool > explicit > none (pool is the active rotation mechanism)
     proxy_url: str | None = None
     if proxy_pool and proxy_pool.available:

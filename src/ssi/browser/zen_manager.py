@@ -118,6 +118,7 @@ class ZenBrowserManager:
         config.sandbox = False
 
         config.add_argument("--disable-gpu")
+        config.add_argument("--disable-dev-shm-usage")
         config.add_argument("--window-size=1920,1080")
         config.add_argument("--disable-blink-features=AutomationControlled")
 
