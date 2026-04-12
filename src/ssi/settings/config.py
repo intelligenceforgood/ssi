@@ -85,6 +85,7 @@ class LLMSettings(BaseSettings):
     # Gemini / Vertex AI settings
     gcp_project: str = ""
     gcp_location: str = "us-central1"
+    gemini_api_key: str = ""  # Gemini API key (generativelanguage.googleapis.com)
 
 
 class BrowserSettings(BaseSettings):

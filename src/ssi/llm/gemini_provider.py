@@ -1,8 +1,10 @@
 """Gemini LLM provider for SSI using the ``google-genai`` unified SDK.
 
-Works with both backends:
-- **Vertex AI** (default for cloud envs — uses ADC / service-account auth)
-- **Google AI Studio** (API-key auth via ``SSI_LLM__GEMINI_API_KEY``)
+Supports two auth modes:
+- **Gemini API key** (preferred): uses ``generativelanguage.googleapis.com`` —
+  billing goes to the GCP project that owns the key.
+- **Vertex AI** (fallback): uses ADC / service-account auth via
+  ``aiplatform.googleapis.com``.
 
 The provider is selected at runtime via ``SSI_LLM__PROVIDER=gemini``.
 """
@@ -43,15 +45,16 @@ def _safety_off() -> list[types.SafetySetting]:
 class GeminiProvider(LLMProvider):
     """LLM provider backed by Google Gemini via the ``google-genai`` SDK.
 
-    Uses Vertex AI (ADC) for authentication in Cloud Run, or
-    Google AI Studio with an API key for local development.
+    Prefers API-key auth (``generativelanguage.googleapis.com``) when
+    ``api_key`` is set; falls back to Vertex AI (ADC) otherwise.
 
     Args:
         model: Gemini model name (e.g. ``gemini-3-flash-preview``).
-        project: GCP project ID (Vertex AI only).
-        location: GCP region (Vertex AI only, default ``us-central1``).
+        project: GCP project ID (Vertex AI fallback only).
+        location: GCP region (Vertex AI fallback only, default ``us-central1``).
         temperature: Default sampling temperature.
         max_tokens: Default max output tokens.
+        api_key: Gemini API key for ``generativelanguage.googleapis.com``.
     """
 
     def __init__(
@@ -61,31 +64,44 @@ class GeminiProvider(LLMProvider):
         location: str = "us-central1",
         temperature: float = 0.1,
         max_tokens: int = 4096,
+        api_key: str = "",
     ) -> None:
         self.model_name = model
         self.project = project
         self.location = location
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.api_key = api_key
         self._client = None
         self._init_client()
 
     def _init_client(self) -> None:
-        """Initialize the ``google-genai`` client."""
+        """Initialize the ``google-genai`` client.
+
+        Prefers API-key auth when ``self.api_key`` is set; falls back to
+        Vertex AI (ADC) otherwise.
+        """
         try:
             from google import genai
 
-            self._client = genai.Client(
-                vertexai=True,
-                project=self.project,
-                location=self.location,
-            )
-            logger.info(
-                "Gemini provider initialized (google-genai): model=%s project=%s location=%s",
-                self.model_name,
-                self.project,
-                self.location,
-            )
+            if self.api_key:
+                self._client = genai.Client(api_key=self.api_key)
+                logger.info(
+                    "Gemini provider initialized (API key): model=%s",
+                    self.model_name,
+                )
+            else:
+                self._client = genai.Client(
+                    vertexai=True,
+                    project=self.project,
+                    location=self.location,
+                )
+                logger.info(
+                    "Gemini provider initialized (Vertex AI): model=%s project=%s location=%s",
+                    self.model_name,
+                    self.project,
+                    self.location,
+                )
         except Exception as e:
             logger.error("Failed to initialize Gemini provider: %s", e)
             raise

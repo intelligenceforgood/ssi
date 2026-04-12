@@ -73,6 +73,7 @@ def create_llm_provider(
             location=settings.llm.gcp_location,
             temperature=settings.llm.temperature,
             max_tokens=settings.llm.max_tokens,
+            api_key=settings.llm.gemini_api_key,
         )
 
     else:
