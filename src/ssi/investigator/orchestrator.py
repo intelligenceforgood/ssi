@@ -953,7 +953,12 @@ def _run_agent_interaction(
 
             step_callback = _on_screenshot
 
-        agent = BrowserAgent(llm_client=llm, output_dir=output_dir / "agent", step_callback=step_callback)
+        agent = BrowserAgent(
+            llm_client=llm,
+            output_dir=output_dir / "agent",
+            step_callback=step_callback,
+            event_bus=event_bus,
+        )
         session = agent.run(url)
         llm.close()
         return session

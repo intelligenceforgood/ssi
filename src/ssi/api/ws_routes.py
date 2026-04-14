@@ -184,15 +184,16 @@ async def ws_guidance(websocket: WebSocket, investigation_id: str) -> None:
                 continue
 
             # Determine if this is a response to guidance_needed or an interject
-            # If guidance queue is empty (no pending request), treat as interject
-            if bus._guidance_queue.empty():
-                bus.request_interject(cmd)
-                await websocket.send_json({"type": "interject_ack", "action": cmd.action.value})
-                logger.info("Interject from guidance WS: %s", cmd.action.value)
-            else:
+            # If the agent is actively awaiting guidance, route to provide_guidance
+            # to unblock request_guidance(). Otherwise treat as an interject.
+            if bus._awaiting_guidance:
                 bus.provide_guidance(cmd)
                 await websocket.send_json({"type": "guidance_ack", "action": cmd.action.value})
                 logger.info("Guidance provided via WS: %s", cmd.action.value)
+            else:
+                bus.request_interject(cmd)
+                await websocket.send_json({"type": "interject_ack", "action": cmd.action.value})
+                logger.info("Interject from guidance WS: %s", cmd.action.value)
 
     except WebSocketDisconnect:
         pass

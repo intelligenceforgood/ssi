@@ -514,6 +514,20 @@ class AgentController:
         """Execute one step of the state machine."""
         agent_cfg = self._settings.agent
 
+        # --- Check for interjected guidance (sent by the user mid-step) ---
+        if hasattr(self._guidance, "check_interject"):
+            interject = self._guidance.check_interject()
+            if interject is not None:
+                logger.info("Processing interject: %s", interject.action.value)
+                guidance_resp = GuidanceResponse(
+                    action=interject.action.value,
+                    value=interject.value,
+                    reason=interject.reason,
+                )
+                await self._apply_guidance(guidance_resp, url, result, screenshots)
+                self._actions_in_state = 0
+                return None
+
         # --- Check for stuck state ---
         threshold = agent_cfg.stuck_thresholds.get(self._state.value, agent_cfg.stuck_thresholds.get("DEFAULT", 15))
         if self._actions_in_state >= threshold:

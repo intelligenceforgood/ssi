@@ -13,6 +13,7 @@ import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ssi.browser.actions import execute_action
 from ssi.browser.dom_extractor import extract_page_observation
@@ -20,6 +21,9 @@ from ssi.browser.downloads import DownloadInterceptor
 from ssi.browser.llm_client import AgentLLMClient
 from ssi.identity.vault import IdentityVault, SyntheticIdentity
 from ssi.models.agent import ActionType, AgentMetrics, AgentSession, AgentStep
+
+if TYPE_CHECKING:
+    from ssi.monitoring.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +51,8 @@ class BrowserAgent:
         step_callback: Optional callable invoked after each step with the
             path to the post-action screenshot PNG.  Used by the orchestrator
             to stream live screenshots via the WebSocket event bus.
+        event_bus: Optional ``EventBus`` for receiving guidance commands
+            from the analyst UI during the investigation.
     """
 
     def __init__(
@@ -57,6 +63,7 @@ class BrowserAgent:
         token_budget: int = _DEFAULT_TOKEN_BUDGET,
         output_dir: Path | None = None,
         step_callback: Callable[[str], None] | None = None,
+        event_bus: EventBus | None = None,
     ) -> None:
         from ssi.settings import get_settings
 
@@ -70,6 +77,7 @@ class BrowserAgent:
         # Called after each agent step with the path to the post-action screenshot.
         # Used by the orchestrator to stream live screenshots to the WebSocket monitor.
         self._step_callback = step_callback
+        self._event_bus = event_bus
 
         self._session = AgentSession(identity_id=self.identity.identity_id)
         self._history: list[dict[str, str]] = []
@@ -169,6 +177,19 @@ class BrowserAgent:
 
                 # --- Main agent loop ---
                 for step_num in range(self.max_steps):
+                    # Check for guidance commands from the analyst UI
+                    if self._event_bus is not None:
+                        guidance_cmd = self._event_bus.check_guidance_sync()
+                        if guidance_cmd is not None:
+                            handled = self._apply_guidance_sync(page, guidance_cmd, step_num)
+                            if handled == "skip":
+                                self._session.metrics.termination_reason = (
+                                    f"skipped: {guidance_cmd.reason or 'analyst guidance'}"
+                                )
+                                break
+                            if handled == "done":
+                                continue
+
                     step = self._execute_step(page, step_num)
                     self._session.steps.append(step)
 
@@ -234,6 +255,51 @@ class BrowserAgent:
             self._save_session()
 
         return self._session
+
+    def _apply_guidance_sync(self, page, guidance_cmd, step_num: int) -> str:
+        """Apply a guidance command from the analyst UI.
+
+        Returns:
+            ``"skip"`` if the investigation should stop,
+            ``"done"`` if the command was handled (skip to next step),
+            ``"continue"`` if the normal LLM loop should proceed.
+        """
+        from ssi.browser.navigation import resilient_goto
+        from ssi.monitoring.event_bus import GuidanceAction
+
+        action = guidance_cmd.action
+        value = guidance_cmd.value
+        logger.info("Applying guidance command: %s value=%s", action, value[:50] if value else "")
+
+        if action == GuidanceAction.SKIP:
+            return "skip"
+
+        if action == GuidanceAction.GOTO:
+            if value:
+                resilient_goto(page, value, timeout_ms=15_000)
+            return "done"
+
+        if action == GuidanceAction.CLICK:
+            if value:
+                try:
+                    page.click(value, timeout=5000)
+                except Exception:
+                    logger.warning("Guided click failed for selector: %s", value)
+            return "done"
+
+        if action == GuidanceAction.TYPE:
+            if value and "|" in value:
+                selector, _, text = value.partition("|")
+                try:
+                    page.fill(selector, text, timeout=5000)
+                except Exception:
+                    logger.warning("Guided type failed for selector: %s", selector)
+            return "done"
+
+        # CONTINUE — inject as context for the next LLM decision
+        if value:
+            self._history.append({"role": "user", "content": f"[Analyst guidance]: {value}"})
+        return "continue"
 
     def _execute_step(self, page, step_number: int) -> AgentStep:
         """Run a single observe → decide → act cycle.

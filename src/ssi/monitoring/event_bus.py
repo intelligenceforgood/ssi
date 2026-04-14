@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import queue as thread_queue
 import time
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -200,6 +201,11 @@ class EventBus:
         self._sinks: list[EventSink] = []
         self._guidance_queue: asyncio.Queue[GuidanceCommand] = asyncio.Queue()
         self._interject_queue: asyncio.Queue[GuidanceCommand] = asyncio.Queue()
+        self._awaiting_guidance: bool = False
+        # Thread-safe queue for sync consumers (e.g. BrowserAgent running in
+        # a background thread).  Receives copies of all guidance/interject
+        # commands so the sync agent loop can poll without asyncio.
+        self._sync_command_queue: thread_queue.Queue[GuidanceCommand] = thread_queue.Queue()
 
         # Snapshot for late-joining clients
         self._latest_screenshot_b64: str = ""
@@ -357,7 +363,11 @@ class EventBus:
         )
 
         logger.info("Awaiting guidance for %s (state=%s)", site_url, state)
-        guidance = await self._guidance_queue.get()
+        self._awaiting_guidance = True
+        try:
+            guidance = await self._guidance_queue.get()
+        finally:
+            self._awaiting_guidance = False
         logger.info("Received guidance: %s", guidance.action.value)
 
         await self.emit(
@@ -369,6 +379,7 @@ class EventBus:
     def provide_guidance(self, guidance: GuidanceCommand) -> None:
         """Submit a guidance response (called by WebSocket handler or CLI)."""
         self._guidance_queue.put_nowait(guidance)
+        self._sync_command_queue.put_nowait(guidance)
 
     # ------------------------------------------------------------------
     # Interject (non-blocking mid-step override)
@@ -377,6 +388,7 @@ class EventBus:
     def request_interject(self, guidance: GuidanceCommand) -> None:
         """Inject guidance mid-step (called by the user via UI)."""
         self._interject_queue.put_nowait(guidance)
+        self._sync_command_queue.put_nowait(guidance)
         logger.info("Interject requested: %s", guidance.action.value)
 
     def check_interject(self) -> GuidanceCommand | None:
@@ -389,6 +401,20 @@ class EventBus:
             try:
                 result = self._interject_queue.get_nowait()
             except asyncio.QueueEmpty:
+                break
+        return result
+
+    def check_guidance_sync(self) -> GuidanceCommand | None:
+        """Thread-safe, non-blocking check for pending guidance commands.
+
+        Called by synchronous agents (e.g. ``BrowserAgent``) running in a
+        background thread.  Returns the latest command, or ``None``.
+        """
+        result: GuidanceCommand | None = None
+        while True:
+            try:
+                result = self._sync_command_queue.get_nowait()
+            except thread_queue.Empty:
                 break
         return result
 
