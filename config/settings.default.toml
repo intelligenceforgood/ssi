@@ -20,6 +20,8 @@ provider = "gemini"
 temperature = 0.1
 token_budget_per_session = 100000
 # gcp_project — injected via SSI_LLM__GCP_PROJECT per environment.
+# gemini_api_key — injected via SSI_LLM__GEMINI_API_KEY from Secret Manager.
+#   When set, uses API-key auth instead of Vertex AI ADC.
 # Ollama settings (used only when provider = "ollama" in local override):
 ollama_base_url = "http://localhost:11434"
 
