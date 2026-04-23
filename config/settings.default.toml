@@ -61,6 +61,26 @@ dns_timeout_sec = 5
 whois_timeout_sec = 10
 # API keys (virustotal, urlscan, ipinfo) — injected from Secret Manager.
 
+# ── PhishDestroy-integration providers (Sprint 0 gating) ────────────────────────
+# See copilot/.github/shared/phishdestroy-provider-gating.instructions.md
+# Disabled by default. Flip `enabled = true` after populating the key in
+# settings.local.toml (dev laptop) or via Secret Manager (SSI_PROVIDERS__*).
+
+[providers.merklemap]
+# enabled = false
+# api_key = ""                              # paste in settings.local.toml for dev
+# base_url = "https://api.merklemap.com"
+# rate_limit_per_sec = 0
+
+[providers.whoxy]
+# enabled = false
+# api_key = ""
+# monthly_query_cap = 0
+
+[providers.ghunt]
+# enabled = false
+# cookie_blob_path = ""
+
 # ── Evidence ─────────────────────────────────────────────────────────────────────
 [evidence]
 gcs_prefix = "investigations"

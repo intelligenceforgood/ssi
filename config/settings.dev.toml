@@ -15,3 +15,22 @@ enabled = true
 # api_key — injected via SSI_ECX__API_KEY from Secret Manager (i4g-dev).
 # To temporarily test enrichment from your workstation:
 #   conda run -n i4g-ssi SSI_ECX__API_KEY=<key> ssi investigate <url>
+
+# ── PhishDestroy-integration providers ─────────────────────────────────────────
+# Dev cluster: keys injected via Secret Manager (SSI_PROVIDERS__<NAME>__API_KEY).
+# Flip `enabled = true` here after Terraform binds the secret. See
+# copilot/.github/shared/phishdestroy-provider-gating.instructions.md
+
+[providers.merklemap]
+enabled = false
+base_url = "https://api.merklemap.com"
+# api_key — SSI_PROVIDERS__MERKLEMAP__API_KEY from Secret Manager.
+
+[providers.whoxy]
+enabled = false
+monthly_query_cap = 0
+# api_key — SSI_PROVIDERS__WHOXY__API_KEY from Secret Manager.
+
+[providers.ghunt]
+enabled = false
+# cookie_blob_path — SSI_PROVIDERS__GHUNT__COOKIE_BLOB_PATH from Secret Manager.
