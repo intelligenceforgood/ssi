@@ -81,6 +81,25 @@ whois_timeout_sec = 10
 # enabled = false
 # cookie_blob_path = ""
 
+# ── PhishDestroy Sprint 1 providers (ssi.osint.*) ───────────────────────────────
+# Opt-in flags + shared knobs for blocklist_aggregator, ctlog_lookup,
+# merklemap_client. All disabled by default; enable in settings.local.toml
+# or per-env Secret Manager via SSI_PHISHDESTROY__<NAME>__ENABLED.
+
+[phishdestroy]
+blocklist_cache_ttl_seconds = 21600  # 6h file cache for blocklist_aggregator
+ctlog_ratelimit_cap_seconds = 30
+ctlog_ratelimit_max_retries = 5
+
+[phishdestroy.blocklist_aggregator]
+enabled = false
+
+[phishdestroy.ctlog_lookup]
+enabled = false
+
+[phishdestroy.merklemap_client]
+enabled = false
+
 # ── Evidence ─────────────────────────────────────────────────────────────────────
 [evidence]
 gcs_prefix = "investigations"

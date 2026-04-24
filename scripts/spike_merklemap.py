@@ -40,7 +40,10 @@ except ImportError:  # pragma: no cover
     sys.exit(2)
 
 
-DEFAULT_URL = "https://api.merklemap.com/v1/stream"  # confirm exact path during spike
+DEFAULT_URL = (
+    "https://api.merklemap.com/live-domains?no_throttle=true"
+    # <!-- spike-update --> confirmed from merklemap-cli/src/lib.rs tail() @ 550cb04aa633c000724c339ada085c59444d5b78
+)
 
 
 @dataclass

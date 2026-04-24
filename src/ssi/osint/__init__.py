@@ -1,6 +1,13 @@
 """OSINT modules for passive reconnaissance.
 
 Provides a shared ``with_retries`` decorator for network-calling modules.
+
+PhishDestroy provider registry
+-------------------------------
+``PHISHDESTROY_PROVIDERS`` maps a logical module name to its dotted import path.
+``phishdestroy_provider_enabled(name)`` returns ``True`` if the module is
+enabled in settings — call this at the entry point of any code path that
+conditionally imports or invokes a PhishDestroy OSINT module.
 """
 
 from __future__ import annotations
@@ -63,3 +70,36 @@ def with_retries(
         return wrapper
 
     return decorator
+
+
+# ── PhishDestroy provider registry ───────────────────────────────────────────
+
+#: Maps logical provider name → dotted module path.
+#: All providers default to ``enabled = false``; flip via settings or env vars.
+PHISHDESTROY_PROVIDERS: dict[str, str] = {
+    "blocklist_aggregator": "ssi.osint.blocklist_aggregator",
+    "ctlog_lookup": "ssi.osint.ctlog_lookup",
+    "merklemap_client": "ssi.osint.merklemap_client",
+}
+
+
+def phishdestroy_provider_enabled(name: str) -> bool:
+    """Return ``True`` if the named PhishDestroy OSINT module is enabled in settings.
+
+    Reads ``settings.phishdestroy.<name>.enabled`` via the settings loader so that
+    TOML overrides and ``SSI_PHISHDESTROY__*`` env vars are respected.  Do NOT read
+    ``os.getenv`` directly — that bypasses the settings loader and breaks TOML.
+
+    Args:
+        name: Logical provider name (key in ``PHISHDESTROY_PROVIDERS``).
+
+    Returns:
+        ``True`` if the provider is enabled; ``False`` if unknown or disabled.
+    """
+    from ssi.settings import get_settings
+
+    settings = get_settings()
+    provider_settings = getattr(settings.phishdestroy, name, None)
+    if provider_settings is None:
+        return False
+    return bool(getattr(provider_settings, "enabled", False))

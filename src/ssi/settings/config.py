@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ---------------------------------------------------------------------------
@@ -434,6 +434,38 @@ class TaskStoreSettings(BaseSettings):
 
 
 # ---------------------------------------------------------------------------
+# PhishDestroy Sprint 1 settings
+# ---------------------------------------------------------------------------
+
+
+class PhishDestroyProviderSettings(BaseModel):
+    """Per-provider enable flag for a PhishDestroy OSINT module."""
+
+    enabled: bool = False
+
+
+class PhishDestroySettings(BaseSettings):
+    """PhishDestroy Sprint 1 OSINT module configuration.
+
+    All providers are disabled by default; enable in settings.local.toml
+    or via ``SSI_PHISHDESTROY__<NAME>__ENABLED`` env vars.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="SSI_PHISHDESTROY__",
+        env_nested_delimiter="__",
+    )
+
+    blocklist_cache_ttl_seconds: int = 21600  # 6h cache for blocklist_aggregator
+    ctlog_ratelimit_cap_seconds: int = 30
+    ctlog_ratelimit_max_retries: int = 5
+
+    blocklist_aggregator: PhishDestroyProviderSettings = Field(default_factory=PhishDestroyProviderSettings)
+    ctlog_lookup: PhishDestroyProviderSettings = Field(default_factory=PhishDestroyProviderSettings)
+    merklemap_client: PhishDestroyProviderSettings = Field(default_factory=PhishDestroyProviderSettings)
+
+
+# ---------------------------------------------------------------------------
 # Root settings
 # ---------------------------------------------------------------------------
 
@@ -470,6 +502,7 @@ class Settings(BaseSettings):
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
     task_store: TaskStoreSettings = Field(default_factory=TaskStoreSettings)
     ecx: ECXSettings = Field(default_factory=ECXSettings)
+    phishdestroy: PhishDestroySettings = Field(default_factory=PhishDestroySettings)
 
     @model_validator(mode="before")
     @classmethod
