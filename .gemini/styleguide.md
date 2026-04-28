@@ -1,0 +1,1 @@
+../../gemini/.gemini/styleguide.md
