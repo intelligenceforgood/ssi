@@ -86,6 +86,9 @@ whois_timeout_sec = 10
 # merklemap_client. All disabled by default; enable in settings.local.toml
 # or per-env Secret Manager via SSI_PHISHDESTROY__<NAME>__ENABLED.
 
+[providers.webarchive]
+# enabled = false
+
 [phishdestroy]
 blocklist_cache_ttl_seconds = 21600  # 6h file cache for blocklist_aggregator
 ctlog_ratelimit_cap_seconds = 30
@@ -196,3 +199,12 @@ enabled = true
 max_event_history = 1000
 snapshot_screenshots = true
 websocket_enabled = true
+
+[phishdestroy.whoxy_reverse]
+enabled = false
+
+[phishdestroy.ghunt]
+enabled = false
+
+[phishdestroy.webarchive]
+enabled = false

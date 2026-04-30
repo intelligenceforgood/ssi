@@ -50,11 +50,16 @@ class ProviderGate:
         return os.environ.get(f"{self.env_prefix}API_KEY", "").strip()
 
     @property
+    def cookie_blob_path(self) -> str:
+        """Return the provider's cookie blob path from the environment, or empty string."""
+        return os.environ.get(f"{self.env_prefix}COOKIE_BLOB_PATH", "").strip()
+
+    @property
     def enabled(self) -> bool:
-        """Return ``True`` iff BOTH the ``ENABLED`` flag is truthy AND ``api_key`` is non-empty."""
+        """Return ``True`` iff BOTH the ``ENABLED`` flag is truthy AND a credential is non-empty."""
         flag = os.environ.get(f"{self.env_prefix}ENABLED", "").strip().lower()
         _bool_true = {"1", "true", "yes", "on"}
-        return flag in _bool_true and bool(self.api_key)
+        return flag in _bool_true and (bool(self.api_key) or bool(self.cookie_blob_path))
 
     def skip(self, reason: SkipReason, detail: str = "") -> SkippedResult:
         """Return a structured ``SkippedResult`` for this provider."""
