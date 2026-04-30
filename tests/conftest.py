@@ -261,3 +261,8 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "integration: marks tests that require external services or real I/O")
     config.addinivalue_line("markers", "slow: marks tests that take more than a few seconds")
     config.addinivalue_line("markers", "benchmark: marks performance benchmark tests")
+
+
+@pytest.fixture(scope="session")
+def anyio_backend():
+    return "asyncio"
