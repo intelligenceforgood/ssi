@@ -1,0 +1,52 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python cache and test/coverage artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.tox/
+.ruff_cache/
+.mypy_cache/
+.nox/
+
+# Build and distribution directories
+build/
+dist/
+
+# Local data stores, large artifacts, and vector indices
+data/
+faiss_index/
+*.db
+*.sqlite
+*.sqlite3
+*.pdf
+*.png
+*.jpg
+*.jsonl
+*.tar.gz
+*.zip
+*.log
+*.csv
+
+# Node.js and frontend artifacts
+node_modules/
+.npm/
+
+# Secrets and local environment files
+.env
+.env.local
+*.pem
+*.key
+
+# IDEs and OS
+.vscode/
+.idea/
+.DS_Store
+.git/
