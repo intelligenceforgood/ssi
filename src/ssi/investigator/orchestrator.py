@@ -683,14 +683,18 @@ def _run_google_osint(result: InvestigationResult) -> None:
                 logger.warning("Google Drive OSINT failed for %s: %s", file_id, e)
 
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
             import nest_asyncio
 
             nest_asyncio.apply()
             loop.run_until_complete(_do_async_scraping())
         else:
-            loop.run_until_complete(_do_async_scraping())
+            asyncio.run(_do_async_scraping())
     except Exception as e:
         logger.warning("Google OSINT execution failed: %s", e)
 
