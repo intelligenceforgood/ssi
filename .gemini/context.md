@@ -1,6 +1,6 @@
 # Gemini Code Assist Context for i4g/ssi
 
-**Unified Workspace Context:** This repository is part of the `i4g` multi-root workspace. Shared coding standards, routines, and platform context live in the `gemini` repo's styles directory. These instructions contain only repo-specific context.
+**Unified Workspace Context:** This repository is part of the unified `i4g` parent workspace. Shared coding standards, routines, and platform context live in the `gemini` repo's styles directory (symlinked at the parent root). GCA will implicitly apply this file's context whenever you work within the `ssi/` directory.
 
 ## GCA Framework & Workflows
 
