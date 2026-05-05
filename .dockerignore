@@ -1,0 +1,17 @@
+# Exclude everything first, then whitelist
+**
+
+!pyproject.toml
+!README.md
+!VERSION.txt
+!LICENSE
+!src/
+!config/
+!templates/
+
+# Re-exclude caches inside whitelisted dirs
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+**/*.pyo
+.git/
