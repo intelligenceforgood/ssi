@@ -161,6 +161,21 @@ class ZenBrowserManager:
             logger.error("Navigation error for %s: %s", url, e)
             return False
 
+    async def get_cookies(self) -> list[dict]:
+        """Extract all cookies from the current page session."""
+        if not self._page:
+            return []
+        try:
+            result = await self._page.send(zd.cdp.network.get_cookies())
+            if hasattr(result, "cookies"):
+                return [c.__dict__ if hasattr(c, "__dict__") else c for c in result.cookies]
+            elif isinstance(result, dict) and "cookies" in result:
+                return result["cookies"]
+            return result
+        except Exception as e:
+            logger.error("Failed to extract cookies: %s", e)
+            return []
+
     # ------------------------------------------------------------------
     # Screenshots
     # ------------------------------------------------------------------
