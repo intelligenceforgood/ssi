@@ -314,6 +314,10 @@ def run_investigation(
         if result.wallets:
             _run_ecx_wallet_enrichment(result)
 
+        # --- Phase 2.7: Google OSINT ----------------------------------------
+        _emit("state_changed", {"new_state": "GOOGLE_OSINT", "message": "Extracting Google OSINT artifacts"})
+        _run_google_osint(result)
+
         # --- Phase 3: Classification & Evidence Packaging -------------------
         logger.info("Phase 3: Classification & evidence packaging")
         _emit("state_changed", {"new_state": "CLASSIFICATION", "message": "Classifying fraud type"})
@@ -604,6 +608,91 @@ def _extract_wallets(result: InvestigationResult, url: str) -> None:
 
     if result.wallets:
         logger.info("Wallet extraction: found %d unique addresses", len(result.wallets))
+
+
+def _run_google_osint(result: InvestigationResult) -> None:
+    """Extract emails and Drive links, then resolve via Google OSINT."""
+    import asyncio
+    import re
+
+    from ssi.evidence.mapping import route_google_osint_results
+    from ssi.osint.google.auth import GoogleAuthManager
+    from ssi.osint.google.drive import GoogleDriveScraper
+    from ssi.osint.google.maps import GoogleMapsScraper
+    from ssi.osint.google.people import GooglePeopleScraper
+
+    text_parts: list[str] = []
+
+    # Page snapshot
+    if result.page_snapshot and result.page_snapshot.dom_snapshot_path:
+        try:
+            from pathlib import Path
+
+            dom_text = Path(result.page_snapshot.dom_snapshot_path).read_text(errors="replace")
+            text_parts.append(dom_text)
+        except Exception:
+            pass
+
+    # Agent steps
+    for step in result.agent_steps:
+        if isinstance(step, dict):
+            if reasoning := step.get("reasoning"):
+                text_parts.append(str(reasoning))
+            if value := step.get("value"):
+                text_parts.append(str(value))
+
+    combined = "\n".join(text_parts)
+    if not combined.strip():
+        return
+
+    emails = set(re.findall(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", combined))
+    drive_links = set(re.findall(r"drive\.google\.com/file/d/([a-zA-Z0-9_-]+)", combined))
+
+    if not emails and not drive_links:
+        return
+
+    logger.info("Google OSINT: found %d emails, %d Drive links", len(emails), len(drive_links))
+
+    async def _do_async_scraping() -> None:
+        auth = GoogleAuthManager(None)  # type: ignore
+        people_scraper = GooglePeopleScraper(auth)
+        maps_scraper = GoogleMapsScraper(auth)
+        drive_scraper = GoogleDriveScraper(auth)
+
+        for email in emails:
+            try:
+                people_data = await people_scraper.resolve_email(email)
+                maps_data = None
+                gaia_id = people_data.get("gaia_id")
+                if gaia_id:
+                    maps_data = await maps_scraper.get_location_data(gaia_id)
+
+                inds, pii = route_google_osint_results(email, people_data=people_data, maps_data=maps_data)
+                result.threat_indicators.extend(inds)
+                result.pii_exposures.extend(pii)
+            except Exception as e:
+                logger.warning("Google People/Maps OSINT failed for %s: %s", email, e)
+
+        for file_id in drive_links:
+            try:
+                drive_data = await drive_scraper.resolve_file(file_id)
+                inds, pii = route_google_osint_results(file_id, drive_data=drive_data)
+                result.threat_indicators.extend(inds)
+                result.pii_exposures.extend(pii)
+            except Exception as e:
+                logger.warning("Google Drive OSINT failed for %s: %s", file_id, e)
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import nest_asyncio
+
+            nest_asyncio.apply()
+            loop.run_until_complete(_do_async_scraping())
+        else:
+            loop.run_until_complete(_do_async_scraping())
+    except Exception as e:
+        logger.warning("Google OSINT execution failed: %s", e)
 
 
 def _run_classification(result: InvestigationResult) -> None:
