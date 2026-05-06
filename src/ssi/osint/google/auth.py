@@ -2,7 +2,7 @@
 
 import hashlib
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from ssi.browser.zen_manager import ZenBrowserManager
@@ -11,9 +11,14 @@ if TYPE_CHECKING:
 class GoogleAuthManager:
     """Manages Google authentication and header generation for OSINT scrapers."""
 
-    def __init__(self, browser: "ZenBrowserManager") -> None:
-        """Initialize with an active browser session."""
+    def __init__(
+        self,
+        browser: Optional["ZenBrowserManager"] = None,
+        cookies: dict[str, str] | None = None,
+    ) -> None:
+        """Initialize with an active browser session or explicit cookies."""
         self.browser = browser
+        self.cookies = cookies or {}
 
     async def extract_auth_cookies(self) -> dict[str, str]:
         """Extract SAPISID and authuser cookies from the browser session.
@@ -21,6 +26,12 @@ class GoogleAuthManager:
         Returns:
             A dictionary containing the required auth cookies if found.
         """
+        if self.cookies:
+            return self.cookies
+
+        if not self.browser:
+            return {}
+
         cookies_raw = await self.browser.get_cookies()
         auth_cookies = {}
 

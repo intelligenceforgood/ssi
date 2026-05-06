@@ -316,7 +316,7 @@ def run_investigation(
 
         # --- Phase 2.7: Google OSINT ----------------------------------------
         _emit("state_changed", {"new_state": "GOOGLE_OSINT", "message": "Extracting Google OSINT artifacts"})
-        _run_google_osint(result)
+        _run_google_osint(result, agent_session)
 
         # --- Phase 3: Classification & Evidence Packaging -------------------
         logger.info("Phase 3: Classification & evidence packaging")

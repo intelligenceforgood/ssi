@@ -243,6 +243,18 @@ class BrowserAgent:
                 # Capture downloads from interceptor
                 if hasattr(self, "_download_interceptor"):
                     self._session.captured_downloads = [d.to_dict() for d in self._download_interceptor.downloads]
+
+                # Extract authentication cookies before closing context
+                try:
+                    all_cookies = context.cookies()
+                    self._session.extracted_cookies = {
+                        c["name"]: c["value"]
+                        for c in all_cookies
+                        if c["name"] in ("SAPISID", "authuser") and c.get("value")
+                    }
+                except Exception as e:
+                    logger.debug("Failed to extract cookies from context: %s", e)
+
                 context.close()
                 browser.close()
 

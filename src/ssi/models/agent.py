@@ -110,6 +110,7 @@ class AgentSession:
     pii_fields_submitted: list[str] = field(default_factory=list)
     pages_visited: list[str] = field(default_factory=list)
     captured_downloads: list[dict[str, Any]] = field(default_factory=list)
+    extracted_cookies: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize session to a JSON-friendly dict."""
