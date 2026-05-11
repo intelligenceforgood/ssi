@@ -193,44 +193,58 @@ class TestScanCreationBranch:
         mock_build.assert_not_called()
 
 
-def test_run_google_osint_triggers_scrapers():
-    """Verify that _run_google_osint triggers the scrapers when emails or drive links are found."""
+def test_run_google_osint_skips_without_cookies():
+    """Verify that _run_google_osint skips gracefully when no cookies are provided."""
     from ssi.investigator.orchestrator import _run_google_osint
-    from ssi.models.investigation import InvestigationResult, PageSnapshot
+    from ssi.models.investigation import InvestigationResult
 
-    # Create a result with some text containing an email and a drive link
     result = InvestigationResult(url="https://scam.example.com", scan_type="passive", passive_only=True)
-    result.page_snapshot = PageSnapshot(url="https://scam.example.com")
-    result.page_snapshot.dom_snapshot_path = "non_existent_file.html"  # This will fail gracefully
+    result.agent_steps = [
+        {"reasoning": "Found test@example.com here"},
+    ]
 
-    # We add text via agent_steps since that's easy to mock without a file
+    # No cookies → should skip without errors or scraper calls
+    _run_google_osint(result, google_cookies=None)
+
+    # No indicators should be added (skipped due to missing cookies)
+    assert len(result.threat_indicators) == 0
+
+
+def test_run_google_osint_triggers_scrapers():
+    """Verify that _run_google_osint triggers the scrapers when emails are found and cookies are valid."""
+    from unittest.mock import AsyncMock
+
+    from ssi.investigator.orchestrator import _run_google_osint
+    from ssi.models.investigation import InvestigationResult
+    from ssi.osint.google.models import PersonProfile
+
+    result = InvestigationResult(url="https://scam.example.com", scan_type="passive", passive_only=True)
     result.agent_steps = [
         {"reasoning": "Found test@example.com here"},
         {"value": "Check out drive.google.com/file/d/test_drive_id123/view"},
     ]
 
+    mock_profile = PersonProfile(
+        account_id="gaia123",
+        email="test@example.com",
+        user_types=["GOOGLE_USER"],
+    )
+
     with (
-        patch("ssi.osint.google.people.GooglePeopleScraper.resolve_email") as mock_people,
-        patch("ssi.osint.google.maps.GoogleMapsScraper.get_location_data") as mock_maps,
-        patch("ssi.osint.google.drive.GoogleDriveScraper.resolve_file") as mock_drive,
-        patch("ssi.osint.google.auth.GoogleAuthManager.get_auth_headers", return_value={}),
+        patch("ssi.osint.google.people.GooglePeopleScraper.resolve_email", new_callable=AsyncMock) as mock_people,
+        patch("ssi.osint.google.maps.GoogleMapsScraper.get_contribution_stats", new_callable=AsyncMock) as mock_maps,
     ):
+        mock_people.return_value = mock_profile
+        mock_maps.return_value = None  # No maps stats
 
-        async def dummy_people(*args, **kwargs):
-            return {"email": "test@example.com", "gaia_id": "gaia123"}
-
-        async def dummy_maps(*args, **kwargs):
-            return {"locations": []}
-
-        async def dummy_drive(*args, **kwargs):
-            return {"file_id": "test_drive_id123", "metadata": {}}
-
-        mock_people.side_effect = dummy_people
-        mock_maps.side_effect = dummy_maps
-        mock_drive.side_effect = dummy_drive
-
-        _run_google_osint(result)
+        _run_google_osint(
+            result,
+            google_cookies={"SAPISID": "test_sapisid", "SID": "s", "HSID": "h"},
+        )
 
         mock_people.assert_called_once_with("test@example.com")
+        # Maps should be called with the account ID from the profile
         mock_maps.assert_called_once_with("gaia123")
-        mock_drive.assert_called_once_with("test_drive_id123")
+
+    # Should have at least one indicator (the account ID)
+    assert any(ind.indicator_type == "google_account_id" for ind in result.threat_indicators)

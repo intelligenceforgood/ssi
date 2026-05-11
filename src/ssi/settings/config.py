@@ -464,7 +464,6 @@ class PhishDestroySettings(BaseSettings):
     ctlog_lookup: PhishDestroyProviderSettings = Field(default_factory=PhishDestroyProviderSettings)
     merklemap_client: PhishDestroyProviderSettings = Field(default_factory=PhishDestroyProviderSettings)
     whoxy_reverse: PhishDestroyProviderSettings = Field(default_factory=PhishDestroyProviderSettings)
-    ghunt: PhishDestroyProviderSettings = Field(default_factory=PhishDestroyProviderSettings)
     webarchive: PhishDestroyProviderSettings = Field(default_factory=PhishDestroyProviderSettings)
 
 

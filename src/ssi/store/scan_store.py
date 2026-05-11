@@ -642,6 +642,8 @@ class ScanStore:
             passive_result["geoip"] = (
                 result.geoip.model_dump(mode="json") if hasattr(result.geoip, "model_dump") else {}
             )
+        if result.google_osint:
+            passive_result["google_osint"] = result.google_osint
 
         # Build active result summary from site_result
         active_result: dict[str, Any] | None = None

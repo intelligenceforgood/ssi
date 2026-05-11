@@ -31,9 +31,6 @@ enabled = false
 monthly_query_cap = 0
 # api_key — SSI_PROVIDERS__WHOXY__API_KEY from Secret Manager.
 
-[providers.ghunt]
-enabled = false
-# cookie_blob_path — SSI_PROVIDERS__GHUNT__COOKIE_BLOB_PATH from Secret Manager.
 
 [providers.webarchive]
 enabled = false
@@ -41,8 +38,6 @@ enabled = false
 [phishdestroy.whoxy_reverse]
 enabled = false
 
-[phishdestroy.ghunt]
-enabled = false
 
 [phishdestroy.webarchive]
 enabled = false

@@ -316,7 +316,7 @@ def run_investigation(
 
         # --- Phase 2.7: Google OSINT ----------------------------------------
         _emit("state_changed", {"new_state": "GOOGLE_OSINT", "message": "Extracting Google OSINT artifacts"})
-        _run_google_osint(result, agent_session)
+        _run_google_osint(result)
 
         # --- Phase 3: Classification & Evidence Packaging -------------------
         logger.info("Phase 3: Classification & evidence packaging")
@@ -610,17 +610,32 @@ def _extract_wallets(result: InvestigationResult, url: str) -> None:
         logger.info("Wallet extraction: found %d unique addresses", len(result.wallets))
 
 
-def _run_google_osint(result: InvestigationResult) -> None:
-    """Extract emails and Drive links, then resolve via Google OSINT."""
+def _run_google_osint(
+    result: InvestigationResult,
+    *,
+    google_cookies: dict[str, str] | None = None,
+) -> None:
+    """Extract emails and Drive links, then resolve via Google OSINT.
+
+    Uses the Google People internal API and Maps contribution stats
+    endpoint to resolve email addresses found in the page to account
+    profiles and geographic intelligence.
+
+    Args:
+        result: The investigation result to enrich.
+        google_cookies: Pre-extracted Google session cookies.  When
+            ``None``, Google OSINT is skipped with a warning.
+    """
     import asyncio
     import re
 
     from ssi.evidence.mapping import route_google_osint_results
     from ssi.osint.google.auth import GoogleAuthManager
-    from ssi.osint.google.drive import GoogleDriveScraper
     from ssi.osint.google.maps import GoogleMapsScraper
+    from ssi.osint.google.models import GoogleOSINTResult
     from ssi.osint.google.people import GooglePeopleScraper
 
+    # --- 1. Extract text from available sources ---
     text_parts: list[str] = []
 
     # Page snapshot
@@ -645,6 +660,7 @@ def _run_google_osint(result: InvestigationResult) -> None:
     if not combined.strip():
         return
 
+    # --- 2. Find emails and Drive links ---
     emails = set(re.findall(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", combined))
     drive_links = set(re.findall(r"drive\.google\.com/file/d/([a-zA-Z0-9_-]+)", combined))
 
@@ -653,34 +669,44 @@ def _run_google_osint(result: InvestigationResult) -> None:
 
     logger.info("Google OSINT: found %d emails, %d Drive links", len(emails), len(drive_links))
 
+    # --- 3. Build auth manager and validate ---
+    auth = GoogleAuthManager(cookies=google_cookies)
+    if not auth.has_required_cookies:
+        logger.info(
+            "Google OSINT: skipping — no valid Google session cookies available. "
+            "Ensure the worker browser profile is logged into a Google account."
+        )
+        return
+
+    # --- 4. Run async scraping ---
+    osint_result = GoogleOSINTResult()
+
     async def _do_async_scraping() -> None:
-        auth = GoogleAuthManager(None)  # type: ignore
         people_scraper = GooglePeopleScraper(auth)
         maps_scraper = GoogleMapsScraper(auth)
-        drive_scraper = GoogleDriveScraper(auth)
 
         for email in emails:
             try:
-                people_data = await people_scraper.resolve_email(email)
-                maps_data = None
-                gaia_id = people_data.get("gaia_id")
-                if gaia_id:
-                    maps_data = await maps_scraper.get_location_data(gaia_id)
+                profile = await people_scraper.resolve_email(email)
+                if profile:
+                    osint_result.profiles.append(profile)
 
-                inds, pii = route_google_osint_results(email, people_data=people_data, maps_data=maps_data)
-                result.threat_indicators.extend(inds)
-                result.pii_exposures.extend(pii)
-            except Exception as e:
-                logger.warning("Google People/Maps OSINT failed for %s: %s", email, e)
+                    # Follow up with Maps stats if we got an account ID
+                    if profile.account_id:
+                        stats = await maps_scraper.get_contribution_stats(profile.account_id)
+                        if stats:
+                            osint_result.map_stats.append(stats)
+            except Exception as exc:
+                msg = f"Google People/Maps OSINT failed for {email}: {exc}"
+                logger.warning(msg)
+                osint_result.errors.append(msg)
 
-        for file_id in drive_links:
-            try:
-                drive_data = await drive_scraper.resolve_file(file_id)
-                inds, pii = route_google_osint_results(file_id, drive_data=drive_data)
-                result.threat_indicators.extend(inds)
-                result.pii_exposures.extend(pii)
-            except Exception as e:
-                logger.warning("Google Drive OSINT failed for %s: %s", file_id, e)
+        # Drive scraping is deferred (requires Android OAuth) — log and skip.
+        if drive_links:
+            logger.info(
+                "Google OSINT: %d Drive links found but Drive scraping is " "not yet implemented — skipping",
+                len(drive_links),
+            )
 
     try:
         try:
@@ -689,14 +715,32 @@ def _run_google_osint(result: InvestigationResult) -> None:
             loop = None
 
         if loop and loop.is_running():
-            import nest_asyncio
+            # We're already in an async context — create a task.
+            # This avoids the nest_asyncio hack.
+            import concurrent.futures
 
-            nest_asyncio.apply()
-            loop.run_until_complete(_do_async_scraping())
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(asyncio.run, _do_async_scraping()).result(timeout=60)
         else:
             asyncio.run(_do_async_scraping())
-    except Exception as e:
-        logger.warning("Google OSINT execution failed: %s", e)
+    except Exception as exc:
+        logger.warning("Google OSINT execution failed: %s", exc)
+        return
+
+    # --- 5. Route results to evidence models ---
+    if osint_result.profiles or osint_result.map_stats or osint_result.drive_files:
+        indicators, pii = route_google_osint_results(osint_result)
+        result.threat_indicators.extend(indicators)
+        result.pii_exposures.extend(pii)
+
+        # Persist structured data for core ingestion
+        result.google_osint = osint_result.model_dump(mode="json")
+
+        logger.info(
+            "Google OSINT: produced %d indicators, %d PII exposures",
+            len(indicators),
+            len(pii),
+        )
 
 
 def _run_classification(result: InvestigationResult) -> None:

@@ -81,7 +81,6 @@ PHISHDESTROY_PROVIDERS: dict[str, str] = {
     "ctlog_lookup": "ssi.osint.ctlog_lookup",
     "merklemap_client": "ssi.osint.merklemap_client",
     "whoxy_reverse": "ssi.osint.whoxy_reverse",
-    "ghunt": "ssi.osint.ghunt",
     "webarchive": "ssi.osint.webarchive",
 }
 

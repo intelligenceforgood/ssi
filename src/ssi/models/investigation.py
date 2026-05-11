@@ -277,6 +277,11 @@ class InvestigationResult(BaseModel):
         default_factory=list,
         description="eCX submission records created during Phase 2 governance (auto-submit + queued).",
     )
+    google_osint: dict[str, Any] | None = Field(
+        default=None,
+        description="Structured Google OSINT result (serialized GoogleOSINTResult). "
+        "Contains resolved profiles, Maps stats, and Drive file metadata.",
+    )
 
     # Evidence packaging
     evidence_zip_path: str = ""

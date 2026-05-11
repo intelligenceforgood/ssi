@@ -2,74 +2,111 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from ssi.models.investigation import PiiExposure, ThreatIndicator
+from ssi.osint.google.models import GoogleOSINTResult
 
 
 def route_google_osint_results(
-    identifier: str,
-    people_data: dict[str, Any] | None = None,
-    maps_data: dict[str, Any] | None = None,
-    drive_data: dict[str, Any] | None = None,
+    osint_result: GoogleOSINTResult,
 ) -> tuple[list[ThreatIndicator], list[PiiExposure]]:
     """Route Google OSINT results to standard evidence models.
 
+    Transforms the structured ``GoogleOSINTResult`` into flat lists of
+    ``ThreatIndicator`` and ``PiiExposure`` records for attachment to the
+    ``InvestigationResult``.
+
+    Mapping rules:
+
+    - Each resolved account ID → ``ThreatIndicator(indicator_type="google_account_id")``
+    - Each activated service → appended to the indicator context
+    - Enterprise/workspace accounts → additional indicator
+    - Maps profiles with contributions → ``ThreatIndicator(indicator_type="google_maps_profile")``
+    - Non-primary emails discovered in profile → ``PiiExposure``
+
     Args:
-        identifier: The email address or Drive file ID that was queried.
-        people_data: Response dict from Google People API.
-        maps_data: Response dict from Google Maps API.
-        drive_data: Response dict from Google Drive API.
+        osint_result: The aggregated Google OSINT result.
+
+    Returns:
+        A tuple of (threat_indicators, pii_exposures).
     """
     indicators: list[ThreatIndicator] = []
     pii_exposures: list[PiiExposure] = []
 
-    if people_data:
-        gaia_id = people_data.get("gaia_id")
-        if gaia_id:
+    # ── Person Profiles ──────────────────────────────────────────────────
+    for profile in osint_result.profiles:
+        if profile.account_id:
+            context_parts = [f"Resolved from email {profile.email}"]
+
+            if profile.user_types:
+                context_parts.append(f"User types: {', '.join(profile.user_types)}")
+
+            if profile.activated_services:
+                context_parts.append(f"Activated services: {', '.join(profile.activated_services)}")
+
+            if profile.is_enterprise_user:
+                context_parts.append("Enterprise/Workspace account")
+
+            if profile.customer_id:
+                context_parts.append(f"Customer ID: {profile.customer_id}")
+
+            if profile.last_updated:
+                context_parts.append(f"Last profile edit: {profile.last_updated.strftime('%Y-%m-%d %H:%M UTC')}")
+
             indicators.append(
                 ThreatIndicator(
-                    indicator_type="gaia_id",
-                    value=gaia_id,
-                    context=f"Resolved from email {identifier}",
-                    source="Google People API",
+                    indicator_type="google_account_id",
+                    value=profile.account_id,
+                    context="; ".join(context_parts),
+                    source="Google People API (internal)",
                 )
             )
 
-        raw = people_data.get("raw", {})
-        results = raw.get("searchResults", [])
-        if results:
-            person = results[0].get("person", {})
-            email_addresses = person.get("emailAddresses", [])
-            for em in email_addresses:
-                val = em.get("value")
-                if val and val.lower() != identifier.lower():
-                    # Secondary emails found in profile go to PII exposures
-                    pii_exposures.append(
-                        PiiExposure(
-                            field_type="email",
-                            field_label="Secondary Email (OSINT)",
-                            was_submitted=False,
-                        )
-                    )
-
-    if maps_data:
-        # We could potentially map locations from maps_data to indicators,
-        # but the manifest only mentioned Gaia IDs and secondary emails.
-        pass
-
-    if drive_data:
-        metadata = drive_data.get("metadata", {})
-        owners = metadata.get("owners", [])
-        for owner in owners:
-            owner_email = owner.get("emailAddress")
-            if owner_email and owner_email.lower() != identifier.lower():
-                pii_exposures.append(
-                    PiiExposure(
-                        field_type="email",
-                        field_label="Drive Owner Email (OSINT)",
-                        was_submitted=False,
-                    )
+        # Non-default profile photo is an intelligence signal
+        if profile.profile_photo_url and not profile.is_default_photo:
+            indicators.append(
+                ThreatIndicator(
+                    indicator_type="profile_photo",
+                    value=profile.profile_photo_url,
+                    context=f"Custom Google profile photo for {profile.email}",
+                    source="Google People API (internal)",
                 )
+            )
+
+    # ── Maps Contributions ───────────────────────────────────────────────
+    for stats in osint_result.map_stats:
+        total = stats.reviews + stats.ratings + stats.photos
+        if total > 0:
+            indicators.append(
+                ThreatIndicator(
+                    indicator_type="google_maps_profile",
+                    value=stats.profile_url,
+                    context=(
+                        f"Maps contributions: {stats.reviews} reviews, "
+                        f"{stats.ratings} ratings, {stats.photos} photos"
+                    ),
+                    source="Google Maps (internal)",
+                )
+            )
+
+    # ── Drive Files ──────────────────────────────────────────────────────
+    for drive_file in osint_result.drive_files:
+        if drive_file.owner_email:
+            pii_exposures.append(
+                PiiExposure(
+                    field_type="email",
+                    field_label=f"Drive file owner ({drive_file.title or drive_file.file_id})",
+                    was_submitted=False,
+                )
+            )
+
+        if drive_file.owner_account_id:
+            indicators.append(
+                ThreatIndicator(
+                    indicator_type="google_account_id",
+                    value=drive_file.owner_account_id,
+                    context=f"Owner of Drive file {drive_file.file_id}",
+                    source="Google Drive API (internal)",
+                )
+            )
 
     return indicators, pii_exposures
