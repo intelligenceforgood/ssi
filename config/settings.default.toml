@@ -171,6 +171,20 @@ polling_interval_minutes = 15
 polling_modules = ["phish"]
 # api_key — injected via SSI_ECX__API_KEY from Secret Manager.
 
+# ── Sec-Gemini (optional enrichment) ────────────────────────────────────────────
+# Feature-flagged AI security analysis via Google's Sec-Gemini SDK.
+# Provides email security posture, vulnerability correlation, and threat
+# synthesis that complement SSI's existing OSINT pipeline.
+# Disabled by default — enable in settings.local.toml or per-env config.
+[sec_gemini]
+enabled = false
+timeout_seconds = 180
+disable_logging = false
+enable_email_security = true
+enable_vuln_correlation = true
+enable_threat_synthesis = true
+# api_key — injected via SSI_SEC_GEMINI__API_KEY from Secret Manager.
+
 # ── Storage ──────────────────────────────────────────────────────────────────────
 [storage]
 backend = "cloudsql"

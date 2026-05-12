@@ -241,6 +241,12 @@ def run_investigation(
             if cost_tracker:
                 cost_tracker.record_api_call("ecrimex")
 
+        # Sec-Gemini enrichment (Phase 1: optional AI-powered analysis)
+        if run_passive:
+            _run_sec_gemini_enrichment(url, result)
+            if cost_tracker:
+                cost_tracker.record_api_call("sec_gemini")
+
         # Budget gate: abort before expensive active phase if already over budget.
         if cost_tracker:
             cost_tracker.check_budget()
@@ -1161,6 +1167,106 @@ def _run_ecx_enrichment(url: str, domain: str, result: InvestigationResult) -> N
             result.ecx_enrichment = ecx_result
     except Exception as e:
         logger.warning("eCX enrichment failed: %s", e)
+
+
+def _run_sec_gemini_enrichment(url: str, result: InvestigationResult) -> None:
+    """Optional Sec-Gemini enrichment (feature-flagged).
+
+    Runs a targeted security analysis via Google's Sec-Gemini AI agent to
+    provide email security posture, vulnerability correlation, and
+    infrastructure fingerprinting that SSI's existing OSINT does not cover.
+
+    This function is a no-op when ``settings.sec_gemini.enabled`` is ``False``
+    or when the API key is not configured.  Failures are logged as warnings
+    and never halt the investigation.
+    """
+    from ssi.settings import get_settings
+
+    settings = get_settings()
+
+    if not settings.sec_gemini.enabled:
+        return
+
+    if not settings.sec_gemini.api_key:
+        logger.debug("Sec-Gemini enabled but no API key configured — skipping")
+        return
+
+    from ssi.providers.sec_gemini.provider import SecGeminiProvider
+
+    try:
+        provider = SecGeminiProvider(
+            api_key=settings.sec_gemini.api_key,
+            timeout_seconds=settings.sec_gemini.timeout_seconds,
+            disable_logging=settings.sec_gemini.disable_logging,
+        )
+
+        # Build context from existing OSINT results
+        existing_osint = _build_sec_gemini_context(result)
+
+        # Run the async provider — orchestrator is synchronous, so we bridge
+        import asyncio
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                analysis = pool.submit(asyncio.run, provider.analyze_domain(url, existing_osint)).result(
+                    timeout=settings.sec_gemini.timeout_seconds + 30
+                )
+        else:
+            analysis = asyncio.run(provider.analyze_domain(url, existing_osint))
+
+        # Merge indicators into the main result
+        if analysis.threat_indicators:
+            result.threat_indicators.extend(analysis.threat_indicators)
+
+        # Persist the full structured analysis
+        result.sec_gemini_analysis = analysis.model_dump(mode="json")
+
+        logger.info(
+            "Sec-Gemini enrichment: %d indicators, risk_adj=%.1f, duration=%.1fs",
+            len(analysis.threat_indicators),
+            analysis.risk_adjustment,
+            analysis.duration_seconds,
+        )
+
+    except Exception as e:
+        logger.warning("Sec-Gemini enrichment failed (non-fatal): %s", type(e).__name__)
+
+
+def _build_sec_gemini_context(result: InvestigationResult) -> dict[str, Any]:
+    """Build a serializable dict of SSI's existing OSINT for Sec-Gemini context.
+
+    Includes WHOIS, DNS, SSL, GeoIP, and existing threat indicators so the
+    Sec-Gemini agent can avoid redundant lookups and focus on complementary
+    analysis.
+    """
+    context: dict[str, Any] = {}
+
+    if result.whois:
+        context["whois"] = result.whois.model_dump(mode="json")
+    if result.dns:
+        context["dns"] = result.dns.model_dump(mode="json")
+    if result.ssl:
+        context["ssl"] = result.ssl.model_dump(mode="json")
+    if result.geoip:
+        context["geoip"] = result.geoip.model_dump(mode="json")
+    if result.threat_indicators:
+        context["existing_threat_indicators"] = [ti.model_dump(mode="json") for ti in result.threat_indicators]
+    if result.page_snapshot:
+        context["page_snapshot"] = {
+            "title": result.page_snapshot.title,
+            "final_url": result.page_snapshot.final_url,
+            "technologies": result.page_snapshot.technologies,
+            "headers": result.page_snapshot.headers,
+        }
+
+    return context
 
 
 def _run_ecx_wallet_enrichment(result: InvestigationResult) -> None:

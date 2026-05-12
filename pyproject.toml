@@ -53,6 +53,9 @@ dev = [
 redis = [
   "redis>=5.0,<6",
 ]
+sec-gemini = [
+  "sec-gemini",
+]
 test = [
   "pytest",
   "pytest-mock",

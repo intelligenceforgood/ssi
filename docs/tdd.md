@@ -1,9 +1,9 @@
 # SSI Technical Design Document
 
 > **Audience:** Developers and system architects.
-> **Last Updated**: March 2026
-> **Last Verified**: March 2026
-> **Status**: Implemented (post-AWH merge, Sprint 6 integration complete)
+> **Last Updated**: May 2026
+> **Last Verified**: May 2026
+> **Status**: Implemented (post-AWH merge, Sprint 6 integration complete, Sec-Gemini enrichment added)
 
 This document is the canonical technical design reference for the Scam Site Investigator (SSI), covering architecture decisions, system design, data schema, API surface, deployment, and testing.
 
@@ -36,11 +36,13 @@ For end-user documentation, see the [docs site](../../docs/book/ssi/README.md).
   │              │  │ (Regex + QR) │  │ + Retry      │
   └──────────────┘  └──────┬───────┘  │ (WHOIS, DNS, │
                            │          │  SSL, GeoIP, │
-                    ┌──────▼───────┐  │  VT, urlscan)│
-                    │ Scan Store   │  └──────┬───────┘
-                    │ (SQLite /    │         │
-                    │  PostgreSQL) │  ┌──────▼───────┐
-                    └──────────────┘  │ Evidence     │
+                    ┌──────▼───────┐  │  VT, urlscan,│
+                    │ Scan Store   │  │  Google OSINT,│
+                    │ (SQLite /    │  │  Sec-Gemini, │
+                    │  PostgreSQL) │  │  eCrimeX)    │
+                    └──────────────┘  └──────┬───────┘
+                                      ┌──────▼───────┐
+                                      │ Evidence     │
                                       │ Store +      │
                                       │ Report Gen   │
                                       │ (MD+PDF+STIX)│
@@ -79,7 +81,10 @@ The product is a **three-phase automated scam site investigation system**:
 │ • urlscan.io    │  │ • Identity Vault  │  │ • PII Collection Map         │
 │ • Screenshots   │  │ • Playbook Engine │  │                              │
 │ • DOM/HAR       │  │ • Human Guidance  │  │                              │
-└────────┬────────┘  └────────┬──────────┘  └────────────┬─────────────────┘
+│ • eCrimeX       │  └────────┬──────────┘  └────────────┬─────────────────┘
+│ • Google OSINT  │           │                          │
+│ • Sec-Gemini†   │           │                          │
+└────────┬────────┘           │                          │
          │                    │                          │
          ▼                    ▼                          ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -91,6 +96,8 @@ The product is a **three-phase automated scam site investigation system**:
 │  └──────────────┘  └──────────────┘  └──────────┘  └──────────────────┘  │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
+
+† Sec-Gemini is **optional** — feature-flagged via `SSI_SEC_GEMINI__ENABLED` (default: off).
 
 Each phase can run independently (passive-only, active-only, or full pipeline).
 
@@ -584,6 +591,82 @@ Every type action reads back the field value after typing and verifies correctne
 - Screenshot optimization: CSS zoom 0.75, downscale 1920→1280, MD5 dedup, text-only mode for simple states
 - Opportunistic wallet capture: JS probe during state transitions
 - Batch fill: single LLM call to generate all form-fill actions (reduces N calls to 2)
+
+### 6.7 Google OSINT Intelligence (Phase 2.7)
+
+Native Google identity intelligence scrapers that resolve email addresses found on scam sites to Google account metadata, profile photos, and Maps contribution statistics.
+
+**Pipeline position:** Runs at Phase 2.7 — after active interaction (Phase 2) and wallet extraction (Phase 2.6), before classification (Phase 3). Uses cookies extracted from the zendriver browser session during Phase 2.
+
+**Auth model:** SAPISIDHASH-authenticated requests using Google session cookies (`SID`, `HSID`, `SSID`, `APISID`, `SAPISID`, `NID`) extracted from the browser profile. Cookies are validated before use; missing or invalid cookies cause graceful skip.
+
+**Capabilities:**
+- **People Lookup** (`ssi.osint.google.people`): Resolves email → Google Account ID → profile metadata (display name, photo, activated services, user types, enterprise status).
+- **Maps Contribution** (`ssi.osint.google.maps`): Scrapes contribution statistics (reviews, ratings, photos) for identified accounts. Geographic intelligence from review locations (deferred to future phase).
+
+**Data flow:**
+- Results stored as `GoogleOSINTResult` on `InvestigationResult.google_osint`
+- Account IDs → `ThreatIndicator(indicator_type="google_account_id")`
+- Secondary emails → `PiiExposure(field_type="email")`
+- Maps profiles with reviews → `ThreatIndicator(indicator_type="google_maps_profile")`
+
+**Future work:** Drive file metadata scraping (requires Android OAuth master token), full review enumeration with location clustering, Play Games profile scraping.
+
+### 6.8 Sec-Gemini Enrichment (Phase 1, Optional)
+
+Optional integration with Google's Sec-Gemini security AI platform. Feature-flagged via `SSI_SEC_GEMINI__ENABLED` (default: `false`).
+
+**Pipeline position:** Runs at end of Phase 1 (passive recon), after eCrimeX enrichment and before the budget gate. Receives SSI's existing OSINT (WHOIS, DNS, SSL, GeoIP, threat indicators) as context.
+
+**Why:** Fills capability gaps that SSI's existing OSINT cannot cover:
+- **Email security posture** (SPF/DKIM/DMARC) — reveals scam operation sophistication
+- **Vulnerability correlation** (CVE lookup) — identifies compromised infrastructure
+- **AI-reasoned threat synthesis** — cross-correlates all signals into a narrative
+
+**Architecture:**
+```
+Orchestrator → _run_sec_gemini_enrichment()
+                  │
+                  ├─ Feature flag check (settings.sec_gemini.enabled)
+                  ├─ API key check (settings.sec_gemini.api_key)
+                  ├─ Build context from existing OSINT
+                  │
+                  └─ SecGeminiProvider.analyze_domain()
+                       │
+                       ├─ SecGemini SDK → create session
+                       ├─ Upload OSINT context as JSON file
+                       ├─ Send focused investigation prompt
+                       ├─ Stream agent responses (MESSAGE_TYPE_RESPONSE)
+                       ├─ Parse JSON from response → SecGeminiAnalysis
+                       └─ Delete session (cleanup)
+```
+
+**Module layout:**
+```
+ssi/src/ssi/providers/sec_gemini/
+├── __init__.py
+├── models.py        # SecGeminiAnalysis, EmailSecurityPosture, InfraFingerprint
+├── parser.py        # JSON extraction from free-form agent output
+├── prompts.py       # Prompt templates (avoids redundant lookups)
+├── provider.py      # SecGeminiProvider (async SDK wrapper)
+└── skills/
+    └── ssi_investigation.md  # Custom skill uploaded to Sec-Gemini
+```
+
+**Configuration:** `[sec_gemini]` section in `settings.*.toml`:
+- `enabled` — feature flag (default: `false`)
+- `api_key` — from `secgemini.google/keys` (Secret Manager in GCP)
+- `timeout_seconds` — max wait for agent (default: `180`)
+- `disable_logging` — suppress server-side logging (default: `false`)
+- `enable_email_security`, `enable_vuln_correlation`, `enable_threat_synthesis` — sub-feature toggles
+
+**Data flow:**
+- Threat indicators → appended to `InvestigationResult.threat_indicators`
+- Full analysis → stored on `InvestigationResult.sec_gemini_analysis`
+- Email security findings → `ThreatIndicator(indicator_type="email_security")`
+- Vulnerability findings → `ThreatIndicator(indicator_type="vulnerability")`
+
+**Error handling:** All failures are caught and logged as warnings. Sec-Gemini failure never halts the investigation. The feature is a no-op when disabled or when the API key is not configured.
 
 ---
 

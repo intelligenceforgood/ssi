@@ -57,3 +57,11 @@ db_url = "sqlite:///../core/data/i4g_store.db"
 # [ecx]
 # api_key = "your-ecx-api-key"
 # enabled = false  # Uncomment to disable ECX if no key or experiencing 502s
+
+# ── Sec-Gemini (optional enrichment) ────────────────────────────────────────────
+# Enable Sec-Gemini for email security, vuln correlation, and threat synthesis.
+# Get an API key from secgemini.google/keys using your authorized Google account.
+# [sec_gemini]
+# enabled = true
+# api_key = "your-sec-gemini-api-key"
+# timeout_seconds = 180

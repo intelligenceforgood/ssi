@@ -433,6 +433,40 @@ class TaskStoreSettings(BaseSettings):
     default_ttl_seconds: int = 86400
 
 
+class SecGeminiSettings(BaseSettings):
+    """Sec-Gemini integration configuration.
+
+    Controls the optional Sec-Gemini enrichment provider that adds email
+    security posture analysis, vulnerability correlation, and AI-reasoned
+    threat synthesis to SSI investigations.
+
+    The integration is feature-flagged via ``enabled`` (default: ``False``).
+    When disabled, zero Sec-Gemini calls are made and no network traffic
+    is generated.
+
+    API key management:
+        - **Local dev:** Set ``api_key`` in ``settings.local.toml``.
+        - **GCP:** Inject via ``SSI_SEC_GEMINI__API_KEY`` from Secret Manager.
+
+    The ``timeout_seconds`` value controls how long SSI waits for the
+    Sec-Gemini agent to complete its analysis.  The agent is autonomous
+    and may take 30s–5min depending on the target; the default of 180s
+    provides a reasonable balance.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="SSI_SEC_GEMINI__")
+
+    enabled: bool = False
+    api_key: str = ""  # From secgemini.google/keys — inject via Secret Manager in GCP
+    timeout_seconds: int = 180  # Max wall-clock time to wait for agent completion
+    disable_logging: bool = False  # When True, instructs Sec-Gemini not to log session data
+
+    # Sub-feature toggles — control which analyses are included in the prompt
+    enable_email_security: bool = True  # SPF/DKIM/DMARC analysis
+    enable_vuln_correlation: bool = True  # CVE/exploit lookup
+    enable_threat_synthesis: bool = True  # AI-reasoned summary
+
+
 # ---------------------------------------------------------------------------
 # PhishDestroy Sprint 1 settings
 # ---------------------------------------------------------------------------
@@ -505,6 +539,7 @@ class Settings(BaseSettings):
     task_store: TaskStoreSettings = Field(default_factory=TaskStoreSettings)
     ecx: ECXSettings = Field(default_factory=ECXSettings)
     phishdestroy: PhishDestroySettings = Field(default_factory=PhishDestroySettings)
+    sec_gemini: SecGeminiSettings = Field(default_factory=SecGeminiSettings)
 
     @model_validator(mode="before")
     @classmethod

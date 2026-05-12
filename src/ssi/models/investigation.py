@@ -282,6 +282,12 @@ class InvestigationResult(BaseModel):
         description="Structured Google OSINT result (serialized GoogleOSINTResult). "
         "Contains resolved profiles, Maps stats, and Drive file metadata.",
     )
+    sec_gemini_analysis: dict[str, Any] | None = Field(
+        default=None,
+        description="Structured Sec-Gemini enrichment result (serialized SecGeminiAnalysis). "
+        "Contains email security posture, infrastructure fingerprinting, vulnerability "
+        "findings, and AI-reasoned threat synthesis.",
+    )
 
     # Evidence packaging
     evidence_zip_path: str = ""
