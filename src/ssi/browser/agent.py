@@ -250,7 +250,8 @@ class BrowserAgent:
                     self._session.extracted_cookies = {
                         c["name"]: c["value"]
                         for c in all_cookies
-                        if c["name"] in ("SAPISID", "authuser") and c.get("value")
+                        if (c["name"] in ("SAPISID", "authuser") or ".google.com" in c.get("domain", ""))
+                        and c.get("value")
                     }
                 except Exception as e:
                     logger.debug("Failed to extract cookies from context: %s", e)

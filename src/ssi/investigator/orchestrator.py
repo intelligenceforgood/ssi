@@ -322,7 +322,8 @@ def run_investigation(
 
         # --- Phase 2.7: Google OSINT ----------------------------------------
         _emit("state_changed", {"new_state": "GOOGLE_OSINT", "message": "Extracting Google OSINT artifacts"})
-        _run_google_osint(result)
+        google_cookies = agent_session.extracted_cookies if agent_session else None
+        _run_google_osint(result, google_cookies=google_cookies)
 
         # --- Phase 3: Classification & Evidence Packaging -------------------
         logger.info("Phase 3: Classification & evidence packaging")
