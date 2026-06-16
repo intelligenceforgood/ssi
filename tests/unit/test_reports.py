@@ -200,3 +200,113 @@ class TestRenderMarkdownReport:
         assert "AI Agent Interaction" in md
         assert "type" in md
         assert "Fill email" in md
+
+    def test_sec_gemini_rendered(self, full_result: InvestigationResult) -> None:
+        # 1. Verify not rendered when absent/empty
+        md_empty = render_markdown_report(full_result)
+        assert "AI Security Enrichment" not in md_empty
+
+        # 2. Add Sec-Gemini data
+        full_result.sec_gemini_analysis = {
+            "email_security": [
+                {
+                    "domain": "scam.example.com",
+                    "spf_record": "v=spf1 -all",
+                    "spf_valid": True,
+                    "dkim_configured": False,
+                    "dmarc_record": "v=DMARC1; p=none",
+                    "dmarc_policy": "none",
+                    "mx_records": ["mx1.example.com"],
+                    "assessment": "Weak email security — DMARC in monitor mode.",
+                }
+            ],
+            "infrastructure": {
+                "web_server": "nginx/1.24.0",
+                "framework": "PHP",
+                "cms": None,
+                "hosting_provider": "DigitalOcean",
+                "cdn": "Cloudflare",
+                "technologies": ["PHP", "nginx"],
+                "vulnerabilities": [
+                    {
+                        "cve_id": "CVE-2023-0001",
+                        "software": "nginx",
+                        "severity": "high",
+                        "cvss_score": 7.5,
+                        "is_exploited": True,
+                        "patch_available": True,
+                        "description": "A vulnerability in nginx",
+                    }
+                ],
+            },
+            "threat_synthesis": "The target domain uses weak email security and runs an outdated nginx server.",
+            "risk_adjustment": 2.5,
+            "duration_seconds": 15.4,
+        }
+
+        md = render_markdown_report(full_result)
+        assert "AI Security Enrichment (Sec-Gemini)" in md
+        assert "Threat Synthesis" in md
+        assert "The target domain uses weak email security" in md
+        assert "Email Security Posture" in md
+        assert "scam.example.com" in md
+        assert "Infrastructure Fingerprint" in md
+        assert "DigitalOcean" in md
+        assert "Detected Vulnerabilities" in md
+        assert "CVE-2023-0001" in md
+        assert "+2.5" in md
+
+    def test_sec_gemini_leo_rendered(self, full_result: InvestigationResult) -> None:
+        # 1. Verify not rendered when absent/empty in LEO
+        md_empty = render_markdown_report(full_result, template_name="leo_report.md.j2")
+        assert "AI Security Enrichment" not in md_empty
+
+        # 2. Add Sec-Gemini data
+        full_result.sec_gemini_analysis = {
+            "email_security": [
+                {
+                    "domain": "scam.example.com",
+                    "spf_record": "v=spf1 -all",
+                    "spf_valid": True,
+                    "dkim_configured": False,
+                    "dmarc_record": "v=DMARC1; p=none",
+                    "dmarc_policy": "none",
+                    "mx_records": ["mx1.example.com"],
+                    "assessment": "Weak email security — DMARC in monitor mode.",
+                }
+            ],
+            "infrastructure": {
+                "web_server": "nginx/1.24.0",
+                "framework": "PHP",
+                "cms": None,
+                "hosting_provider": "DigitalOcean",
+                "cdn": "Cloudflare",
+                "technologies": ["PHP", "nginx"],
+                "vulnerabilities": [
+                    {
+                        "cve_id": "CVE-2023-0001",
+                        "software": "nginx",
+                        "severity": "high",
+                        "cvss_score": 7.5,
+                        "is_exploited": True,
+                        "patch_available": True,
+                        "description": "A vulnerability in nginx",
+                    }
+                ],
+            },
+            "threat_synthesis": "The target domain uses weak email security and runs an outdated nginx server.",
+            "risk_adjustment": 2.5,
+            "duration_seconds": 15.4,
+        }
+
+        md = render_markdown_report(full_result, template_name="leo_report.md.j2")
+        assert "AI Security Enrichment (Sec-Gemini)" in md
+        assert "Threat Synthesis" in md
+        assert "The target domain uses weak email security" in md
+        assert "Email Security Posture" in md
+        assert "scam.example.com" in md
+        assert "Infrastructure Fingerprint" in md
+        assert "DigitalOcean" in md
+        assert "Detected Vulnerabilities" in md
+        assert "CVE-2023-0001" in md
+        assert "+2.5" in md

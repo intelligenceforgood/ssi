@@ -308,6 +308,68 @@ This is the PII the site attempts to collect:
 > Community intelligence enrichment provided under APWG data sharing agreement.
 {% endif %}
 
+{% if result.sec_gemini_analysis and (result.sec_gemini_analysis.get('threat_synthesis') or result.sec_gemini_analysis.get('email_security') or result.sec_gemini_analysis.get('infrastructure')) %}
+
+---
+
+## AI Security Enrichment (Sec-Gemini)
+
+> Analysis provided by Google's Sec-Gemini AI security platform.
+> Risk adjustment applied: {{ "%+.1f" | format(result.sec_gemini_analysis.get('risk_adjustment', 0.0)) }} | Duration: {{ "%.1f" | format(result.sec_gemini_analysis.get('duration_seconds', 0.0)) }}s
+
+{% if result.sec_gemini_analysis.get('threat_synthesis') %}
+### Threat Synthesis
+
+{{ result.sec_gemini_analysis.get('threat_synthesis') }}
+{% endif %}
+
+{% if result.sec_gemini_analysis.get('email_security') %}
+### Email Security Posture
+
+| Domain | SPF Record | SPF Valid | DKIM | DMARC Record | Policy | Assessment |
+|--------|------------|-----------|------|--------------|--------|------------|
+{% for email in result.sec_gemini_analysis.get('email_security') %}
+| {{ email.get('domain', '—') }} | `{{ email.get('spf_record') or "None" }}` | {{ "Yes" if email.get('spf_valid') else "No" }} | {{ "Yes" if email.get('dkim_configured') else "No" }} | `{{ email.get('dmarc_record') or "None" }}` | {{ email.get('dmarc_policy') or "None" }} | {{ email.get('assessment', '—') }} |
+{% endfor %}
+{% endif %}
+
+{% if result.sec_gemini_analysis.get('infrastructure') %}
+{% set infra = result.sec_gemini_analysis.get('infrastructure') %}
+### Infrastructure Fingerprint
+
+| Field | Value |
+|-------|-------|
+{% if infra.get('web_server') %}
+| **Web Server** | {{ infra.get('web_server') }} |
+{% endif %}
+{% if infra.get('framework') %}
+| **Framework** | {{ infra.get('framework') }} |
+{% endif %}
+{% if infra.get('cms') %}
+| **CMS** | {{ infra.get('cms') }} |
+{% endif %}
+{% if infra.get('hosting_provider') %}
+| **Hosting Provider** | {{ infra.get('hosting_provider') }} |
+{% endif %}
+{% if infra.get('cdn') %}
+| **CDN** | {{ infra.get('cdn') }} |
+{% endif %}
+{% if infra.get('technologies') %}
+| **Technologies** | {{ infra.get('technologies') | join(', ') }} |
+{% endif %}
+
+{% if infra.get('vulnerabilities') %}
+#### Detected Vulnerabilities
+
+| CVE ID | Software | Severity | CVSS | Exploited | Patch | Description |
+|--------|----------|----------|------|-----------|-------|-------------|
+{% for vuln in infra.get('vulnerabilities') %}
+| {{ vuln.get('cve_id', '—') }} | {{ vuln.get('software', '—') }} | {{ vuln.get('severity', '—') | upper }} | {{ vuln.get('cvss_score') or "N/A" }} | {{ "Yes" if vuln.get('is_exploited') else "No" }} | {{ "Yes" if vuln.get('patch_available') else "No" }} | {{ vuln.get('description', '—') }} |
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endif %}
+
 ---
 {% if result.threat_indicators %}
 

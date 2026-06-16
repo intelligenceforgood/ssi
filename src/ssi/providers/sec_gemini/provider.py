@@ -85,6 +85,87 @@ class SecGeminiProvider:
 
         start = time.monotonic()
 
+        # Local development mock fallback
+        if self._api_key == "p916FE-8Q9E-T82M-9L5N-RT21" or self._api_key.startswith("mock"):
+            logger.info("Using mock Sec-Gemini enrichment for local development key")
+            from urllib.parse import urlparse
+
+            from ssi.models.investigation import ThreatIndicator
+            from ssi.providers.sec_gemini.models import EmailSecurityPosture, InfraFingerprint, VulnerabilityFinding
+
+            domain = urlparse(url).netloc or url
+            if ":" in domain:
+                domain = domain.split(":")[0]
+
+            email_sec = [
+                EmailSecurityPosture(
+                    domain=domain,
+                    spf_record="v=spf1 include:_spf.google.com ~all",
+                    spf_valid=True,
+                    dkim_configured=False,
+                    dmarc_record="v=DMARC1; p=none",
+                    dmarc_policy="none",
+                    mx_records=["aspmx.l.google.com"],
+                    assessment=(
+                        "[MOCK] Weak email security posture. DMARC policy is set to monitor "
+                        "mode (p=none) and DKIM is not configured."
+                    ),
+                )
+            ]
+
+            infra = InfraFingerprint(
+                web_server="nginx/1.24.0",
+                framework="PHP/8.2.10",
+                cms=None,
+                hosting_provider="Cloudflare",
+                cdn="Cloudflare",
+                technologies=["nginx", "PHP", "Cloudflare"],
+                vulnerabilities=[
+                    VulnerabilityFinding(
+                        cve_id="CVE-2023-44487",
+                        software="nginx",
+                        severity="high",
+                        cvss_score=7.5,
+                        is_exploited=True,
+                        patch_available=True,
+                        description=(
+                            "[MOCK] HTTP/2 Rapid Reset vulnerability (CVE-2023-44487) " "allows denial of service."
+                        ),
+                    )
+                ],
+            )
+
+            threat_indicators = [
+                ThreatIndicator(
+                    indicator_type="email_security",
+                    value=domain,
+                    context="[MOCK] DMARC set to monitor mode (p=none)",
+                    source="sec_gemini",
+                ),
+                ThreatIndicator(
+                    indicator_type="vulnerability",
+                    value="CVE-2023-44487",
+                    context="[MOCK] nginx CVE-2023-44487 (actively exploited)",
+                    source="sec_gemini",
+                ),
+            ]
+
+            return SecGeminiAnalysis(
+                email_security=email_sec,
+                infrastructure=infra,
+                threat_synthesis=(
+                    f"[MOCK] The target domain {domain} exhibits signs of modern infrastructure but "
+                    "suffers from critical security misconfigurations. The email security posture is "
+                    "weak with DMARC set to monitor mode, and there is an outdated server fingerprint "
+                    "that correlates with high-severity vulnerabilities."
+                ),
+                threat_indicators=threat_indicators,
+                risk_adjustment=2.5,
+                raw_agent_response="MOCK_RESPONSE: local development mock",
+                session_id="mock-session-12345",
+                duration_seconds=1.2,
+            )
+
         try:
             async with SecGemini(api_key=self._api_key) as client:
                 session = await client.sessions.create()

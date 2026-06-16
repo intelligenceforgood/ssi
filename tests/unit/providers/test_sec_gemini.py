@@ -396,3 +396,24 @@ class TestSecGeminiSettings:
         )
         assert hasattr(settings, "sec_gemini")
         assert settings.sec_gemini.enabled is False
+
+
+class TestSecGeminiProviderMock:
+    """Test local development mock fallback in the provider."""
+
+    @pytest.mark.anyio
+    async def test_mock_fallback_triggered(self) -> None:
+        from ssi.providers.sec_gemini.provider import SecGeminiProvider
+
+        # Initialize with the local developer key
+        provider = SecGeminiProvider(api_key="p916FE-8Q9E-T82M-9L5N-RT21")
+        analysis = await provider.analyze_domain("https://test-domain.com", {})
+
+        assert len(analysis.email_security) == 1
+        assert analysis.email_security[0].domain == "test-domain.com"
+        assert analysis.infrastructure is not None
+        assert analysis.infrastructure.web_server == "nginx/1.24.0"
+        assert analysis.threat_synthesis.startswith("[MOCK] The target domain test-domain.com")
+        assert len(analysis.threat_indicators) == 2
+        assert analysis.risk_adjustment == 2.5
+        assert "MOCK_RESPONSE" in analysis.raw_agent_response
