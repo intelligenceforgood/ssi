@@ -215,18 +215,23 @@ class GuidancePollHandler:
             Headers dict.
         """
         if self._core_events_url:
-            try:
-                import google.auth.transport.requests  # type: ignore[import-untyped]
-                import google.oauth2.id_token  # type: ignore[import-untyped]
+            is_local_service = any(
+                loc in self._core_events_url for loc in ("localhost", "127.0.0.1", "::1")
+            ) or not self._core_events_url.startswith("https://")
 
-                req = google.auth.transport.requests.Request()
-                token = google.oauth2.id_token.fetch_id_token(req, audience=self._core_events_url)
-                headers: dict[str, str] = {"Authorization": f"Bearer {token}"}
-                if self._core_api_key:
-                    headers["X-API-KEY"] = self._core_api_key
-                return headers
-            except Exception as exc:
-                logger.warning("Could not acquire OIDC token for guidance poll: %s", exc)
+            if not is_local_service:
+                try:
+                    import google.auth.transport.requests  # type: ignore[import-untyped]
+                    import google.oauth2.id_token  # type: ignore[import-untyped]
+
+                    req = google.auth.transport.requests.Request()
+                    token = google.oauth2.id_token.fetch_id_token(req, audience=self._core_events_url)
+                    headers: dict[str, str] = {"Authorization": f"Bearer {token}"}
+                    if self._core_api_key:
+                        headers["X-API-KEY"] = self._core_api_key
+                    return headers
+                except Exception as exc:
+                    logger.warning("Could not acquire OIDC token for guidance poll: %s", exc)
 
         if self._core_api_key:
             return {"X-API-KEY": self._core_api_key}
@@ -396,18 +401,23 @@ class GuidancePollRelay:
             Headers dict.
         """
         if self._core_events_url:
-            try:
-                import google.auth.transport.requests  # type: ignore[import-untyped]
-                import google.oauth2.id_token  # type: ignore[import-untyped]
+            is_local_service = any(
+                loc in self._core_events_url for loc in ("localhost", "127.0.0.1", "::1")
+            ) or not self._core_events_url.startswith("https://")
 
-                req = google.auth.transport.requests.Request()
-                token = google.oauth2.id_token.fetch_id_token(req, audience=self._core_events_url)
-                headers: dict[str, str] = {"Authorization": f"Bearer {token}"}
-                if self._core_api_key:
-                    headers["X-API-KEY"] = self._core_api_key
-                return headers
-            except Exception as exc:
-                logger.warning("Could not acquire OIDC token for guidance relay: %s", exc)
+            if not is_local_service:
+                try:
+                    import google.auth.transport.requests  # type: ignore[import-untyped]
+                    import google.oauth2.id_token  # type: ignore[import-untyped]
+
+                    req = google.auth.transport.requests.Request()
+                    token = google.oauth2.id_token.fetch_id_token(req, audience=self._core_events_url)
+                    headers: dict[str, str] = {"Authorization": f"Bearer {token}"}
+                    if self._core_api_key:
+                        headers["X-API-KEY"] = self._core_api_key
+                    return headers
+                except Exception as exc:
+                    logger.warning("Could not acquire OIDC token for guidance relay: %s", exc)
 
         if self._core_api_key:
             return {"X-API-KEY": self._core_api_key}
