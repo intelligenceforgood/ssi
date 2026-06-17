@@ -41,6 +41,18 @@
 {% endif %}
 
 ---
+{% if result.module_statuses %}
+
+## Module Execution Summary
+
+| Module | Status | Detail |
+|--------|--------|--------|
+{% for mod, outcome in result.module_statuses.items() %}
+| {{ mod | replace('_', ' ') | title }} | {{ outcome.status.value | upper }} | {{ outcome.message or "—" }} |
+{% endfor %}
+
+---
+{% endif %}
 {% if result.taxonomy_result %}
 
 ## Risk Assessment & Fraud Classification
@@ -106,6 +118,12 @@
 {% if result.whois.status %}
 | **Status** | {{ result.whois.status | join(', ') }} |
 {% endif %}
+{% elif result.module_statuses.get('whois') %}
+{% set _ws = result.module_statuses['whois'] %}
+
+## WHOIS / Domain Registration
+
+> **{{ _ws.status.value | upper }}:** {{ _ws.message or "No data available." }}
 {% endif %}
 
 ---
@@ -135,6 +153,12 @@
 | TXT | `{{ record[:80] }}` |
 {% endfor %}
 {% endif %}
+{% elif result.module_statuses.get('dns') %}
+{% set _ds = result.module_statuses['dns'] %}
+
+## DNS Records
+
+> **{{ _ds.status.value | upper }}:** {{ _ds.message or "No data available." }}
 {% endif %}
 
 ---
@@ -154,6 +178,12 @@
 | **SANs** | {{ result.ssl.san | join(', ') }} |
 {% endif %}
 | **SHA-256** | `{{ result.ssl.fingerprint_sha256 }}` |
+{% elif result.module_statuses.get('ssl') %}
+{% set _ss = result.module_statuses['ssl'] %}
+
+## TLS / SSL Certificate
+
+> **{{ _ss.status.value | upper }}:** {{ _ss.message or "No data available." }}
 {% endif %}
 
 ---
@@ -171,6 +201,12 @@
 | **Organization** | {{ result.geoip.org or "Unknown" }} |
 | **ASN** | {{ result.geoip.asn or "Unknown" }} |
 | **AS Name** | {{ result.geoip.as_name or "Unknown" }} |
+{% elif result.module_statuses.get('geoip') %}
+{% set _gs = result.module_statuses['geoip'] %}
+
+## IP Geolocation
+
+> **{{ _gs.status.value | upper }}:** {{ _gs.message or "No data available." }}
 {% endif %}
 
 ---
@@ -306,6 +342,12 @@ This is the PII the site attempts to collect:
 
 > **Source:** [eCrimeX](https://ecrimex.net) — APWG eCrime eXchange data clearinghouse.
 > Community intelligence enrichment provided under APWG data sharing agreement.
+{% elif result.module_statuses.get('ecrimex') %}
+{% set _es = result.module_statuses['ecrimex'] %}
+
+## Community Intelligence (eCrimeX)
+
+> **{{ _es.status.value | upper }}:** {{ _es.message or "No data available." }}
 {% endif %}
 
 {% if result.sec_gemini_analysis and (result.sec_gemini_analysis.get('threat_synthesis') or result.sec_gemini_analysis.get('email_security') or result.sec_gemini_analysis.get('infrastructure')) %}
@@ -368,6 +410,12 @@ This is the PII the site attempts to collect:
 {% endfor %}
 {% endif %}
 {% endif %}
+{% elif result.module_statuses.get('sec_gemini') %}
+{% set _sg = result.module_statuses['sec_gemini'] %}
+
+## AI Security Enrichment (Sec-Gemini)
+
+> **{{ _sg.status.value | upper }}:** {{ _sg.message or "No data available." }}
 {% endif %}
 
 ---

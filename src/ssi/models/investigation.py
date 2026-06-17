@@ -36,6 +36,24 @@ class InvestigationStatus(StrEnum):
     PARTIAL = "partial"
 
 
+class ModuleStatus(StrEnum):
+    """Execution status of an individual investigation module."""
+
+    SUCCESS = "success"
+    DISABLED = "disabled"
+    SKIPPED = "skipped"
+    FAILED = "failed"
+
+
+class ModuleOutcome(BaseModel):
+    """Execution metadata for a single investigation module."""
+
+    status: ModuleStatus
+    message: str = ""
+    duration_ms: float = 0.0
+    error_type: str = ""
+
+
 class TaxonomyScoredLabel(BaseModel):
     """A single taxonomy label with confidence."""
 
@@ -305,3 +323,8 @@ class InvestigationResult(BaseModel):
     cost_summary: dict[str, Any] | None = None
     captcha_encountered: bool = False
     warnings: list[str] = Field(default_factory=list)
+    module_statuses: dict[str, ModuleOutcome] = Field(
+        default_factory=dict,
+        description="Per-module execution status. Keys are module identifiers "
+        "(e.g., 'whois', 'dns', 'geoip', 'virustotal', 'sec_gemini').",
+    )

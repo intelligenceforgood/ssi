@@ -177,6 +177,11 @@ img {
     float: right;
     margin-top: 4pt;
 }
+
+/* Module status callouts (rendered as blockquotes in markdown) */
+blockquote strong {
+    font-weight: 700;
+}
 """
 
 

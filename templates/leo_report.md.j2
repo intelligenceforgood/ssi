@@ -53,6 +53,16 @@ to document the site's infrastructure, behaviour, and threat indicators.
 {% endfor %}
 
 {% endif %}
+{% if result.module_statuses %}
+
+### Module Execution Summary
+
+| Module | Status | Detail |
+|--------|--------|--------|
+{% for mod, outcome in result.module_statuses.items() %}
+| {{ mod | replace('_', ' ') | title }} | {{ outcome.status.value | upper }} | {{ outcome.message or "—" }} |
+{% endfor %}
+{% endif %}
 ---
 
 ## 2. Infrastructure Intelligence
@@ -70,7 +80,11 @@ to document the site's infrastructure, behaviour, and threat indicators.
 | **Country** | {{ result.whois.registrant_country or 'Unknown' }} |
 | **Name Servers** | {{ result.whois.name_servers | join(', ') }} |
 {% else %}
+{% if result.module_statuses.get('whois') %}
+**{{ result.module_statuses['whois'].status.value | upper }}:** {{ result.module_statuses['whois'].message }}
+{% else %}
 WHOIS data was not available — the domain may be unregistered or privacy-protected beyond RDAP.
+{% endif %}
 {% endif %}
 
 ### DNS Records
@@ -91,7 +105,11 @@ WHOIS data was not available — the domain may be unregistered or privacy-prote
 {% if result.dns.cname %}| CNAME | {{ result.dns.cname | join(', ') }} |
 {% endif %}
 {% else %}
+{% if result.module_statuses.get('dns') %}
+**{{ result.module_statuses['dns'].status.value | upper }}:** {{ result.module_statuses['dns'].message }}
+{% else %}
 No DNS records found — the domain does not resolve (NXDOMAIN). This may indicate the domain is unregistered, expired, or has been taken down.
+{% endif %}
 {% endif %}
 
 ### SSL Certificate
@@ -108,7 +126,11 @@ No DNS records found — the domain does not resolve (NXDOMAIN). This may indica
 | **SHA-256 Fingerprint** | `{{ result.ssl.fingerprint_sha256 }}` |
 {% if result.ssl.san %}| **SAN** | {{ result.ssl.san | join(', ') }} |{% endif %}
 {% else %}
+{% if result.module_statuses.get('ssl') %}
+**{{ result.module_statuses['ssl'].status.value | upper }}:** {{ result.module_statuses['ssl'].message }}
+{% else %}
 SSL certificate could not be retrieved — no server responded on port 443.
+{% endif %}
 {% endif %}
 
 ### Hosting / GeoIP
@@ -122,7 +144,11 @@ SSL certificate could not be retrieved — no server responded on port 443.
 | **Organisation** | {{ result.geoip.org }} |
 | **ASN** | {{ result.geoip.asn }} ({{ result.geoip.as_name }}) |
 {% else %}
+{% if result.module_statuses.get('geoip') %}
+**{{ result.module_statuses['geoip'].status.value | upper }}:** {{ result.module_statuses['geoip'].message }}
+{% else %}
 GeoIP data was not available — no IP address could be resolved for this domain.
+{% endif %}
 {% endif %}
 
 ---

@@ -14,7 +14,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from ssi.models.investigation import DownloadArtifact, InvestigationResult, InvestigationStatus, ScanType
+from ssi.models.investigation import (
+    DownloadArtifact,
+    InvestigationResult,
+    InvestigationStatus,
+    ModuleOutcome,
+    ModuleStatus,
+    ScanType,
+)
 from ssi.monitoring import CostTracker
 
 if TYPE_CHECKING:
@@ -28,6 +35,33 @@ if TYPE_CHECKING:
     from ssi.osint.whois_lookup import WHOISRecord
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_error(error: Exception) -> str:
+    """Return a single-line, traceback-free error description."""
+    msg = str(error).split("\n")[0].strip()
+    return msg[:200] if msg else type(error).__name__
+
+
+def _record_status(
+    result: InvestigationResult,
+    module: str,
+    status: ModuleStatus,
+    *,
+    message: str = "",
+    duration_ms: float = 0.0,
+    error: Exception | None = None,
+) -> None:
+    """Record the execution outcome of an investigation module."""
+    error_type = type(error).__name__ if error else ""
+    if error and not message:
+        message = _sanitize_error(error)
+    result.module_statuses[module] = ModuleOutcome(
+        status=status,
+        message=message,
+        duration_ms=duration_ms,
+        error_type=error_type,
+    )
 
 
 def run_investigation(
@@ -181,30 +215,89 @@ def run_investigation(
         _emit("state_changed", {"new_state": "PASSIVE_RECON", "message": "Starting passive reconnaissance"})
 
         if run_passive and not skip_whois:
+            _t0 = time.monotonic()
             result.whois = _run_whois(url)
+            _dt = (time.monotonic() - _t0) * 1000
+            if result.whois:
+                _record_status(result, "whois", ModuleStatus.SUCCESS, duration_ms=_dt)
+            else:
+                _record_status(
+                    result, "whois", ModuleStatus.FAILED, message="WHOIS lookup returned no data", duration_ms=_dt
+                )
             if cost_tracker:
                 cost_tracker.record_api_call("whois")
+        elif run_passive:
+            _record_status(result, "whois", ModuleStatus.SKIPPED, message="Skipped by caller flag")
+        else:
+            _record_status(result, "whois", ModuleStatus.SKIPPED, message="Not included in scan type")
 
         if run_passive and domain_resolves:
+            _t0 = time.monotonic()
             result.dns = _run_dns(url)
+            _dt = (time.monotonic() - _t0) * 1000
+            if result.dns:
+                _record_status(result, "dns", ModuleStatus.SUCCESS, duration_ms=_dt)
+            else:
+                _record_status(
+                    result, "dns", ModuleStatus.FAILED, message="DNS lookup returned no data", duration_ms=_dt
+                )
             if cost_tracker:
                 cost_tracker.record_api_call("dns")
 
+            _t0 = time.monotonic()
             result.ssl = _run_ssl(url)
+            _dt = (time.monotonic() - _t0) * 1000
+            if result.ssl:
+                _record_status(result, "ssl", ModuleStatus.SUCCESS, duration_ms=_dt)
+            else:
+                _record_status(
+                    result, "ssl", ModuleStatus.FAILED, message="SSL inspection returned no data", duration_ms=_dt
+                )
             if cost_tracker:
                 cost_tracker.record_api_call("ssl")
 
+            _t0 = time.monotonic()
             result.geoip = _run_geoip(result.dns)
+            _dt = (time.monotonic() - _t0) * 1000
+            if result.geoip:
+                _record_status(result, "geoip", ModuleStatus.SUCCESS, duration_ms=_dt)
+            else:
+                _record_status(
+                    result,
+                    "geoip",
+                    ModuleStatus.SKIPPED,
+                    message="No A records available for GeoIP resolution",
+                    duration_ms=_dt,
+                )
             if cost_tracker:
                 cost_tracker.record_api_call("geoip")
         elif run_passive and not domain_resolves:
             logger.info("Skipping DNS/SSL/GeoIP — domain does not resolve")
+            _record_status(result, "dns", ModuleStatus.SKIPPED, message="Domain does not resolve (NXDOMAIN)")
+            _record_status(result, "ssl", ModuleStatus.SKIPPED, message="Domain does not resolve (NXDOMAIN)")
+            _record_status(result, "geoip", ModuleStatus.SKIPPED, message="Domain does not resolve (NXDOMAIN)")
+        elif not run_passive:
+            _record_status(result, "dns", ModuleStatus.SKIPPED, message="Not included in scan type")
+            _record_status(result, "ssl", ModuleStatus.SKIPPED, message="Not included in scan type")
+            _record_status(result, "geoip", ModuleStatus.SKIPPED, message="Not included in scan type")
 
         # Screenshot is captured for all scan types (passive, active, full)
         # unless explicitly skipped by the caller or the domain is unreachable.
         if not skip_screenshot and domain_resolves:
             _emit("state_changed", {"new_state": "SCREENSHOT", "message": "Capturing page screenshot"})
+            _t0 = time.monotonic()
             result.page_snapshot = _run_browser_capture(url, inv_dir)
+            _dt = (time.monotonic() - _t0) * 1000
+            if result.page_snapshot:
+                _record_status(result, "screenshot", ModuleStatus.SUCCESS, duration_ms=_dt)
+            else:
+                _record_status(
+                    result,
+                    "screenshot",
+                    ModuleStatus.FAILED,
+                    message="Browser capture returned no data",
+                    duration_ms=_dt,
+                )
 
             # Emit screenshot to live monitor if available
             if result.page_snapshot and result.page_snapshot.screenshot_path and event_bus is not None:
@@ -222,30 +315,94 @@ def run_investigation(
             # Collect passive-capture downloads
             if result.page_snapshot and result.page_snapshot.captured_downloads:
                 result.downloads.extend(_to_download_artifacts(result.page_snapshot.captured_downloads))
+        elif skip_screenshot:
+            _record_status(result, "screenshot", ModuleStatus.SKIPPED, message="Skipped by caller flag")
+        elif not domain_resolves:
+            _record_status(result, "screenshot", ModuleStatus.SKIPPED, message="Domain does not resolve")
 
         if run_passive and not skip_virustotal:
+            _t0 = time.monotonic()
             _run_virustotal(url, result)
+            _dt = (time.monotonic() - _t0) * 1000
+            _record_status(result, "virustotal", ModuleStatus.SUCCESS, duration_ms=_dt)
             if cost_tracker:
                 cost_tracker.record_api_call("virustotal")
+        elif run_passive:
+            _record_status(result, "virustotal", ModuleStatus.SKIPPED, message="Skipped by caller flag")
+        else:
+            _record_status(result, "virustotal", ModuleStatus.SKIPPED, message="Not included in scan type")
 
         if run_passive and not skip_urlscan and domain_resolves:
+            _t0 = time.monotonic()
             _run_urlscan(url, result)
+            _dt = (time.monotonic() - _t0) * 1000
+            _record_status(result, "urlscan", ModuleStatus.SUCCESS, duration_ms=_dt)
             if cost_tracker:
                 cost_tracker.record_api_call("urlscan")
         elif run_passive and not skip_urlscan and not domain_resolves:
             logger.info("Skipping urlscan.io — domain does not resolve")
+            _record_status(result, "urlscan", ModuleStatus.SKIPPED, message="Domain does not resolve (NXDOMAIN)")
+        elif run_passive:
+            _record_status(result, "urlscan", ModuleStatus.SKIPPED, message="Skipped by caller flag")
+        else:
+            _record_status(result, "urlscan", ModuleStatus.SKIPPED, message="Not included in scan type")
 
         # eCrimeX enrichment (Phase 1: passive recon)
         if run_passive:
+            _t0 = time.monotonic()
             _run_ecx_enrichment(url, domain_slug, result)
+            _dt = (time.monotonic() - _t0) * 1000
+            if result.ecx_enrichment:
+                _record_status(result, "ecrimex", ModuleStatus.SUCCESS, duration_ms=_dt)
+            else:
+                _record_status(
+                    result, "ecrimex", ModuleStatus.SUCCESS, message="No community hits found", duration_ms=_dt
+                )
             if cost_tracker:
                 cost_tracker.record_api_call("ecrimex")
+        else:
+            _record_status(result, "ecrimex", ModuleStatus.SKIPPED, message="Not included in scan type")
 
         # Sec-Gemini enrichment (Phase 1: optional AI-powered analysis)
         if run_passive:
+            _t0 = time.monotonic()
             _run_sec_gemini_enrichment(url, result)
+            _dt = (time.monotonic() - _t0) * 1000
+            if result.sec_gemini_analysis:
+                _record_status(result, "sec_gemini", ModuleStatus.SUCCESS, duration_ms=_dt)
+            else:
+                # Check if disabled or skipped (no API key)
+                from ssi.settings import get_settings as _get_settings
+
+                _sec_settings = _get_settings().sec_gemini
+                if not _sec_settings.enabled:
+                    _record_status(
+                        result,
+                        "sec_gemini",
+                        ModuleStatus.DISABLED,
+                        message="Sec-Gemini integration disabled in config",
+                        duration_ms=_dt,
+                    )
+                elif not _sec_settings.api_key:
+                    _record_status(
+                        result,
+                        "sec_gemini",
+                        ModuleStatus.SKIPPED,
+                        message="No SEC_GEMINI API key configured",
+                        duration_ms=_dt,
+                    )
+                else:
+                    _record_status(
+                        result,
+                        "sec_gemini",
+                        ModuleStatus.FAILED,
+                        message="Sec-Gemini enrichment returned no data",
+                        duration_ms=_dt,
+                    )
             if cost_tracker:
                 cost_tracker.record_api_call("sec_gemini")
+        else:
+            _record_status(result, "sec_gemini", ModuleStatus.SKIPPED, message="Not included in scan type")
 
         # Budget gate: abort before expensive active phase if already over budget.
         if cost_tracker:
@@ -323,12 +480,44 @@ def run_investigation(
         # --- Phase 2.7: Google OSINT ----------------------------------------
         _emit("state_changed", {"new_state": "GOOGLE_OSINT", "message": "Extracting Google OSINT artifacts"})
         google_cookies = agent_session.extracted_cookies if agent_session else None
+        _t0 = time.monotonic()
         _run_google_osint(result, google_cookies=google_cookies)
+        _dt = (time.monotonic() - _t0) * 1000
+        if result.google_osint:
+            _record_status(result, "google_osint", ModuleStatus.SUCCESS, duration_ms=_dt)
+        elif google_cookies is None:
+            _record_status(
+                result,
+                "google_osint",
+                ModuleStatus.SKIPPED,
+                message="No Google session cookies available",
+                duration_ms=_dt,
+            )
+        else:
+            _record_status(
+                result,
+                "google_osint",
+                ModuleStatus.SKIPPED,
+                message="No emails or Drive links found to resolve",
+                duration_ms=_dt,
+            )
 
         # --- Phase 3: Classification & Evidence Packaging -------------------
         logger.info("Phase 3: Classification & evidence packaging")
         _emit("state_changed", {"new_state": "CLASSIFICATION", "message": "Classifying fraud type"})
+        _t0 = time.monotonic()
         _run_classification(result)
+        _dt = (time.monotonic() - _t0) * 1000
+        if result.taxonomy_result or result.classification:
+            _record_status(result, "classification", ModuleStatus.SUCCESS, duration_ms=_dt)
+        else:
+            _record_status(
+                result,
+                "classification",
+                ModuleStatus.FAILED,
+                message="Classification returned no results",
+                duration_ms=_dt,
+            )
 
         result.status = InvestigationStatus.COMPLETED
         result.success = True
