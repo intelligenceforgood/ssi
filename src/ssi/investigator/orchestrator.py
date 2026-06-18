@@ -369,7 +369,26 @@ def run_investigation(
             _run_sec_gemini_enrichment(url, result)
             _dt = (time.monotonic() - _t0) * 1000
             if result.sec_gemini_analysis:
-                _record_status(result, "sec_gemini", ModuleStatus.SUCCESS, duration_ms=_dt)
+                _raw_resp = result.sec_gemini_analysis.get("raw_agent_response", "")
+                if _raw_resp.startswith("ERROR:"):
+                    _err_msg = _raw_resp[len("ERROR:") :].strip()
+                    _record_status(
+                        result,
+                        "sec_gemini",
+                        ModuleStatus.FAILED,
+                        message=_err_msg or "Sec-Gemini enrichment failed",
+                        duration_ms=_dt,
+                    )
+                elif _raw_resp.startswith("MOCK_RESPONSE:"):
+                    _record_status(
+                        result,
+                        "sec_gemini",
+                        ModuleStatus.MOCKED,
+                        message="Mock fallback used",
+                        duration_ms=_dt,
+                    )
+                else:
+                    _record_status(result, "sec_gemini", ModuleStatus.SUCCESS, duration_ms=_dt)
             else:
                 # Check if disabled or skipped (no API key)
                 from ssi.settings import get_settings as _get_settings

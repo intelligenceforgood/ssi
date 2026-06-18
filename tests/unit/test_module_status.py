@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from ssi.models.investigation import InvestigationResult, ModuleOutcome, ModuleStatus
@@ -19,6 +22,7 @@ class TestModuleStatus:
         assert ModuleStatus.DISABLED == "disabled"
         assert ModuleStatus.SKIPPED == "skipped"
         assert ModuleStatus.FAILED == "failed"
+        assert ModuleStatus.MOCKED == "mocked"
 
     def test_all_members(self) -> None:
         assert set(ModuleStatus) == {
@@ -26,6 +30,7 @@ class TestModuleStatus:
             ModuleStatus.DISABLED,
             ModuleStatus.SKIPPED,
             ModuleStatus.FAILED,
+            ModuleStatus.MOCKED,
         }
 
 
@@ -215,3 +220,92 @@ class TestRecordStatus:
 
         assert result.module_statuses["whois"].status == ModuleStatus.SUCCESS
         assert result.module_statuses["whois"].message == "second"
+
+
+class TestSecGeminiStatusResolution:
+    """Verify that run_investigation records correct status for sec_gemini based on outcome."""
+
+    @patch("ssi.investigator.orchestrator._check_domain_resolution", return_value=True)
+    @patch("ssi.investigator.orchestrator._run_whois", return_value=None)
+    @patch("ssi.investigator.orchestrator._run_dns", return_value=None)
+    @patch("ssi.investigator.orchestrator._run_ssl", return_value=None)
+    @patch("ssi.investigator.orchestrator._run_geoip", return_value=None)
+    @patch("ssi.investigator.orchestrator._run_browser_capture", return_value=None)
+    @patch("ssi.investigator.orchestrator._run_virustotal", return_value=None)
+    @patch("ssi.investigator.orchestrator._run_urlscan", return_value=None)
+    def test_sec_gemini_status_resolution(
+        self,
+        _mock_urlscan: MagicMock,
+        _mock_vt: MagicMock,
+        _mock_capture: MagicMock,
+        _mock_geoip: MagicMock,
+        _mock_ssl: MagicMock,
+        _mock_dns: MagicMock,
+        _mock_whois: MagicMock,
+        _mock_domain: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        from ssi.investigator.orchestrator import run_investigation
+
+        mock_settings = MagicMock()
+        mock_settings.storage.persist_scans = False
+        mock_settings.cost.enabled = False
+
+        # 1. Success case
+        def _mock_enrich_success(url, result):
+            result.sec_gemini_analysis = {"raw_agent_response": "Successful response content"}
+
+        with (
+            patch("ssi.settings.get_settings", return_value=mock_settings),
+            patch("ssi.investigator.orchestrator._run_sec_gemini_enrichment", side_effect=_mock_enrich_success),
+        ):
+            res = run_investigation(
+                url="https://scam.example.com",
+                output_dir=tmp_path,
+                scan_type="passive",
+                skip_whois=True,
+                skip_screenshot=True,
+                skip_virustotal=True,
+                skip_urlscan=True,
+            )
+            assert res.module_statuses["sec_gemini"].status == ModuleStatus.SUCCESS
+
+        # 2. Failed case
+        def _mock_enrich_failed(url, result):
+            result.sec_gemini_analysis = {"raw_agent_response": "ERROR: Session timed out"}
+
+        with (
+            patch("ssi.settings.get_settings", return_value=mock_settings),
+            patch("ssi.investigator.orchestrator._run_sec_gemini_enrichment", side_effect=_mock_enrich_failed),
+        ):
+            res = run_investigation(
+                url="https://scam.example.com",
+                output_dir=tmp_path,
+                scan_type="passive",
+                skip_whois=True,
+                skip_screenshot=True,
+                skip_virustotal=True,
+                skip_urlscan=True,
+            )
+            assert res.module_statuses["sec_gemini"].status == ModuleStatus.FAILED
+            assert res.module_statuses["sec_gemini"].message == "Session timed out"
+
+        # 3. Mocked case
+        def _mock_enrich_mocked(url, result):
+            result.sec_gemini_analysis = {"raw_agent_response": "MOCK_RESPONSE: local development mock"}
+
+        with (
+            patch("ssi.settings.get_settings", return_value=mock_settings),
+            patch("ssi.investigator.orchestrator._run_sec_gemini_enrichment", side_effect=_mock_enrich_mocked),
+        ):
+            res = run_investigation(
+                url="https://scam.example.com",
+                output_dir=tmp_path,
+                scan_type="passive",
+                skip_whois=True,
+                skip_screenshot=True,
+                skip_virustotal=True,
+                skip_urlscan=True,
+            )
+            assert res.module_statuses["sec_gemini"].status == ModuleStatus.MOCKED
+            assert res.module_statuses["sec_gemini"].message == "Mock fallback used"

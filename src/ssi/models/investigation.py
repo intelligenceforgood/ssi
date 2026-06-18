@@ -43,6 +43,7 @@ class ModuleStatus(StrEnum):
     DISABLED = "disabled"
     SKIPPED = "skipped"
     FAILED = "failed"
+    MOCKED = "mocked"
 
 
 class ModuleOutcome(BaseModel):
