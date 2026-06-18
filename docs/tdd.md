@@ -37,10 +37,10 @@ For end-user documentation, see the [docs site](../../docs/book/ssi/README.md).
   └──────────────┘  └──────┬───────┘  │ (WHOIS, DNS, │
                            │          │  SSL, GeoIP, │
                     ┌──────▼───────┐  │  VT, urlscan,│
-                    │ Scan Store   │  │  Google OSINT,│
-                    │ (SQLite /    │  │  Sec-Gemini, │
-                    │  PostgreSQL) │  │  eCrimeX)    │
-                    └──────────────┘  └──────┬───────┘
+                    │ Scan Store   │  │  Sec-Gemini, │
+                    │ (SQLite /    │  │  eCrimeX)    │
+                    │  PostgreSQL) │  └──────┬───────┘
+                    └──────────────┘
                                       ┌──────▼───────┐
                                       │ Evidence     │
                                       │ Store +      │
@@ -82,7 +82,6 @@ The product is a **three-phase automated scam site investigation system**:
 │ • Screenshots   │  │ • Playbook Engine │  │                              │
 │ • DOM/HAR       │  │ • Human Guidance  │  │                              │
 │ • eCrimeX       │  └────────┬──────────┘  └────────────┬─────────────────┘
-│ • Google OSINT  │           │                          │
 │ • Sec-Gemini†   │           │                          │
 └────────┬────────┘           │                          │
          │                    │                          │
@@ -592,27 +591,7 @@ Every type action reads back the field value after typing and verifies correctne
 - Opportunistic wallet capture: JS probe during state transitions
 - Batch fill: single LLM call to generate all form-fill actions (reduces N calls to 2)
 
-### 6.7 Google OSINT Intelligence (Phase 2.7)
-
-Native Google identity intelligence scrapers that resolve email addresses found on scam sites to Google account metadata, profile photos, and Maps contribution statistics.
-
-**Pipeline position:** Runs at Phase 2.7 — after active interaction (Phase 2) and wallet extraction (Phase 2.6), before classification (Phase 3). Uses cookies extracted from the zendriver browser session during Phase 2.
-
-**Auth model:** SAPISIDHASH-authenticated requests using Google session cookies (`SID`, `HSID`, `SSID`, `APISID`, `SAPISID`, `NID`) extracted from the browser profile. Cookies are validated before use; missing or invalid cookies cause graceful skip.
-
-**Capabilities:**
-- **People Lookup** (`ssi.osint.google.people`): Resolves email → Google Account ID → profile metadata (display name, photo, activated services, user types, enterprise status).
-- **Maps Contribution** (`ssi.osint.google.maps`): Scrapes contribution statistics (reviews, ratings, photos) for identified accounts. Geographic intelligence from review locations (deferred to future phase).
-
-**Data flow:**
-- Results stored as `GoogleOSINTResult` on `InvestigationResult.google_osint`
-- Account IDs → `ThreatIndicator(indicator_type="google_account_id")`
-- Secondary emails → `PiiExposure(field_type="email")`
-- Maps profiles with reviews → `ThreatIndicator(indicator_type="google_maps_profile")`
-
-**Future work:** Drive file metadata scraping (requires Android OAuth master token), full review enumeration with location clustering, Play Games profile scraping.
-
-### 6.8 Sec-Gemini Enrichment (Phase 1, Optional)
+### 6.7 Sec-Gemini Enrichment (Phase 1, Optional)
 
 Optional integration with Google's Sec-Gemini security AI platform. Feature-flagged via `SSI_SEC_GEMINI__ENABLED` (default: `false`).
 
