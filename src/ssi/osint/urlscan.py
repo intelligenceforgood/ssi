@@ -195,7 +195,7 @@ def _submit_and_poll(url: str, api_key: str) -> dict[str, Any]:
             elapsed += _POLL_INTERVAL
 
             try:
-                result_resp = httpx.get(result_url, timeout=15)
+                result_resp = httpx.get(result_url, headers=headers, timeout=15)
                 if result_resp.status_code == 200:
                     return result_resp.json()
                 elif result_resp.status_code == 404:
@@ -232,13 +232,23 @@ def _search_existing(url: str) -> dict[str, Any]:
     """Search urlscan.io for existing scans of the URL (no API key required)."""
     from urllib.parse import urlparse
 
+    from ssi.settings import get_settings
+
+    settings = get_settings()
+    api_key = (settings.osint.urlscan_api_key or "").strip()
+
+    placeholder_values = {"changeme", "replace_me", "todo", "none", "placeholder", ""}
+    headers = {}
+    if api_key and api_key.lower() not in placeholder_values and len(api_key) >= 32:
+        headers["API-Key"] = api_key
+
     domain = urlparse(url).hostname or ""
     if not domain:
         return {}
 
     try:
         search_url = f"{URLSCAN_API_BASE}/search/?q=domain:{domain}&size=1"
-        resp = httpx.get(search_url, timeout=15)
+        resp = httpx.get(search_url, headers=headers, timeout=15)
         resp.raise_for_status()
         results = resp.json().get("results", [])
 
@@ -251,7 +261,7 @@ def _search_existing(url: str) -> dict[str, Any]:
         if not result_id:
             return {}
 
-        detail_resp = httpx.get(f"{URLSCAN_API_BASE}/result/{result_id}/", timeout=15)
+        detail_resp = httpx.get(f"{URLSCAN_API_BASE}/result/{result_id}/", headers=headers, timeout=15)
         if detail_resp.status_code == 200:
             return detail_resp.json()
 
