@@ -48,6 +48,19 @@ This guide covers setting up a development environment, understanding the codeba
   sudo apt-get install libglib2.0-dev libcairo2-dev libpango1.0-dev
   ```
 
+  > [!IMPORTANT]
+  > **macOS (Apple Silicon) library resolution issue:** If you installed glib/cairo/pango via Homebrew, they are located under `/opt/homebrew/lib`. Because Conda's Python environment does not search this path by default, you may get an `OSError: cannot load library 'libgobject-2.0-0'` during investigations, which will silently skip generating the PDF report.
+  >
+  > To fix this, set the fallback library path inside your Conda environment:
+  > ```bash
+  > conda env config vars set DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib -n i4g-ssi
+  > ```
+  > After running this command, reactivate the environment to apply the change:
+  > ```bash
+  > conda deactivate && conda activate i4g-ssi
+  > ```
+
+
 - **Git** — for version control
 
 ---

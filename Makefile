@@ -1,12 +1,22 @@
 .PHONY: setup install install-dev test lint format clean browsers rehydrate \
         build-svc build-dev deploy-dev build-prod deploy-prod
 
+# macOS Apple Silicon Homebrew library path resolution for WeasyPrint
+DYLD_ENV =
+ifeq ($(shell uname -s),Darwin)
+    ifeq ($(shell uname -m),arm64)
+        DYLD_ENV = DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib
+    endif
+endif
+
 # ---------- Setup ----------
 # Full first-time setup: install Python deps + native libs + Playwright browser.
 # Prerequisites: Python 3.13+ environment already activated (conda, venv, etc.).
 # macOS native libs (required by weasyprint for PDF generation):
 #   conda:  conda install -c conda-forge glib cairo pango
 #   brew:   brew install glib cairo pango
+#   NOTE: On Apple Silicon with Homebrew, you may also need to set the library path in your environment:
+#   conda env config vars set DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib -n i4g-ssi
 setup: install-dev browsers
 	@echo "✅ Setup complete. Run 'ssi --version' to verify."
 
@@ -22,10 +32,10 @@ browsers:
 
 # ---------- Quality ----------
 test:
-	pytest tests/unit -v
+	$(DYLD_ENV) pytest tests/unit -v
 
 test-all:
-	pytest -v
+	$(DYLD_ENV) pytest -v
 
 lint:
 	ruff check src/ tests/
@@ -37,10 +47,10 @@ format:
 
 # ---------- Run ----------
 serve:
-	uvicorn ssi.api.app:app --reload --port 8100
+	$(DYLD_ENV) uvicorn ssi.api.app:app --reload --port 8100
 
 investigate:
-	ssi investigate $(URL)
+	$(DYLD_ENV) ssi investigate $(URL)
 
 # ---------- Docker / Deploy ----------
 build-svc:
