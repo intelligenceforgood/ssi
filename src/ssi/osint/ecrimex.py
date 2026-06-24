@@ -517,7 +517,7 @@ _get_client = get_client
 # ---------------------------------------------------------------------------
 
 
-def _safe_query(
+def _safe_query[T](
     fn: Callable[..., T],
     *args: Any,
     errors: list[str] | None = None,

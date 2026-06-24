@@ -71,8 +71,7 @@ def extract_inline_images(
     Returns:
         List of ``InlineImage`` metadata objects.
     """
-    data_uris: list[dict[str, str]] = page.evaluate(
-        """() => {
+    data_uris: list[dict[str, str]] = page.evaluate("""() => {
         const results = [];
         document.querySelectorAll('img[src^="data:image"]').forEach(el => {
             results.push({
@@ -83,8 +82,7 @@ def extract_inline_images(
             });
         });
         return results;
-    }"""
-    )
+    }""")
 
     if not data_uris:
         return []

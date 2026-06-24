@@ -3,7 +3,7 @@
 
 # ---------- Setup ----------
 # Full first-time setup: install Python deps + native libs + Playwright browser.
-# Prerequisites: Python 3.11+ environment already activated (conda, venv, etc.).
+# Prerequisites: Python 3.13+ environment already activated (conda, venv, etc.).
 # macOS native libs (required by weasyprint for PDF generation):
 #   conda:  conda install -c conda-forge glib cairo pango
 #   brew:   brew install glib cairo pango

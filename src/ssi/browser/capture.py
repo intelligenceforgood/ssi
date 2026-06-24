@@ -166,8 +166,7 @@ def capture_page(url: str, output_dir: Path) -> PageSnapshot:
 
 def _extract_form_fields(page: Page) -> list[FormField]:
     """Extract all form input fields from the current page."""
-    fields = page.evaluate(
-        """() => {
+    fields = page.evaluate("""() => {
         const fields = [];
         const inputs = document.querySelectorAll('input, select, textarea');
         inputs.forEach(el => {
@@ -191,8 +190,7 @@ def _extract_form_fields(page: Page) -> list[FormField]:
             });
         });
         return fields;
-    }"""
-    )
+    }""")
 
     return [FormField(**f) for f in fields]
 
@@ -203,8 +201,7 @@ def _extract_external_resources(page: Page, base_url: str) -> list[str]:
 
     base_domain = urlparse(base_url).hostname or ""
 
-    resources = page.evaluate(
-        """() => {
+    resources = page.evaluate("""() => {
         const urls = new Set();
         // Scripts
         document.querySelectorAll('script[src]').forEach(el => urls.add(el.src));
@@ -215,7 +212,6 @@ def _extract_external_resources(page: Page, base_url: str) -> list[str]:
         // Iframes
         document.querySelectorAll('iframe[src]').forEach(el => urls.add(el.src));
         return [...urls];
-    }"""
-    )
+    }""")
 
     return [r for r in resources if r and not r.startswith("data:") and urlparse(r).hostname != base_domain]

@@ -72,7 +72,7 @@ def _cleanup_orphaned_scans() -> None:
 
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa: ARG001
+async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:  # noqa: ARG001
     """Application lifespan — run startup cleanup before serving requests."""
     _cleanup_orphaned_scans()
     yield

@@ -5,7 +5,7 @@
 ## Environment
 
 - **Conda env:** `i4g-ssi`
-- **Language:** Python 3.11+ (FastAPI, Pydantic v2, Playwright)
+- **Language:** Python 3.13+ (FastAPI, Pydantic v2, Playwright)
 - **All commands prefix:** `conda run -n i4g-ssi ...`
 
 ## Build & Test

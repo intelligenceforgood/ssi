@@ -1,5 +1,11 @@
 # Scam Site Investigator (SSI)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
 AI-driven scam URL reconnaissance and evidence packaging for law enforcement.
 
 Given a suspicious URL, SSI automatically:
@@ -12,8 +18,8 @@ Given a suspicious URL, SSI automatically:
 
 ```bash
 # Create and activate a virtual environment
-conda create -n i4g-ssi python=3.11 && conda activate i4g-ssi
-# or: python3.11 -m venv .venv && source .venv/bin/activate
+conda create -n i4g-ssi python=3.13 && conda activate i4g-ssi
+# or: python3.13 -m venv .venv && source .venv/bin/activate
 
 # Install SSI
 pip install -e ".[dev,test]"

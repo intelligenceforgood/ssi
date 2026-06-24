@@ -5,7 +5,7 @@
 ## Environment
 
 - **Conda env:** `i4g-ssi`
-- **Language:** Python 3.11+ (FastAPI, Pydantic v2, Playwright)
+- **Language:** Python 3.13+ (FastAPI, Pydantic v2, Playwright)
 - **All commands prefix:** `conda run -n i4g-ssi ...`
 
 ## Build & Test
@@ -21,17 +21,15 @@ conda run -n i4g-ssi make test                                 # all tests
 ## Architecture
 
 - **Investigation entry point:** `src/ssi/investigator/orchestrator.py`
-- **Investigation entry point:** `src/ssi/investigator/orchestrator.py`
-ts
+- Guard imports with `TYPE_CHECKING` to avoid runtime dependencies.
 
-ver
-* * * * * * * * * * * * * * * * * t
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -ngs(- - - - - SI_*` - - - - - - - - - - - -core- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ist.- - - - - - - - - - - - - - - - - - - - - - - - - - � O- - - - - - - fil- - - m
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - pr- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -to- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - d - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+## Pre-Commit
 
-##########################################################################rs# guard the import with `TYPE_CHECKING` to avoid runtime dependency.
+```bash
+conda run -n i4g-ssi pre-commit run --all-files   # Pass 1 — auto-fixes formatting
+conda run -n i4g-ssi pre-commit run --all-files   # Pass 2 — must exit clean
+```
 
-## Pre-Commit (SSI — m## Pre-Commit (SSI — m## Pre-Commit (SSI — m## Pre-Commit (SSI �nda run ## i4g-ssi pre-commit run --all-files   ## Pre-Commit (SSI — m## Pre-Commit (SSI — m## Pre-Commit (SSI — m## Pre-Commit (SSI �nda run ## i4g-ssi pre-commit run --all-files   ## Pre-Commit (SSI — m## Pre-Commit (SSI — m## Pre-Commit (SSI — m## Pre-Commit (SSI �nda run ## i4g-ssi pre-commit run --all-files   ## Pre-Commit (SSI — m## Pre-Commit (SSI — m## Pre-Commit (SSI — m## Pre-Commit (SSI �nda run ## i4g-ssi pre-commit run --all-files  exits with no files modified and all hooks passing.
 - If a hook fails on Pass 2 that was not failing on Pass 1, troubleshoot the specific failure before retrying.
 
 ## Coding Standards

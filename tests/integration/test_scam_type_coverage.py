@@ -160,7 +160,7 @@ def _osint_patches() -> list:
 
 
 @pytest.fixture()
-def mock_osint() -> Generator[list[Any], None, None]:
+def mock_osint() -> Generator[list[Any]]:
     """Apply all OSINT patches via context managers (compatible with pytest fixtures)."""
     cms = [p.start() for p in _osint_patches()]
     yield cms

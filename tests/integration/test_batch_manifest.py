@@ -108,7 +108,7 @@ class TestBatchPipelineSmoke:
     """Smoke test running multiple investigations from the batch manifest."""
 
     @pytest.fixture(autouse=True)
-    def mock_osint(self) -> Generator[None, None, None]:
+    def mock_osint(self) -> Generator[None]:
         """Apply all OSINT + store patches via context managers."""
         patches = [
             patch("ssi.investigator.orchestrator._check_domain_resolution", return_value=True),

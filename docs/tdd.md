@@ -158,7 +158,7 @@ Simpler imports: `from ssi.models import InvestigationResult`. No namespace pack
 
 | Layer                 | Local                                    | Dev (GCP)                                 | Prod (GCP)                                 |
 | --------------------- | ---------------------------------------- | ----------------------------------------- | ------------------------------------------ |
-| **Python**            | 3.11+ (conda `i4g-ssi`)                  | Cloud Run container                       | Cloud Run container                        |
+| **Python**            | 3.13+ (conda `i4g-ssi`)                  | Cloud Run container                       | Cloud Run container                        |
 | **API**               | FastAPI + uvicorn (port 8100)            | Core gateway (Cloud Run)                  | Core gateway (Cloud Run)                   |
 | **Browser (Active)**  | zendriver + Chromium (headless)          | Cloud Run Job (gVisor)                    | Cloud Run Job (gVisor)                     |
 | **Browser (Passive)** | Playwright + Chromium                    | Cloud Run Job                             | Cloud Run Job                              |

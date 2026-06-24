@@ -26,7 +26,7 @@ SCAM_SITES_DIR = FIXTURES_DIR / "scam_sites"
 
 
 @pytest.fixture(autouse=True)
-def _reset_settings_cache() -> Generator[None, None, None]:
+def _reset_settings_cache() -> Generator[None]:
     """Clear the settings LRU cache between tests."""
     from ssi.settings.config import get_settings
 

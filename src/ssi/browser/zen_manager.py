@@ -304,14 +304,12 @@ class ZenBrowserManager:
             return ""
         try:
             safe_sel = _json.dumps(selector)
-            value = await self._page.evaluate(
-                f"""
+            value = await self._page.evaluate(f"""
                 (() => {{
                     const el = document.querySelector({safe_sel});
                     return el ? (el.value || '') : '';
                 }})()
-            """
-            )
+            """)
             return value or ""
         except Exception as e:
             logger.debug("get_field_value failed for '%s': %s", selector, e)
@@ -322,8 +320,7 @@ class ZenBrowserManager:
         if not self._page:
             return []
         try:
-            errors = await self._page.evaluate(
-                """
+            errors = await self._page.evaluate("""
                 (() => {
                     const errors = new Set();
                     const isVisible = (el) => {
@@ -370,8 +367,7 @@ class ZenBrowserManager:
                     }
                     return [...errors];
                 })()
-            """
-            )
+            """)
             return errors or []
         except Exception as e:
             logger.warning("Failed to extract visible errors: %s", e)
@@ -382,8 +378,7 @@ class ZenBrowserManager:
         if not self._page:
             return ""
         try:
-            fields = await self._page.evaluate(
-                """
+            fields = await self._page.evaluate("""
                 (() => {
                     const results = [];
                     const fields = document.querySelectorAll('input, select, textarea');
@@ -417,8 +412,7 @@ class ZenBrowserManager:
                     }
                     return results;
                 })()
-            """
-            )
+            """)
             if not fields:
                 return ""
             lines = ["FORM FIELD STATUS (actual current values from DOM, NOT placeholder text):"]
@@ -456,16 +450,14 @@ class ZenBrowserManager:
         # JS fallback
         try:
             safe_key = _json.dumps(key)
-            await self._page.evaluate(
-                f"""
+            await self._page.evaluate(f"""
                 (() => {{
                     const key = {safe_key};
                     const target = document.activeElement || document.body;
                     target.dispatchEvent(new KeyboardEvent('keydown', {{key: key, bubbles: true, cancelable: true}}));
                     target.dispatchEvent(new KeyboardEvent('keyup', {{key: key, bubbles: true, cancelable: true}}));
                 }})()
-            """
-            )
+            """)
             await asyncio.sleep(0.5)
             logger.info("Pressed key via JS: %s", key)
             return True
@@ -493,15 +485,13 @@ class ZenBrowserManager:
         # Strategy 1: CSS selector via JavaScript
         try:
             safe_sel = _json.dumps(selector)
-            clicked = await self._page.evaluate(
-                f"""
+            clicked = await self._page.evaluate(f"""
                 (() => {{
                     const el = document.querySelector({safe_sel});
                     if (el) {{ el.click(); return true; }}
                     return false;
                 }})()
-            """
-            )
+            """)
             if clicked:
                 await asyncio.sleep(1)
                 logger.info("Clicked (JS selector): %s", selector)
@@ -515,8 +505,7 @@ class ZenBrowserManager:
         if search_text:
             try:
                 safe_text = _json.dumps(search_text)
-                clicked = await self._page.evaluate(
-                    f"""
+                clicked = await self._page.evaluate(f"""
                     (() => {{
                         const target = {safe_text}.toLowerCase().trim();
                         const candidates = document.querySelectorAll(
@@ -533,8 +522,7 @@ class ZenBrowserManager:
                         }}
                         return false;
                     }})()
-                """
-                )
+                """)
                 if clicked:
                     await asyncio.sleep(1)
                     logger.info("Clicked (JS text search '%s'): %s", search_text, selector)
@@ -646,8 +634,7 @@ class ZenBrowserManager:
         try:
             safe_sel = _json.dumps(selector)
             safe_val = _json.dumps(text)
-            done = await self._page.evaluate(
-                f"""
+            done = await self._page.evaluate(f"""
                 (() => {{
                     const el = document.querySelector({safe_sel});
                     if (!el) return false;
@@ -663,8 +650,7 @@ class ZenBrowserManager:
                     el.dispatchEvent(new Event('change', {{bubbles: true}}));
                     return true;
                 }})()
-            """
-            )
+            """)
             if done:
                 actual = await self.get_field_value(selector)
                 if actual == text:
@@ -720,8 +706,7 @@ class ZenBrowserManager:
         """Dispatch input+change events so reactive frameworks pick up the value."""
         try:
             safe_sel = _json.dumps(selector)
-            await self._page.evaluate(
-                f"""
+            await self._page.evaluate(f"""
                 (() => {{
                     const el = document.querySelector({safe_sel});
                     if (el) {{
@@ -729,8 +714,7 @@ class ZenBrowserManager:
                         el.dispatchEvent(new Event('change', {{bubbles: true}}));
                     }}
                 }})()
-            """
-            )
+            """)
         except Exception as e:
             logger.debug("_fire_input_events failed for '%s': %s", selector, e)
 
@@ -786,8 +770,7 @@ class ZenBrowserManager:
         try:
             safe_keywords = _json.dumps(keywords)
             safe_val = _json.dumps(text)
-            result = await self._page.evaluate(
-                f"""
+            result = await self._page.evaluate(f"""
                 (() => {{
                     const keywords = {safe_keywords};
                     const value = {safe_val};
@@ -841,8 +824,7 @@ class ZenBrowserManager:
                         score: bestScore,
                     }};
                 }})()
-            """
-            )
+            """)
             if result and result.get("found"):
                 actual = result.get("actualValue", "")
                 matched_by = result.get("matchedBy", "?")
@@ -863,8 +845,7 @@ class ZenBrowserManager:
             return False
         try:
             safe_keywords = _json.dumps(keywords)
-            clicked = await self._page.evaluate(
-                f"""
+            clicked = await self._page.evaluate(f"""
                 (() => {{
                     const keywords = {safe_keywords};
                     const candidates = document.querySelectorAll(
@@ -896,8 +877,7 @@ class ZenBrowserManager:
                     }}
                     return false;
                 }})()
-            """
-            )
+            """)
             if clicked:
                 await asyncio.sleep(1)
                 logger.info("Clicked (fuzzy match): %s", selector)
@@ -917,8 +897,7 @@ class ZenBrowserManager:
         try:
             safe_sel = _json.dumps(selector)
             safe_val = _json.dumps(value)
-            result = await self._page.evaluate(
-                f"""
+            result = await self._page.evaluate(f"""
                 (() => {{
                     const sel = document.querySelector({safe_sel});
                     if (!sel) return false;
@@ -950,8 +929,7 @@ class ZenBrowserManager:
                     }}
                     return false;
                 }})()
-            """
-            )
+            """)
             if result:
                 logger.info("Selected '%s' in %s", value, selector)
                 return True
@@ -980,8 +958,7 @@ class ZenBrowserManager:
         if not self._page:
             return 0
         try:
-            count = await self._page.evaluate(
-                """
+            count = await self._page.evaluate("""
                 (() => {
                     let removed = 0;
                     const selectors = [
@@ -1016,8 +993,7 @@ class ZenBrowserManager:
                     }
                     return removed;
                 })()
-            """
-            )
+            """)
             if count:
                 logger.info("Overlay dismissal removed %d elements", count)
             return int(count or 0)
@@ -1078,8 +1054,7 @@ class ZenBrowserManager:
                 "\u0e2a\u0e21\u0e31\u0e04\u0e23\u0e2a\u0e21\u0e32\u0e0a\u0e34\u0e01",
             ]
         )
-        result = await self._page.evaluate(
-            f"""
+        result = await self._page.evaluate(f"""
             (() => {{
                 const KEYWORDS = {register_keywords};
                 const currentUrl = window.location.href.toLowerCase();
@@ -1162,8 +1137,7 @@ class ZenBrowserManager:
                     modal_selector: modalSelector, current_url: currentUrl,
                 }};
             }})()
-        """
-        )
+        """)
         return result or {}
 
     async def _scan_navigate_deposit(self) -> dict:
@@ -1191,8 +1165,7 @@ class ZenBrowserManager:
                 "\u0e1d\u0e32\u0e01\u0e40\u0e07\u0e34\u0e19",
             ]
         )
-        result = await self._page.evaluate(
-            f"""
+        result = await self._page.evaluate(f"""
             (() => {{
                 const KEYWORDS = {deposit_keywords};
                 const currentUrl = window.location.href.toLowerCase();
@@ -1245,8 +1218,7 @@ class ZenBrowserManager:
                     current_url: currentUrl,
                 }};
             }})()
-        """
-        )
+        """)
         return result or {}
 
     async def _scan_check_email(self) -> dict:
@@ -1281,8 +1253,7 @@ class ZenBrowserManager:
                 "trading",
             ]
         )
-        result = await self._page.evaluate(
-            f"""
+        result = await self._page.evaluate(f"""
             (() => {{
                 const EMAIL_PATTERNS = {email_patterns};
                 const DASHBOARD_PATTERNS = {dashboard_patterns};
@@ -1320,8 +1291,7 @@ class ZenBrowserManager:
                     current_url: currentUrl,
                 }};
             }})()
-        """
-        )
+        """)
         return result or {}
 
     # ------------------------------------------------------------------
@@ -1333,8 +1303,7 @@ class ZenBrowserManager:
         if not self._page:
             return []
         try:
-            discovered = await self._page.evaluate(
-                """
+            discovered = await self._page.evaluate("""
                 (() => {
                     const results = [];
                     const seen = new Set();
@@ -1393,8 +1362,7 @@ class ZenBrowserManager:
                     }
                     return results;
                 })()
-            """
-            )
+            """)
             logger.info("Crypto selector discovery: found %d candidates", len(discovered or []))
             return discovered or []
         except Exception as e:
@@ -1416,8 +1384,7 @@ class ZenBrowserManager:
                 return await self.click(option["label"])
             if "index" in option:
                 idx = int(option["index"])
-                clicked = await self._page.evaluate(
-                    f"""
+                clicked = await self._page.evaluate(f"""
                     (() => {{
                         const clickables = document.querySelectorAll(
                             'button, a, [role="tab"], [role="button"], [class*="tab"], '
@@ -1431,8 +1398,7 @@ class ZenBrowserManager:
                         }}
                         return false;
                     }})()
-                """
-                )
+                """)
                 if clicked:
                     await asyncio.sleep(1)
                     return True
@@ -1446,8 +1412,7 @@ class ZenBrowserManager:
         if not self._page:
             return ""
         try:
-            address = await self._page.evaluate(
-                """
+            address = await self._page.evaluate("""
                 (() => {
                     const patterns = [
                         /\\b(0x[a-fA-F0-9]{40})\\b/,
@@ -1491,8 +1456,7 @@ class ZenBrowserManager:
                     }
                     return '';
                 })()
-            """
-            )
+            """)
             if address:
                 logger.info("JS wallet extraction found: %s...", address[:20])
             return address or ""

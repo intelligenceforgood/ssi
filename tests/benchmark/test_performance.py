@@ -88,7 +88,7 @@ class TestPassiveBenchmark:
     """Benchmark passive investigation performance."""
 
     @pytest.fixture()
-    def mock_osint(self) -> Generator[None, None, None]:
+    def mock_osint(self) -> Generator[None]:
         """Apply all OSINT patches via context managers."""
         patches = [
             patch("ssi.investigator.orchestrator._check_domain_resolution", return_value=True),

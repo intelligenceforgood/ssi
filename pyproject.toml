@@ -41,7 +41,7 @@ dynamic = ["version"]
 license = {file = "LICENSE"}
 name = "ssi"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 
 [project.optional-dependencies]
 dev = [
@@ -91,7 +91,7 @@ profile = "black"
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 ignore = [
@@ -105,7 +105,7 @@ select = ["E", "F", "N", "W", "UP", "B", "SIM"] # "I" omitted: isort is authorit
 "tests/**" = ["N806", "N803", "N817", "B017"] # PascalCase assignments + broad exception asserts in validation tests
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 strict = true
 warn_return_any = true
 warn_unused_configs = true

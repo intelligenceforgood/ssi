@@ -27,7 +27,7 @@ This guide covers setting up a development environment, understanding the codeba
 
 ## 1. Prerequisites
 
-- **Python 3.11+** — SSI requires 3.11 for `tomllib` and improved typing features
+- **Python 3.13+** — SSI requires 3.13 for `tomllib` and improved typing features
 - **Ollama** — local LLM runtime ([ollama.com](https://ollama.com)). Install it, then pull a model:
   ```bash
   # macOS
